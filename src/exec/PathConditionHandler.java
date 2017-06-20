@@ -28,53 +28,72 @@ import jbse.mem.exc.ContradictionException;
 import jbse.mem.exc.ThreadStackEmptyException;
 
 public class PathConditionHandler {
+	private final RunnerPath rp;
+	private final JavaCompiler compiler;
 	private PathExplorer pe;
-	
-	
-	public void generateTestCases(RunnerPath rp, int i, int pos, State newState)
-		throws DecisionException, CannotBuildEngineException, InitializationException, 
-	   InvalidClassFileFactoryClassException, NonexistingObservedVariablesException, 
-	   ClasspathException, CannotBacktrackException, CannotManageStateException, 
-	   ThreadStackEmptyException, ContradictionException, EngineStuckException, 
-	   FailureException{
-			
-		
-		String fileName = rp.getFormatter(i, newState);
-		
-		final JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
 
-		if (compiler == null) {
-			//return null;
+	public PathConditionHandler(RunnerPath rp) {
+		this.rp = rp;
+		this.compiler = ToolProvider.getSystemJavaCompiler();
+		if (this.compiler == null) {
+			//TODO throw an exception
 		}
-		String OutputBin = Settings.BIN_PATH.toString();
-		String reportDir = Settings.TMP_BASE_PATH.toString();
-		
-		final Path logFileJavacPath = Paths.get(reportDir + "/javac-log-" + pos + "_" + i + ".txt");
+	}
 
+	/**
+	 * Invokes EvoSuite to generate a {@link TestCase} that covers a path 
+	 * condition, and then explores the generated test case starting from
+	 * the depth of the path condition.
+	 * 
+	 * @param state a {@link State}. The test case will cover its path condition.
+	 * @param depth the depth of {@code state}.
+	 * @param breadth the breadth of {@code state}. Only used to disambiguate file names.
+	 * @param maxDepth the maximum depth at which generation of tests is performed.
+	 *        Used for recursive calls to exploration.
+	 * @throws DecisionException
+	 * @throws CannotBuildEngineException
+	 * @throws InitializationException
+	 * @throws InvalidClassFileFactoryClassException
+	 * @throws NonexistingObservedVariablesException
+	 * @throws ClasspathException
+	 * @throws CannotBacktrackException
+	 * @throws CannotManageStateException
+	 * @throws ThreadStackEmptyException
+	 * @throws ContradictionException
+	 * @throws EngineStuckException
+	 * @throws FailureException
+	 */
+	public void generateTestCases(State state, int depth, int breadth, int maxDepth)
+			throws DecisionException, CannotBuildEngineException, InitializationException, 
+			InvalidClassFileFactoryClassException, NonexistingObservedVariablesException, 
+			ClasspathException, CannotBacktrackException, CannotManageStateException, 
+			ThreadStackEmptyException, ContradictionException, EngineStuckException, 
+			FailureException{
+		//compiles the Evosuite wrapper
+		final String fileName = rp.emitEvoSuiteWrapper(state, breadth);
+		final String OutputBin = Settings.BIN_PATH.toString();
+		final String reportDir = Settings.TMP_BASE_PATH.toString();
+		final Path logFileJavacPath = Paths.get(reportDir + "/javac-log-" + depth + "_" + breadth + ".txt");
 		final String[] javacParameters = { "-d", OutputBin, fileName };
 		try (final OutputStream w = new BufferedOutputStream(Files.newOutputStream(logFileJavacPath))) {
 			compiler.run(null, w, w, javacParameters);
 		} catch (IOException e) {
 			e.printStackTrace();
-			//return null;
+			//TODO rethrow or handle the error otherwise
 		}
 
-			
-		String testPackage = "exec";
-			
-		String testClass = "Testgen";
-			
-		String testMethod = "getNode(Lexec/Testgen$Node;I)Lexec/Testgen$Node;";
-			
-		String evosuitePath = Settings.EVOSUITE_PATH.toString();
-			
-		String classpath = Settings.BIN_PATH.toString() + ";" + Settings.SUSHI_LIB_PATH.toString();
-								 
+		//some configuration - test method, paths
+		//TODO make this stuff configurable!
+		final String testPackage = "tg";
+		final String testClass = "Testgen";
+		final String testMethod = "getNode(Ltg/Testgen$Node;I)Ltg/Testgen$Node;";
+		final String evosuitePath = Settings.EVOSUITE_PATH.toString();
+		final String classpathEvosuite = Settings.BIN_PATH.toString() + ":" + Settings.SUSHI_LIB_PATH.toString(); //TODO fix classpath separator for platform
+		final String classpathCompilation = classpathEvosuite + ":" + evosuitePath;
+		final String testDir = Settings.OUT_PATH.toString();
 		
-		String testDir = Settings.OUT_PATH.toString();
-			
+		//prepares the Evosuite parameters
 		final List<String> evosuiteParameters = new ArrayList<String>();
-			
 		evosuiteParameters.add("java");
 		evosuiteParameters.add("-Xmx4G");
 		evosuiteParameters.add("-jar");
@@ -83,12 +102,12 @@ public class PathConditionHandler {
 		evosuiteParameters.add(testPackage + "." + testClass);
 		evosuiteParameters.add("-mem");
 		evosuiteParameters.add("2048");
-		evosuiteParameters.add("-DCP=" + classpath);
+		evosuiteParameters.add("-DCP=" + classpathEvosuite);
 		evosuiteParameters.add("-Dassertions=false");
 		evosuiteParameters.add("-Dhtml=false");
 		evosuiteParameters.add("-Dglobal_timeout=600");
 		evosuiteParameters.add("-Dreport_dir=" + reportDir);
-		evosuiteParameters.add("-Djunit_suffix=PC_" + pos + "_" + i  + "_Test");
+		evosuiteParameters.add("-Djunit_suffix=PC_" + depth + "_" + breadth  + "_Test");
 		evosuiteParameters.add("-Dsearch_budget=600");
 		evosuiteParameters.add("-Dtest_dir=" + testDir);
 		evosuiteParameters.add("-Dvirtual_fs=false");
@@ -103,10 +122,11 @@ public class PathConditionHandler {
 		evosuiteParameters.add("-Dmax_size=1");
 		evosuiteParameters.add("-Dmax_initial_tests=1");
 		evosuiteParameters.add("-Dinline=false");
-		evosuiteParameters.add("-Dpath_condition=" + testPackage + "." + testClass + "," + testMethod + ",EvoSuiteWrapper_" + i);
+		evosuiteParameters.add("-Dpath_condition=" + testPackage + "." + testClass + "," + testMethod + ",EvoSuiteWrapper_" + breadth);
 		evosuiteParameters.add("-Dpath_condition_check_first_target_call_only=true");
-			
-		final Path logFileEvosuitePath = Paths.get(reportDir + "/evosuite-log-" + pos + "_" + i + ".txt");
+
+		//launches Evosuite
+		final Path logFileEvosuitePath = Paths.get(reportDir + "/evosuite-log-" + depth + "_" + breadth + ".txt");
 		final ProcessBuilder pb = new ProcessBuilder(evosuiteParameters).redirectErrorStream(true).redirectOutput(logFileEvosuitePath.toFile());
 		Process pr;
 		try {
@@ -114,34 +134,32 @@ public class PathConditionHandler {
 			pr.waitFor();
 		} catch (IOException | InterruptedException e) {
 			e.printStackTrace();
-			//return null;
+			//TODO rethrow or handle the error otherwise
 		}
-		String testCaseScaff = testDir +"/exec/" + testClass + "PC_" + pos + "_" + i + "_Test_scaffolding.java";
-		String testCase = testDir + "/exec/" + testClass + "PC_" +  pos + "_" + i + "_Test.java";
-			
-		final Path logFileJavacPath_Test = Paths.get(reportDir + "/javac-log-test-" +  pos + "_" + i + ".txt");
-		final String[] javacParametersTestScaff = { "-d", OutputBin, testCaseScaff };
-		final String[] javacParametersTestCase = { "-d", OutputBin, testCase };
-			
+		
+		//compiles the generated test
+		//TODO here we are assuming EvoSuite was able to find a test, handle the situation where EvoSuite does not generate anything
+		//TODO make the following paths configurable!
+		final String testCaseScaff = testDir + "/" + testPackage + "/" + testClass + "PC_" + depth + "_" + breadth + "_Test_scaffolding.java";
+		final String testCase = testDir + "/" + testPackage + "/" + testClass + "PC_" +  depth + "_" + breadth + "_Test.java";
+		final Path logFileJavacPath_Test = Paths.get(reportDir + "/javac-log-test-" +  depth + "_" + breadth + ".txt");
+		final String[] javacParametersTestScaff = { "-cp", classpathCompilation, "-d", OutputBin, testCaseScaff };
+		final String[] javacParametersTestCase = { "-cp", classpathCompilation, "-d", OutputBin, testCase };
 		try (final OutputStream w = new BufferedOutputStream(Files.newOutputStream(logFileJavacPath_Test))) {
 			compiler.run(null, w, w, javacParametersTestScaff);
 			compiler.run(null, w, w, javacParametersTestCase);
 		} catch (IOException e) {
 			e.printStackTrace();
-			//return null;
+			//TODO rethrow or handle the error otherwise
 		}
-		
-		 
-		 TestCase newTC = new TestCase( testPackage + "/" + testClass + "PC_" +  pos + "_" + i + "_Test", "()V", "test0");
-		 System.out.println("RECURSE on " + newTC);
-		 pe = new PathExplorer(rp);
-		 pe.explore(pos+1, newState.getDepth()-1, newTC);
-		 
-		 
+
+		//creates the TestCase and explores it
+		final TestCase newTC = new TestCase( testPackage + "/" + testClass + "PC_" +  depth + "_" + breadth + "_Test", "()V", "test0");
+		System.out.println("RECURSE on " + newTC);
+		pe = new PathExplorer(rp);
+		pe.explore(newTC, depth + 1, maxDepth);
 	}
-	
-		
 }
-	
-	
+
+
 

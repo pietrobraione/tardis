@@ -19,7 +19,6 @@ import jbse.dec.DecisionProcedureClassInit;
 import jbse.dec.DecisionProcedureLICS;
 import jbse.dec.DecisionProcedureSMTLIB2_AUFNIRA;
 import jbse.dec.exc.DecisionException;
-import jbse.jvm.Engine;
 import jbse.jvm.Runner;
 import jbse.jvm.RunnerBuilder;
 import jbse.jvm.RunnerParameters;
@@ -42,37 +41,31 @@ import jbse.rules.LICSRulesRepo;
 import jbse.tree.StateTree.BranchPoint;
 import sushi.execution.jbse.StateFormatterSushiPathCondition;
 
-
-
-
 public class RunnerPath {
-	private int numBranches;
-	private String classPackage = "exec";
-	private String className = "Testgen";
-	private String parametersSignature = "(Lexec/Testgen$Node;I)Lexec/Testgen$Node;";
-	private String methodName  = "getNode";
-	
-	private Engine e;
+	private State initialState;
 	private DecisionProcedureGuidance dp;
-	
+
+	//TODO make parametric the following stuff!
+	private String classPackage = "tg";
+	private String className = "Testgen";
+	private String parametersSignature = "(Ltg/Testgen$Node;I)Ltg/Testgen$Node;";
+	private String methodName  = "getNode";
 	private String[] classpath = {
 			Settings.BIN_PATH.toString(), 
 			Settings.JBSE_PATH.toString(), 
 			Settings.JBSE_PATH.toString() + "/../data/jre/rt.jar" //indispensable!
 			//put all the paths to the program to be executed (the binaries)
 	};
-	
-	
 
-	private  RunnerParameters commonParams = null;
-	
+
+	private RunnerParameters commonParams = null;
 	private RunnerParameters commonGuidance = null;
-	
+
 	private  RunnerParameters getCommonParams() throws DecisionException {
 		if (commonParams == null) {
 			//builds the parameters for the guided (symbolic) execution
 			RunnerParameters p = new RunnerParameters();
-			
+
 			//the guided method (to be executed symbolically)
 			String subjectClassName = classPackage + "/" + className;
 			String subjectParametersSignature = parametersSignature;
@@ -80,7 +73,7 @@ public class RunnerPath {
 
 			CalculatorRewriting calc = new CalculatorRewriting();
 			calc.addRewriter(new RewriterOperationOnSimplex());
-			
+
 
 			p.addClasspath(classpath);
 			p.setMethodSignature(subjectClassName, subjectParametersSignature, subjectMethodName);
@@ -95,20 +88,20 @@ public class RunnerPath {
 							calc, new ClassInitRulesRepo()), calc);
 			p.setDecisionProcedure(pd);
 			p.setBreadthMode(BreadthMode.ALL_DECISIONS_NONTRIVIAL);
-			
+
 			commonParams = p;
 
 		}
 		return commonParams;
 	}
-	
-	private  RunnerParameters getCommonGuidance(RunnerParameters p) throws DecisionException {
+
+	private RunnerParameters getCommonGuidance(RunnerParameters p) throws DecisionException {
 		if (commonGuidance == null) {
 
 			//builds the parameters for the guiding (concrete) execution
 			RunnerParameters pGuidance = new RunnerParameters();
 			pGuidance.addClasspath(classpath);
-			
+
 			pGuidance.setCalculator(p.getCalculator());
 			pGuidance.setDecisionProcedure(
 					new DecisionProcedureAlgorithms(
@@ -119,137 +112,167 @@ public class RunnerPath {
 			pGuidance.setStateIdentificationMode(StateIdentificationMode.COMPACT);
 			pGuidance.setBreadthMode(BreadthMode.ALL_DECISIONS);
 
-		
-			
+
+
 			commonGuidance = pGuidance;
 		}
-		
-		
-		
+
+
+
 		return commonGuidance;
 	}
-	
 
-		
-	public List<State> runProgram(TestCase t, int stateDepth)
-		throws DecisionException, CannotBuildEngineException, InitializationException, 
-		InvalidClassFileFactoryClassException, NonexistingObservedVariablesException, 
-		ClasspathException, CannotBacktrackException, CannotManageStateException, 
-		ThreadStackEmptyException, ContradictionException, EngineStuckException, 
-		FailureException {
-			
-			//builds the parameters for the guided (symbolic) execution
-			RunnerParameters p = getCommonParams();
-			
-			RunnerParameters pGuidance = getCommonGuidance(p);
-			
-			//the guiding method (to be executed concretely)
-			String testClassName = t.getClassName() ;
-			String testParametersSignature = t.getParameterSignature();
-			String testMethodName = t.getMethodName();
-			
-	
-			pGuidance.setMethodSignature(testClassName, testParametersSignature, testMethodName);
 
-			DecisionProcedureGuidance guid = new DecisionProcedureGuidance(p.getDecisionProcedure(),
-					p.getCalculator(), pGuidance, p.getMethodSignature());
-			p.setDecisionProcedure(guid);
+
+	/**
+	 * Does symbolic execution guided by a test case up to some depth, 
+	 * then peeks the states on the next branch.  
+	 * 
+	 * @param testCase a {@link TestCase}, it will guide symbolic execution.
+	 * @param testDepth the maximum depth up to which {@code t} guides 
+	 *        symbolic execution, or a negative value.
+	 * @return a {@link List}{@code <}{@link State}{@code >} containing
+	 *         all the states at depth {@code stateDepth + 1}. In case 
+	 *         {@code stateDepth < 0} executes the test up to the final
+	 *         state and returns a list containing only the final state.
+	 * @throws DecisionException
+	 * @throws CannotBuildEngineException
+	 * @throws InitializationException
+	 * @throws InvalidClassFileFactoryClassException
+	 * @throws NonexistingObservedVariablesException
+	 * @throws ClasspathException
+	 * @throws CannotBacktrackException
+	 * @throws CannotManageStateException
+	 * @throws ThreadStackEmptyException
+	 * @throws ContradictionException
+	 * @throws EngineStuckException
+	 * @throws FailureException
+	 */
+	public List<State> runProgram(TestCase testCase, int testDepth)
+			throws DecisionException, CannotBuildEngineException, InitializationException, 
+			InvalidClassFileFactoryClassException, NonexistingObservedVariablesException, 
+			ClasspathException, CannotBacktrackException, CannotManageStateException, 
+			ThreadStackEmptyException, ContradictionException, EngineStuckException, 
+			FailureException {
+
+		//builds the parameters for the guided (symbolic) execution
+		final RunnerParameters p = getCommonParams();
+
+		//builds the parameters for the guiding (concrete) execution
+		final RunnerParameters pGuidance = getCommonGuidance(p);
+
+		//the guiding method (to be executed concretely)
+		final String testClassName = testCase.getClassName() ;
+		final String testParametersSignature = testCase.getParameterSignature();
+		final String testMethodName = testCase.getMethodName();
+		pGuidance.setMethodSignature(testClassName, testParametersSignature, testMethodName);
+
+		//the guidance decision procedure
+		final DecisionProcedureGuidance guid = new DecisionProcedureGuidance(p.getDecisionProcedure(),
+				p.getCalculator(), pGuidance, p.getMethodSignature());
+		p.setDecisionProcedure(guid);
+
+		//the return value
+		final List<State> stateList = new ArrayList<State>();
+
+		p.setActions(new Actions() {
+			private int currentDepth = 0;
 			
-			
-			
-			List<State> stateList = new ArrayList<State>();
-			numBranches = 0;
-			
-			p.setActions(new Actions() {
-				//this MUST be present, or the guiding execution will not advance!!!!
-				@Override
-				public boolean atStepPre() {
-					try {
-						if (this.getEngine().getCurrentState().getCurrentMethodSignature().equals( 
-								guid.getCurrentMethodSignature())) {
-							guid.step();
-						}
-					} catch (GuidanceException | CannotManageStateException | ThreadStackEmptyException e) {
-						e.printStackTrace();
-						return true;
+			//this MUST be present, or the guiding execution will not advance!!!!
+			@Override
+			public boolean atStepPre() {
+				try {
+					if (this.getEngine().getCurrentState().getCurrentMethodSignature().equals( 
+							guid.getCurrentMethodSignature())) {
+						guid.step();
 					}
-					//put here your stuff, if you want to do something							
-					
-					return super.atStepPre();
+				} catch (GuidanceException | CannotManageStateException | ThreadStackEmptyException e) {
+					e.printStackTrace();
+					return true;
 				}
-				
-				@Override
-				public boolean atRoot() {
-					if(stateDepth == 0){
-						guid.endGuidance();
-					}
-					
-					return super.atRoot();
+				//put here your stuff, if you want to do something							
+
+				return super.atStepPre();
+			}
+
+			@Override
+			public boolean atRoot() {
+				if (testDepth == 0) {
+					guid.endGuidance();
 				}
-				
-				@Override
-				public boolean atBranch(BranchPoint bp) {
-					numBranches++;				
-					if(numBranches == stateDepth){
-						guid.endGuidance();
-					} else if (numBranches == stateDepth + 1) {
-						stateList.add(this.getEngine().getCurrentState().clone());
-						this.getEngine().stopCurrentTrace();
-					}
-					
-					return super.atBranch(bp);
-				}
-				
-				@Override
-				public boolean atBacktrackPost(BranchPoint bp) {
+				return super.atRoot();
+			}
+
+			@Override
+			public boolean atBranch(BranchPoint bp) {
+				this.currentDepth++;				
+				if (this.currentDepth == testDepth) {
+					guid.endGuidance();
+				} else if (this.currentDepth == testDepth + 1) {
 					stateList.add(this.getEngine().getCurrentState().clone());
 					this.getEngine().stopCurrentTrace();
-					
-					return super.atBacktrackPost(bp);
 				}
-				
-				@Override
-				public void atEnd() {
-					if(stateDepth < 0){
-						final State finalState = this.getEngine().getCurrentState();
-						stateList.add(finalState);
-					}
 
-					super.atEnd();
+				return super.atBranch(bp);
+			}
+
+			@Override
+			public boolean atBacktrackPost(BranchPoint bp) {
+				stateList.add(this.getEngine().getCurrentState().clone());
+				this.getEngine().stopCurrentTrace();
+
+				return super.atBacktrackPost(bp);
+			}
+
+			@Override
+			public void atEnd() {
+				if (testDepth < 0) {
+					final State finalState = this.getEngine().getCurrentState();
+					stateList.add(finalState);
 				}
-				
-			});
-			
-			//builds the runner
-			RunnerBuilder rb = new RunnerBuilder();
-			Runner r = rb.build(p);
-			r.run();
-			
-			e = rb.getEngine();
-			dp = guid;
-			
-			return stateList;
-			
+				super.atEnd();
+			}
+		});
+
+		//builds the runner
+		final RunnerBuilder rb = new RunnerBuilder();
+		final Runner r = rb.build(p);
+		r.run();
+
+		this.initialState = rb.getEngine().getInitialState();
+		this.dp = guid;
+
+		return stateList;
+
 	}
-	
-	public String getFormatter(int i, State newState){
-		StateFormatterSushiPathCondition fmt = new StateFormatterSushiPathCondition(i, e::getInitialState, () -> {
+
+	/**
+	 * Must be invoked after an invocation of {@link #runProgram(TestCase, int)}.
+	 * Generates the EvoSuite wrapper for the path condition of some state.
+	 * 
+	 * @param state a {@link State}; must be some state in the execution 
+	 *        triggered by {@link #runProgram(TestCase, int)}.
+	 * @param breadth the breadth of {@code state} (used only to disambiguate
+	 *        file names).
+	 * @return a {@link String}, the file name of the generated EvoSuite wrapper.
+	 */
+	//TODO only breadth is not enough to disambiguate file names.
+	public String emitEvoSuiteWrapper(State state, int breadth) {
+		final StateFormatterSushiPathCondition fmt = new StateFormatterSushiPathCondition(breadth, () -> this.initialState, () -> {
 			try {
 				return dp.getModel();
 			} catch (DecisionException e1) {
 				return null;
 			}
-	});
+		});
 		fmt.formatPrologue();
-		fmt.formatState(newState);
+		fmt.formatState(state);
 		fmt.formatEpilogue();
-		
-		//String srcPath = Settings.SRC_PATH.toString() + "/exec";
-		
-		String wrapperPath = Settings.TMP_BASE_PATH.toString();
-		
-		
-		String fileName = wrapperPath + "/EvoSuiteWrapper_" + i +".java";
+
+		//TODO make this a parameter!
+		final String wrapperPath = Settings.TMP_BASE_PATH.toString();
+
+		final String fileName = wrapperPath + "/EvoSuiteWrapper_" + breadth +".java";
 		try (final BufferedWriter w = Files.newBufferedWriter(Paths.get(fileName))) {
 			w.write(fmt.emit());
 		} catch (IOException e) {
@@ -257,7 +280,7 @@ public class RunnerPath {
 			return null;
 		}
 		fmt.cleanup();
-		
+
 		return fileName;
 	}
 }

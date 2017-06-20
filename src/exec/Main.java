@@ -37,7 +37,7 @@ public class Main {
 		
 		PathExplorer pe = new PathExplorer(rp);
 
-		pe.explore(0, maxdepth, tc);
+		pe.explore(tc, 0, maxdepth);
 	}
 	
 }
