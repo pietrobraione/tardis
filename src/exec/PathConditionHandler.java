@@ -71,10 +71,10 @@ public class PathConditionHandler {
 			FailureException{
 		//compiles the Evosuite wrapper
 		final String fileName = rp.emitEvoSuiteWrapper(state, breadth);
-		final String OutputBin = Settings.BIN_PATH.toString();
+		final String outputBin = Settings.BIN_PATH.toString();
 		final String reportDir = Settings.TMP_BASE_PATH.toString();
 		final Path logFileJavacPath = Paths.get(reportDir + "/javac-log-" + depth + "_" + breadth + ".txt");
-		final String[] javacParameters = { "-d", OutputBin, fileName };
+		final String[] javacParameters = { "-d", outputBin, fileName };
 		try (final OutputStream w = new BufferedOutputStream(Files.newOutputStream(logFileJavacPath))) {
 			compiler.run(null, w, w, javacParameters);
 		} catch (IOException e) {
@@ -143,8 +143,8 @@ public class PathConditionHandler {
 		final String testCaseScaff = testDir + "/" + testPackage + "/" + testClass + "PC_" + depth + "_" + breadth + "_Test_scaffolding.java";
 		final String testCase = testDir + "/" + testPackage + "/" + testClass + "PC_" +  depth + "_" + breadth + "_Test.java";
 		final Path logFileJavacPath_Test = Paths.get(reportDir + "/javac-log-test-" +  depth + "_" + breadth + ".txt");
-		final String[] javacParametersTestScaff = { "-cp", classpathCompilation, "-d", OutputBin, testCaseScaff };
-		final String[] javacParametersTestCase = { "-cp", classpathCompilation, "-d", OutputBin, testCase };
+		final String[] javacParametersTestScaff = { "-cp", classpathCompilation, "-d", outputBin, testCaseScaff };
+		final String[] javacParametersTestCase = { "-cp", classpathCompilation, "-d", outputBin, testCase };
 		try (final OutputStream w = new BufferedOutputStream(Files.newOutputStream(logFileJavacPath_Test))) {
 			compiler.run(null, w, w, javacParametersTestScaff);
 			compiler.run(null, w, w, javacParametersTestCase);
