@@ -71,7 +71,7 @@ public class PathExplorer {
 		System.out.println(indent + "Test_" + (++testcount) + ": Executed PC= " + tcFinalPC); 
 
 		for (int currentDepth = startDepth; currentDepth < Math.min(maxDepth, tcFinalDepth - 1); currentDepth++) {
-			System.out.println(indent + "POS=" + currentDepth);
+			System.out.println(indent + "DEPTH=" + currentDepth);
 
 			final List<State> newStates = rp.runProgram(tc, currentDepth);
 			int currentBreadth = 0;
