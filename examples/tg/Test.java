@@ -1,4 +1,4 @@
-package exec;
+package tg;
 
 public class Test{
 	public void test0(){

@@ -1,4 +1,4 @@
-package exec;
+package tg;
 
 public class Testgen {
 	public static class Node {

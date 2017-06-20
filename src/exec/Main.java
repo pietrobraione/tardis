@@ -25,7 +25,7 @@ public class Main {
 				ThreadStackEmptyException, ContradictionException, EngineStuckException, 
 				FailureException {
 	
-		String testPackage = "exec";
+		String testPackage = "tg";
 		String testClass = "Test";
 		String testMethodSignature = "()V";
 		String testMethod = "test0";
