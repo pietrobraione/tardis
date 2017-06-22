@@ -2,12 +2,12 @@
 <classpath>
 	<classpathentry kind="src" path="src"/>
 	<classpathentry kind="src" path="examples"/>
-	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER/org.eclipse.jdt.internal.debug.ui.launcher.StandardVMType/jdk1.8.0_77"/>
 	<classpathentry combineaccessrules="false" kind="src" path="/jbse"/>
 	<classpathentry combineaccessrules="false" kind="src" path="/sushi"/>
 	<classpathentry combineaccessrules="false" kind="src" path="/sushi-lib"/>
 	<classpathentry kind="lib" path="/sushi/lib/evosuite-shaded-1.0.3.jar"/>
 	<classpathentry kind="con" path="org.eclipse.jdt.junit.JUNIT_CONTAINER/4"/>
 	<classpathentry kind="lib" path="/sushi/lib/args4j-2.32.jar"/>
+	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER/org.eclipse.jdt.internal.debug.ui.launcher.StandardVMType/JavaSE-1.8"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>
