@@ -12,7 +12,6 @@ import org.kohsuke.args4j.spi.PathOptionHandler;
 
 import sushi.configure.SignatureHandler;
 
-
 public class Options {
 
 	private static Options instance = null;
