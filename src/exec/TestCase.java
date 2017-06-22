@@ -17,6 +17,20 @@ public class TestCase {
 		this.pathCondition = null;
 	}
 	
+	public TestCase(Options o){
+		this.className = o.getTestMethod().get(0) + "/" + o.getTestMethod().get(1);
+		this.parameterSignature = o.getTestMethod().get(2);
+		this.methodName = o.getTestMethod().get(3);
+		this.pathCondition = null;
+	}
+	
+	public TestCase(Options o,  Collection<Clause> path){
+		this.className =  o.getTestMethod().get(0) + "/" + o.getTestMethod().get(1);
+		this.parameterSignature = o.getTestMethod().get(2);
+		this.methodName = o.getTestMethod().get(3);
+		this.pathCondition = path;
+	}
+	
 	public TestCase(String cn, String ps, String mn){
 		this.className = cn;
 		this.parameterSignature = ps;

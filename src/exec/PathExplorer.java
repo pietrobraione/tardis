@@ -27,9 +27,9 @@ public class PathExplorer {
 	static private String indent = "";
 	static private int testcount = 0;
 
-	public PathExplorer(RunnerPath runner){
-		this.rp = new RunnerPath();
-		this.handlerPC = new PathConditionHandler(this.rp);
+	public PathExplorer(Options o, RunnerPath runner){
+		this.rp = new RunnerPath(o);
+		this.handlerPC = new PathConditionHandler(o, this.rp);
 	}
 
 

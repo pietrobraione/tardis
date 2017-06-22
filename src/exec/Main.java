@@ -1,6 +1,6 @@
 package exec;
 
-
+import common.Settings;
 import jbse.algo.exc.CannotManageStateException;
 import jbse.bc.exc.InvalidClassFileFactoryClassException;
 import jbse.common.exc.ClasspathException;
@@ -24,20 +24,39 @@ public class Main {
 				ClasspathException, CannotBacktrackException, CannotManageStateException, 
 				ThreadStackEmptyException, ContradictionException, EngineStuckException, 
 				FailureException {
-	
+		
+		
 		String testPackage = "tg";
+		String className = "Testgen";
+		String parametersSignature = "(Ltg/Testgen$Node;I)Ltg/Testgen$Node;";
+		String methodName  = "getNode";
 		String testClass = "Test";
 		String testMethodSignature = "()V";
 		String testMethod = "test0";
+		
 		int maxdepth = 50;
 	
-		TestCase tc = new TestCase(testPackage + "/" + testClass, testMethodSignature, testMethod);
-	
-		RunnerPath rp = new RunnerPath();
+		Options o = new Options();
 		
-		PathExplorer pe = new PathExplorer(rp);
+		o.setTestMethod(testPackage, testClass, testMethodSignature, testMethod);
+		o.setGuidedMethod(testPackage, className, parametersSignature, methodName);
+		o.setMaxDepth(maxdepth);
+		o.setTmpDirectoryBase(Settings.TMP_BASE_PATH);
+		o.setZ3Path(Settings.Z3_PATH);
+		o.setJBSELibraryPath(Settings.JBSE_PATH);
+		o.setJREPath(Settings.JRE_PATH);
+		o.setBinPath(Settings.BIN_PATH);
+		o.setOutDirectory(Settings.OUT_PATH);
+		o.setEvosuitePath(Settings.EVOSUITE_PATH);
+		o.setSushiLibPath(Settings.SUSHI_LIB_PATH);
+		
+		TestCase tc = new TestCase(o);
+		
+		RunnerPath rp = new RunnerPath(o);
+		
+		PathExplorer pe = new PathExplorer(o, rp);
 
-		pe.explore(tc, 0, maxdepth);
+		pe.explore(tc, 0, o.getMaxDepth());
 	}
 	
 }

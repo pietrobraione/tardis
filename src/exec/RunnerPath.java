@@ -7,7 +7,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 
-import common.Settings;
+
 import jbse.algo.exc.CannotManageStateException;
 import jbse.apps.run.DecisionProcedureGuidance;
 import jbse.apps.run.GuidanceException;
@@ -46,17 +46,26 @@ public class RunnerPath {
 	private DecisionProcedureGuidance dp;
 
 	//TODO make parametric the following stuff!
-	private String classPackage = "tg";
-	private String className = "Testgen";
-	private String parametersSignature = "(Ltg/Testgen$Node;I)Ltg/Testgen$Node;";
-	private String methodName  = "getNode";
-	private String[] classpath = {
-			Settings.BIN_PATH.toString(), 
-			Settings.JBSE_PATH.toString(), 
-			Settings.JBSE_PATH.toString() + "/../data/jre/rt.jar" //indispensable!
-			//put all the paths to the program to be executed (the binaries)
-	};
-
+	private String classPackage;
+	private String className;
+	private String parametersSignature;
+	private String methodName;
+	private String z3_Path;
+	private String tmp_Path;
+	private String[] classpath;
+	
+	public RunnerPath(Options o) {
+		this.classPackage = o.getGuidedMethod().get(0);
+		this.className = o.getGuidedMethod().get(1);
+		this.parametersSignature = o.getGuidedMethod().get(2);
+		this.methodName = o.getGuidedMethod().get(3);
+		this.classpath = new String[3];
+		this.classpath[0] = o.getBinPath().toString();
+		this.classpath[1] = o.getJBSELibraryPath().toString();
+		this.classpath[2] = o.getJREPath().toString();
+		this.z3_Path = o.getZ3Path().toString();
+		this.tmp_Path = o.getTmpDirectoryBase().toString();
+	}
 
 	private RunnerParameters commonParams = null;
 	private RunnerParameters commonGuidance = null;
@@ -83,7 +92,7 @@ public class RunnerPath {
 							new DecisionProcedureLICS( //useless?
 									new DecisionProcedureSMTLIB2_AUFNIRA(
 											new DecisionProcedureAlwSat(), 
-											calc, Settings.Z3_PATH.toString() + " -smt2 -in -t:10"), 
+											calc, z3_Path + " -smt2 -in -t:10"), 
 									calc, new LICSRulesRepo()), 
 							calc, new ClassInitRulesRepo()), calc);
 			p.setDecisionProcedure(pd);
@@ -162,7 +171,7 @@ public class RunnerPath {
 		final RunnerParameters pGuidance = getCommonGuidance(p);
 
 		//the guiding method (to be executed concretely)
-		final String testClassName = testCase.getClassName() ;
+		final String testClassName = testCase.getClassName();
 		final String testParametersSignature = testCase.getParameterSignature();
 		final String testMethodName = testCase.getMethodName();
 		pGuidance.setMethodSignature(testClassName, testParametersSignature, testMethodName);
@@ -270,7 +279,7 @@ public class RunnerPath {
 		fmt.formatEpilogue();
 
 		//TODO make this a parameter!
-		final String wrapperPath = Settings.TMP_BASE_PATH.toString();
+		final String wrapperPath = tmp_Path;
 
 		final String fileName = wrapperPath + "/EvoSuiteWrapper_" + breadth +".java";
 		try (final BufferedWriter w = Files.newBufferedWriter(Paths.get(fileName))) {
