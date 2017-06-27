@@ -26,11 +26,10 @@ public class Main {
 				FailureException {
 		
 		
-		String testPackage = "tg";
-		String className = "Testgen";
+		String className = "tg/Testgen";
 		String parametersSignature = "(Ltg/Testgen$Node;I)Ltg/Testgen$Node;";
 		String methodName  = "getNode";
-		String testClass = "Test";
+		String testClass = "tg/Test";
 		String testMethodSignature = "()V";
 		String testMethod = "test0";
 		
@@ -38,8 +37,8 @@ public class Main {
 	
 		Options o = new Options();
 		
-		o.setTestMethod(testPackage, testClass, testMethodSignature, testMethod);
-		o.setGuidedMethod(testPackage, className, parametersSignature, methodName);
+		o.setTestMethod(testClass, testMethodSignature, testMethod);
+		o.setGuidedMethod(className, parametersSignature, methodName);
 		o.setMaxDepth(maxdepth);
 		o.setTmpDirectoryBase(Settings.TMP_BASE_PATH);
 		o.setZ3Path(Settings.Z3_PATH);
@@ -51,12 +50,12 @@ public class Main {
 		o.setSushiLibPath(Settings.SUSHI_LIB_PATH);
 		
 		TestCase tc = new TestCase(o);
-		
+		TestIdentifier testCount = new TestIdentifier();
 		RunnerPath rp = new RunnerPath(o);
 		
 		PathExplorer pe = new PathExplorer(o, rp);
 
-		pe.explore(tc, 0, o.getMaxDepth());
+		pe.explore(testCount, tc, 0, o.getMaxDepth());
 	}
 	
 }

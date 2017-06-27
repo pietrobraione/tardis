@@ -46,25 +46,23 @@ public class RunnerPath {
 	private DecisionProcedureGuidance dp;
 
 	//TODO make parametric the following stuff!
-	private String classPackage;
 	private String className;
 	private String parametersSignature;
 	private String methodName;
-	private String z3_Path;
-	private String tmp_Path;
+	private String z3Path;
+	private String tmpPath;
 	private String[] classpath;
 	
 	public RunnerPath(Options o) {
-		this.classPackage = o.getGuidedMethod().get(0);
-		this.className = o.getGuidedMethod().get(1);
-		this.parametersSignature = o.getGuidedMethod().get(2);
-		this.methodName = o.getGuidedMethod().get(3);
+		this.className = o.getGuidedMethod().get(0);
+		this.parametersSignature = o.getGuidedMethod().get(1);
+		this.methodName = o.getGuidedMethod().get(2);
 		this.classpath = new String[3];
 		this.classpath[0] = o.getBinPath().toString();
 		this.classpath[1] = o.getJBSELibraryPath().toString();
 		this.classpath[2] = o.getJREPath().toString();
-		this.z3_Path = o.getZ3Path().toString();
-		this.tmp_Path = o.getTmpDirectoryBase().toString();
+		this.z3Path = o.getZ3Path().toString();
+		this.tmpPath = o.getTmpDirectoryBase().toString();
 	}
 
 	private RunnerParameters commonParams = null;
@@ -76,7 +74,7 @@ public class RunnerPath {
 			RunnerParameters p = new RunnerParameters();
 
 			//the guided method (to be executed symbolically)
-			String subjectClassName = classPackage + "/" + className;
+			String subjectClassName = className;
 			String subjectParametersSignature = parametersSignature;
 			String subjectMethodName = methodName;
 
@@ -92,7 +90,7 @@ public class RunnerPath {
 							new DecisionProcedureLICS( //useless?
 									new DecisionProcedureSMTLIB2_AUFNIRA(
 											new DecisionProcedureAlwSat(), 
-											calc, z3_Path + " -smt2 -in -t:10"), 
+											calc, z3Path + " -smt2 -in -t:10"), 
 									calc, new LICSRulesRepo()), 
 							calc, new ClassInitRulesRepo()), calc);
 			p.setDecisionProcedure(pd);
@@ -278,10 +276,7 @@ public class RunnerPath {
 		fmt.formatState(state);
 		fmt.formatEpilogue();
 
-		//TODO make this a parameter!
-		final String wrapperPath = tmp_Path;
-
-		final String fileName = wrapperPath + "/EvoSuiteWrapper_" + breadth +".java";
+		final String fileName = tmpPath + "/EvoSuiteWrapper_" + breadth +".java";
 		try (final BufferedWriter w = Files.newBufferedWriter(Paths.get(fileName))) {
 			w.write(fmt.emit());
 		} catch (IOException e) {

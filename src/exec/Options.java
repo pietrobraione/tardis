@@ -90,7 +90,7 @@ public class Options {
 	}
 	
 	public void setTestMethod(String... signature) {
-		if (signature.length != 4) {
+		if (signature.length != 3) {
 			return;
 		}
 		this.testMethodSignature = Arrays.asList(signature);
@@ -101,7 +101,7 @@ public class Options {
 	}
 	
 	public void setGuidedMethod(String... signature) {
-		if (signature.length != 4) {
+		if (signature.length != 3) {
 			return;
 		}
 		this.guidedMethodSignature = Arrays.asList(signature);

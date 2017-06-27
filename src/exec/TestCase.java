@@ -18,16 +18,16 @@ public class TestCase {
 	}
 	
 	public TestCase(Options o){
-		this.className = o.getTestMethod().get(0) + "/" + o.getTestMethod().get(1);
-		this.parameterSignature = o.getTestMethod().get(2);
-		this.methodName = o.getTestMethod().get(3);
+		this.className = o.getTestMethod().get(0);
+		this.parameterSignature = o.getTestMethod().get(1);
+		this.methodName = o.getTestMethod().get(2);
 		this.pathCondition = null;
 	}
 	
 	public TestCase(Options o,  Collection<Clause> path){
-		this.className =  o.getTestMethod().get(0) + "/" + o.getTestMethod().get(1);
-		this.parameterSignature = o.getTestMethod().get(2);
-		this.methodName = o.getTestMethod().get(3);
+		this.className =  o.getTestMethod().get(0);
+		this.parameterSignature = o.getTestMethod().get(1);
+		this.methodName = o.getTestMethod().get(2);
 		this.pathCondition = path;
 	}
 	

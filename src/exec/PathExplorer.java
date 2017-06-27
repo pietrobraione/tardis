@@ -23,9 +23,8 @@ public class PathExplorer {
 
 	private final RunnerPath rp;
 	private final PathConditionHandler handlerPC;
-
 	static private String indent = "";
-	static private int testcount = 0;
+	//static private int testcount = 0;
 
 	public PathExplorer(Options o, RunnerPath runner){
 		this.rp = new RunnerPath(o);
@@ -53,7 +52,7 @@ public class PathExplorer {
 	 * @throws EngineStuckException
 	 * @throws FailureException
 	 */
-	public void explore(TestCase tc, int startDepth, int maxDepth) 
+	public void explore(TestIdentifier testCount, TestCase tc, int startDepth, int maxDepth) 
 			throws DecisionException, CannotBuildEngineException, InitializationException, 
 			InvalidClassFileFactoryClassException, NonexistingObservedVariablesException, 
 			ClasspathException, CannotBacktrackException, CannotManageStateException, 
@@ -67,8 +66,8 @@ public class PathExplorer {
 		final State tcFinalState = rp.runProgram(tc, -1).get(0);
 		final Collection<Clause> tcFinalPC = tcFinalState.getPathCondition();
 		final int tcFinalDepth = tcFinalState.getDepth();
-
-		System.out.println(indent + "Test_" + (++testcount) + ": Executed PC= " + tcFinalPC); 
+		testCount.testIncrease();
+		System.out.println(indent + "Test_" + testCount.getTestCount() + ": Executed PC= " + tcFinalPC); 
 
 		for (int currentDepth = startDepth; currentDepth < Math.min(maxDepth, tcFinalDepth - 1); currentDepth++) {
 			System.out.println(indent + "DEPTH=" + currentDepth);
@@ -86,7 +85,7 @@ public class PathExplorer {
 				String indentBak = indent;
 				indent += "  ";
 				
-				handlerPC.generateTestCases(newState, currentDepth, currentBreadth, maxDepth);
+				handlerPC.generateTestCases(testCount, newState, currentDepth, currentBreadth, maxDepth);
 				
 				indent = indentBak;
 				System.out.println(indent + "BACK"); 
