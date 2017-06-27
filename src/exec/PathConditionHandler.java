@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.nio.file.Files;
 import java.io.BufferedOutputStream;
+import java.io.File;
 
 import javax.tools.JavaCompiler;
 import javax.tools.ToolProvider;
@@ -108,8 +109,8 @@ public class PathConditionHandler {
 		final String testClass = test_Class;
 		final String testMethod = test_Method + test_Signature;
 		final String evosuitePath = evosuite_Path;
-		final String classpathEvosuite = bin_Path + ";" + sushi_lib_Path; //TODO fix classpath separator for platform
-		final String classpathCompilation = classpathEvosuite + ";" + evosuitePath; //TODO fix classpath separator for platform
+		final String classpathEvosuite = bin_Path + File.pathSeparator + sushi_lib_Path;
+		final String classpathCompilation = classpathEvosuite + File.pathSeparator + evosuitePath;
 		final String testDir = out_Path;
 		
 		//prepares the Evosuite parameters
@@ -122,7 +123,7 @@ public class PathConditionHandler {
 		evosuiteParameters.add(testPackage + "." + testClass);
 		evosuiteParameters.add("-mem");
 		evosuiteParameters.add("2048");
-		evosuiteParameters.add("-DCP=" + classpathEvosuite);
+		evosuiteParameters.add("-DCP=" + classpathEvosuite); 
 		evosuiteParameters.add("-Dassertions=false");
 		evosuiteParameters.add("-Dhtml=false");
 		evosuiteParameters.add("-Dglobal_timeout=600");
@@ -174,7 +175,7 @@ public class PathConditionHandler {
 		}
 
 		//creates the TestCase and explores it
-		final TestCase newTC = new TestCase( testPackage + "/" + testClass + "PC_" +  depth + "_" + breadth + "_Test", "()V", "test0");
+		final TestCase newTC = new TestCase(testPackage + "/" + testClass + "PC_" +  depth + "_" + breadth + "_Test", "()V", "test0");
 		System.out.println("RECURSE on " + newTC);
 		pe = new PathExplorer(o, rp);
 		pe.explore(newTC, depth + 1, maxDepth);
