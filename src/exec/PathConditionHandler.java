@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.nio.file.Files;
 import java.io.BufferedOutputStream;
+import java.io.File;
 
 import javax.tools.JavaCompiler;
 import javax.tools.ToolProvider;
@@ -108,8 +109,8 @@ public class PathConditionHandler {
 		final String testClass = test_Class;
 		final String testMethod = test_Method + test_Signature;
 		final String evosuitePath = evosuite_Path;
-		final String classpathEvosuite = bin_Path + ";" + sushi_lib_Path; //TODO fix classpath separator for platform
-		final String classpathCompilation = classpathEvosuite + ";" + evosuitePath; //TODO fix classpath separator for platform
+		final String classpathEvosuite = bin_Path + File.pathSeparator + sushi_lib_Path;
+		final String classpathCompilation = classpathEvosuite + File.pathSeparator + evosuitePath;
 		final String testDir = out_Path;
 		
 		//prepares the Evosuite parameters
