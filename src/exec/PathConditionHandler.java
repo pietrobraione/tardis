@@ -64,9 +64,9 @@ public class PathConditionHandler {
 	 * condition, and then explores the generated test case starting from
 	 * the depth of the path condition.
 	 * 
+	 * @param testCount a {@link TestIdentifier}. Only used to disambiguate file names.
 	 * @param state a {@link State}. The test case will cover its path condition.
 	 * @param depth the depth of {@code state}.
-	 * @param breadth the breadth of {@code state}. Only used to disambiguate file names.
 	 * @param maxDepth the maximum depth at which generation of tests is performed.
 	 *        Used for recursive calls to exploration.
 	 * @throws DecisionException
@@ -82,14 +82,14 @@ public class PathConditionHandler {
 	 * @throws EngineStuckException
 	 * @throws FailureException
 	 */
-	public void generateTestCases(TestIdentifier testCount, State state, int depth, int breadth, int maxDepth)
+	public void generateTestCases(TestIdentifier testCount, State state, int depth, int maxDepth)
 			throws DecisionException, CannotBuildEngineException, InitializationException, 
 			InvalidClassFileFactoryClassException, NonexistingObservedVariablesException, 
 			ClasspathException, CannotBacktrackException, CannotManageStateException, 
 			ThreadStackEmptyException, ContradictionException, EngineStuckException, 
 			FailureException{
 		//compiles the Evosuite wrapper
-		final String fileName = rp.emitEvoSuiteWrapper(state, breadth);
+		final String fileName = rp.emitEvoSuiteWrapper(testCount, state);
 		final Path logFileJavacPath = Paths.get(tmpPath + "/javac-log-" + testCount.getTestCount() + ".txt");
 		final String[] javacParameters = { "-d", binPath, fileName };
 		try (final OutputStream w = new BufferedOutputStream(Files.newOutputStream(logFileJavacPath))) {
@@ -100,7 +100,6 @@ public class PathConditionHandler {
 		}
 
 		//some configuration - test method, paths
-		//TODO make this stuff configurable!
 		final String classpathEvosuite = binPath + File.pathSeparator + sushiLibPath;
 		final String classpathCompilation = classpathEvosuite + File.pathSeparator + evosuitePath;
 		
@@ -134,7 +133,7 @@ public class PathConditionHandler {
 		evosuiteParameters.add("-Dmax_size=1");
 		evosuiteParameters.add("-Dmax_initial_tests=1");
 		evosuiteParameters.add("-Dinline=false");
-		evosuiteParameters.add("-Dpath_condition=" + testClass.replace('/', '.') + "," + testMethod + testSignature + ",EvoSuiteWrapper_" + breadth);
+		evosuiteParameters.add("-Dpath_condition=" + testClass.replace('/', '.') + "," + testMethod + testSignature + ",EvoSuiteWrapper_" + testCount.getTestCount());
 		evosuiteParameters.add("-Dpath_condition_check_first_target_call_only=true");
 
 		//launches Evosuite
@@ -151,7 +150,6 @@ public class PathConditionHandler {
 		
 		//compiles the generated test
 		//TODO here we are assuming EvoSuite was able to find a test, handle the situation where EvoSuite does not generate anything
-		//TODO make the following paths configurable!
 		final String testCaseScaff = outPath + "/" + testClass + "_" + testCount.getTestCount() + "_Test_scaffolding.java";
 		final String testCase = outPath + "/" + testClass + "_" + testCount.getTestCount() + "_Test.java";
 		final Path logFileJavacPath_Test = Paths.get(tmpPath + "/javac-log-test-" +  testCount.getTestCount() + ".txt");

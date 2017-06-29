@@ -24,7 +24,6 @@ public class PathExplorer {
 	private final RunnerPath rp;
 	private final PathConditionHandler handlerPC;
 	static private String indent = "";
-	//static private int testcount = 0;
 
 	public PathExplorer(Options o, RunnerPath runner){
 		this.rp = new RunnerPath(o);
@@ -73,7 +72,6 @@ public class PathExplorer {
 			System.out.println(indent + "DEPTH=" + currentDepth);
 
 			final List<State> newStates = rp.runProgram(tc, currentDepth);
-			int currentBreadth = 0;
 			for (State newState : newStates) {
 				final Collection<Clause> currentPC = newState.getPathCondition();
 				if (alreadyExplored(currentPC, tcFinalPC)) {
@@ -85,12 +83,11 @@ public class PathExplorer {
 				String indentBak = indent;
 				indent += "  ";
 				
-				handlerPC.generateTestCases(testCount, newState, currentDepth, currentBreadth, maxDepth);
+				handlerPC.generateTestCases(testCount, newState, currentDepth, maxDepth);
 				
 				indent = indentBak;
 				System.out.println(indent + "BACK"); 
 				
-				currentBreadth++;
 			}
 
 		}

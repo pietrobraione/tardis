@@ -44,8 +44,6 @@ import sushi.execution.jbse.StateFormatterSushiPathCondition;
 public class RunnerPath {
 	private State initialState;
 	private DecisionProcedureGuidance dp;
-
-	//TODO make parametric the following stuff!
 	private String className;
 	private String parametersSignature;
 	private String methodName;
@@ -257,15 +255,14 @@ public class RunnerPath {
 	 * Must be invoked after an invocation of {@link #runProgram(TestCase, int)}.
 	 * Generates the EvoSuite wrapper for the path condition of some state.
 	 * 
+	 * @param testCount a {@link TestIdentifier} (used only to disambiguate
+	 *        file names).
 	 * @param state a {@link State}; must be some state in the execution 
 	 *        triggered by {@link #runProgram(TestCase, int)}.
-	 * @param breadth the breadth of {@code state} (used only to disambiguate
-	 *        file names).
 	 * @return a {@link String}, the file name of the generated EvoSuite wrapper.
 	 */
-	//TODO only breadth is not enough to disambiguate file names.
-	public String emitEvoSuiteWrapper(State state, int breadth) {
-		final StateFormatterSushiPathCondition fmt = new StateFormatterSushiPathCondition(breadth, () -> this.initialState, () -> {
+	public String emitEvoSuiteWrapper(TestIdentifier testCount, State state) {
+		final StateFormatterSushiPathCondition fmt = new StateFormatterSushiPathCondition(testCount.getTestCount(), () -> this.initialState, () -> {
 			try {
 				return dp.getModel();
 			} catch (DecisionException e1) {
@@ -276,7 +273,7 @@ public class RunnerPath {
 		fmt.formatState(state);
 		fmt.formatEpilogue();
 
-		final String fileName = tmpPath + "/EvoSuiteWrapper_" + breadth +".java";
+		final String fileName = tmpPath + "/EvoSuiteWrapper_" + testCount.getTestCount() +".java";
 		try (final BufferedWriter w = Files.newBufferedWriter(Paths.get(fileName))) {
 			w.write(fmt.emit());
 		} catch (IOException e) {
