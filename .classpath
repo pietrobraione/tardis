@@ -2,6 +2,7 @@
 <classpath>
 	<classpathentry kind="src" path="src"/>
 	<classpathentry kind="src" path="examples"/>
+	<classpathentry kind="src" path="testCase"/>
 	<classpathentry combineaccessrules="false" kind="src" path="/jbse"/>
 	<classpathentry combineaccessrules="false" kind="src" path="/sushi"/>
 	<classpathentry combineaccessrules="false" kind="src" path="/sushi-lib"/>
