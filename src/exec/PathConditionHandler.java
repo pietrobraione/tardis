@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.nio.file.Files;
 import java.io.BufferedOutputStream;
+import java.io.BufferedWriter;
 import java.io.File;
 
 import javax.tools.JavaCompiler;
@@ -26,11 +27,9 @@ import jbse.jvm.exc.NonexistingObservedVariablesException;
 import jbse.mem.State;
 import jbse.mem.exc.ContradictionException;
 import jbse.mem.exc.ThreadStackEmptyException;
+import sushi.execution.jbse.StateFormatterSushiPathCondition;
 
 public class PathConditionHandler {
-	private final RunnerPath rp;
-	private final JavaCompiler compiler;
-	private PathExplorer pe;
 	private Options o;
 	private String testClass;
 	private String testMethod;
@@ -40,10 +39,10 @@ public class PathConditionHandler {
 	private String evosuitePath;
 	private String sushiLibPath;
 	private String outPath;
+	private final JavaCompiler compiler;
 	
 
-	public PathConditionHandler(Options o, RunnerPath rp) {
-		this.rp = rp;
+	public PathConditionHandler(Options o) {
 		this.o = o;
 		this.testClass = o.getGuidedMethod().get(0);
 		this.testSignature = o.getGuidedMethod().get(1);
@@ -58,6 +57,37 @@ public class PathConditionHandler {
 			//TODO throw an exception
 		}
 	}
+	
+
+	/**
+	 * Generates the EvoSuite wrapper for the path condition of some state.
+	 * 
+	 * @param testCount a {@link TestIdentifier} (used only to disambiguate
+	 *        file names).
+	 * @param initialState a {@link State}; must be the initial state in the execution 
+	 *        for which we want to generate the wrapper.
+	 * @param finalState a {@link State}; must be the final state in the execution 
+	 *        for which we want to generate the wrapper.
+	 * @return a {@link String}, the file name of the generated EvoSuite wrapper.
+	 */
+	private String emitEvoSuiteWrapper(TestIdentifier testCount, State initialState, State finalState) {
+		final StateFormatterSushiPathCondition fmt = new StateFormatterSushiPathCondition(testCount.getTestCount(), () -> initialState);
+		fmt.formatPrologue();
+		fmt.formatState(finalState);
+		fmt.formatEpilogue();
+
+		final String fileName = this.tmpPath + "/EvoSuiteWrapper_" + testCount.getTestCount() +".java";
+		try (final BufferedWriter w = Files.newBufferedWriter(Paths.get(fileName))) {
+			w.write(fmt.emit());
+		} catch (IOException e) {
+			e.printStackTrace();
+			return null;
+		}
+		fmt.cleanup();
+
+		return fileName;
+	}
+
 
 	/**
 	 * Invokes EvoSuite to generate a {@link TestCase} that covers a path 
@@ -65,10 +95,10 @@ public class PathConditionHandler {
 	 * the depth of the path condition.
 	 * 
 	 * @param testCount a {@link TestIdentifier}. Only used to disambiguate file names.
-	 * @param state a {@link State}. The test case will cover its path condition.
+	 * @param initialState a {@link State}, the initial state of a symbolic execution.
+	 * @param finalState a {@link State}, the final state of the symbolic execution whose
+	 *        initial state is {@code initialState}. The test case will cover its path condition.
 	 * @param depth the depth of {@code state}.
-	 * @param maxDepth the maximum depth at which generation of tests is performed.
-	 *        Used for recursive calls to exploration.
 	 * @throws DecisionException
 	 * @throws CannotBuildEngineException
 	 * @throws InitializationException
@@ -82,42 +112,42 @@ public class PathConditionHandler {
 	 * @throws EngineStuckException
 	 * @throws FailureException
 	 */
-	public void generateTestCases(TestIdentifier testCount, State state, int depth, int maxDepth)
+	public void generateTestCases(TestIdentifier testCount, State initialState, State finalState, int depth)
 			throws DecisionException, CannotBuildEngineException, InitializationException, 
 			InvalidClassFileFactoryClassException, NonexistingObservedVariablesException, 
 			ClasspathException, CannotBacktrackException, CannotManageStateException, 
 			ThreadStackEmptyException, ContradictionException, EngineStuckException, 
-			FailureException{
+			FailureException {
 		//compiles the Evosuite wrapper
-		final String fileName = rp.emitEvoSuiteWrapper(testCount, state);
-		final Path logFileJavacPath = Paths.get(tmpPath + "/javac-log-" + testCount.getTestCount() + ".txt");
+		final String fileName = emitEvoSuiteWrapper(testCount, initialState, finalState);
+		final Path logFileJavacPath = Paths.get(this.tmpPath + "/javac-log-" + testCount.getTestCount() + ".txt");
 		final String[] javacParameters = { "-d", binPath, fileName };
 		try (final OutputStream w = new BufferedOutputStream(Files.newOutputStream(logFileJavacPath))) {
-			compiler.run(null, w, w, javacParameters);
+			this.compiler.run(null, w, w, javacParameters);
 		} catch (IOException e) {
 			e.printStackTrace();
 			//TODO rethrow or handle the error otherwise
 		}
 
 		//some configuration - test method, paths
-		final String classpathEvosuite = binPath + File.pathSeparator + sushiLibPath;
-		final String classpathCompilation = classpathEvosuite + File.pathSeparator + evosuitePath;
+		final String classpathEvosuite = this.binPath + File.pathSeparator + this.sushiLibPath;
+		final String classpathCompilation = classpathEvosuite + File.pathSeparator + this.evosuitePath;
 		
 		//prepares the Evosuite parameters
 		final List<String> evosuiteParameters = new ArrayList<String>();
 		evosuiteParameters.add("java");
 		evosuiteParameters.add("-Xmx4G");
 		evosuiteParameters.add("-jar");
-		evosuiteParameters.add(evosuitePath);
+		evosuiteParameters.add(this.evosuitePath);
 		evosuiteParameters.add("-class");
-		evosuiteParameters.add(testClass.replace('/', '.'));
+		evosuiteParameters.add(this.testClass.replace('/', '.'));
 		evosuiteParameters.add("-mem");
 		evosuiteParameters.add("2048");
 		evosuiteParameters.add("-DCP=" + classpathEvosuite); 
 		evosuiteParameters.add("-Dassertions=false");
 		evosuiteParameters.add("-Dhtml=false");
 		evosuiteParameters.add("-Dglobal_timeout=600");
-		evosuiteParameters.add("-Dreport_dir=" + tmpPath);
+		evosuiteParameters.add("-Dreport_dir=" + this.tmpPath);
 		evosuiteParameters.add("-Djunit_suffix=" + "_" + testCount.getTestCount()  + "_Test");
 		evosuiteParameters.add("-Dsearch_budget=600");
 		evosuiteParameters.add("-Dtest_dir=" + outPath);
@@ -133,15 +163,14 @@ public class PathConditionHandler {
 		evosuiteParameters.add("-Dmax_size=1");
 		evosuiteParameters.add("-Dmax_initial_tests=1");
 		evosuiteParameters.add("-Dinline=false");
-		evosuiteParameters.add("-Dpath_condition=" + testClass.replace('/', '.') + "," + testMethod + testSignature + ",EvoSuiteWrapper_" + testCount.getTestCount());
+		evosuiteParameters.add("-Dpath_condition=" + this.testClass.replace('/', '.') + "," + this.testMethod + this.testSignature + ",EvoSuiteWrapper_" + testCount.getTestCount());
 		evosuiteParameters.add("-Dpath_condition_check_first_target_call_only=true");
 
 		//launches Evosuite
-		final Path logFileEvosuitePath = Paths.get(tmpPath + "/evosuite-log-" + testCount.getTestCount() + ".txt");
+		final Path logFileEvosuitePath = Paths.get(this.tmpPath + "/evosuite-log-" + testCount.getTestCount() + ".txt");
 		final ProcessBuilder pb = new ProcessBuilder(evosuiteParameters).redirectErrorStream(true).redirectOutput(logFileEvosuitePath.toFile());
-		Process pr;
 		try {
-			pr = pb.start();
+			final Process pr = pb.start();
 			pr.waitFor();
 		} catch (IOException | InterruptedException e) {
 			e.printStackTrace();
@@ -150,24 +179,25 @@ public class PathConditionHandler {
 		
 		//compiles the generated test
 		//TODO here we are assuming EvoSuite was able to find a test, handle the situation where EvoSuite does not generate anything
-		final String testCaseScaff = outPath + "/" + testClass + "_" + testCount.getTestCount() + "_Test_scaffolding.java";
-		final String testCase = outPath + "/" + testClass + "_" + testCount.getTestCount() + "_Test.java";
-		final Path logFileJavacPath_Test = Paths.get(tmpPath + "/javac-log-test-" +  testCount.getTestCount() + ".txt");
-		final String[] javacParametersTestScaff = { "-cp", classpathCompilation, "-d", binPath, testCaseScaff };
-		final String[] javacParametersTestCase = { "-cp", classpathCompilation, "-d", binPath, testCase };
-		try (final OutputStream w = new BufferedOutputStream(Files.newOutputStream(logFileJavacPath_Test))) {
-			compiler.run(null, w, w, javacParametersTestScaff);
-			compiler.run(null, w, w, javacParametersTestCase);
+		final String testCaseClassName = this.testClass + "_" + testCount.getTestCount() + "_Test";
+		final String testCaseScaff = this.outPath + "/" + testCaseClassName + "_scaffolding.java";
+		final String testCase = this.outPath + "/" + testCaseClassName + ".java";
+		final Path javacLogFile = Paths.get(this.tmpPath + "/javac-log-test-" +  testCount.getTestCount() + ".txt");
+		final String[] javacParametersTestScaff = { "-cp", classpathCompilation, "-d", this.binPath, testCaseScaff };
+		final String[] javacParametersTestCase = { "-cp", classpathCompilation, "-d", this.binPath, testCase };
+		try (final OutputStream w = new BufferedOutputStream(Files.newOutputStream(javacLogFile))) {
+			this.compiler.run(null, w, w, javacParametersTestScaff);
+			this.compiler.run(null, w, w, javacParametersTestCase);
 		} catch (IOException e) {
 			e.printStackTrace();
 			//TODO rethrow or handle the error otherwise
 		}
 
 		//creates the TestCase and explores it
-		final TestCase newTC = new TestCase(testClass + "_" + testCount.getTestCount() + "_Test", "()V", "test0");
+		final TestCase newTC = new TestCase(testCaseClassName, "()V", "test0");
 		System.out.println("RECURSE on " + newTC);
-		pe = new PathExplorer(o, rp);
-		pe.explore(testCount, newTC, depth + 1, maxDepth);
+		final PathExplorer pe = new PathExplorer(this.o);
+		pe.explore(testCount, newTC, depth + 1);
 	}
 }
 

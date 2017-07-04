@@ -20,16 +20,16 @@ import jbse.mem.exc.ContradictionException;
 import jbse.mem.exc.ThreadStackEmptyException;
 
 public class PathExplorer {
-
+	private final int maxDepth;
 	private final RunnerPath rp;
 	private final PathConditionHandler handlerPC;
 	static private String indent = "";
 
-	public PathExplorer(Options o, RunnerPath runner){
+	public PathExplorer(Options o) {
+		this.maxDepth = o.getMaxDepth();
 		this.rp = new RunnerPath(o);
-		this.handlerPC = new PathConditionHandler(o, this.rp);
+		this.handlerPC = new PathConditionHandler(o);
 	}
-
 
 	/**
 	 * Executes a test case and generates tests for all the alternative branches
@@ -37,7 +37,6 @@ public class PathExplorer {
 	 * 
 	 * @param tc a {@link TestCase}.
 	 * @param startDepth the depth to which generation of tests must be started.
-	 * @param maxDepth the maximum depth at which generation of tests is performed.
 	 * @throws DecisionException
 	 * @throws CannotBuildEngineException
 	 * @throws InitializationException
@@ -51,27 +50,28 @@ public class PathExplorer {
 	 * @throws EngineStuckException
 	 * @throws FailureException
 	 */
-	public void explore(TestIdentifier testCount, TestCase tc, int startDepth, int maxDepth) 
+	public void explore(TestIdentifier testCount, TestCase tc, int startDepth) 
 			throws DecisionException, CannotBuildEngineException, InitializationException, 
 			InvalidClassFileFactoryClassException, NonexistingObservedVariablesException, 
 			ClasspathException, CannotBacktrackException, CannotManageStateException, 
 			ThreadStackEmptyException, ContradictionException, EngineStuckException, 
 			FailureException {
-		if (maxDepth <= 0) {
+		if (this.maxDepth <= 0) {
 			return;
 		}
 
 		//runs the test case up to the final state, and takes the final state's path condition
-		final State tcFinalState = rp.runProgram(tc, -1).get(0);
+		final State tcFinalState = this.rp.runProgram(tc, -1).get(0);
 		final Collection<Clause> tcFinalPC = tcFinalState.getPathCondition();
 		final int tcFinalDepth = tcFinalState.getDepth();
 		testCount.testIncrease();
 		System.out.println(indent + "Test_" + testCount.getTestCount() + ": Executed PC= " + tcFinalPC); 
 
-		for (int currentDepth = startDepth; currentDepth < Math.min(maxDepth, tcFinalDepth - 1); currentDepth++) {
+		for (int currentDepth = startDepth; currentDepth < Math.min(this.maxDepth, tcFinalDepth - 1); currentDepth++) {
 			System.out.println(indent + "DEPTH=" + currentDepth);
 
-			final List<State> newStates = rp.runProgram(tc, currentDepth);
+			final List<State> newStates = this.rp.runProgram(tc, currentDepth);
+			final State initialState = this.rp.getInitialState();
 			for (State newState : newStates) {
 				final Collection<Clause> currentPC = newState.getPathCondition();
 				if (alreadyExplored(currentPC, tcFinalPC)) {
@@ -80,14 +80,13 @@ public class PathExplorer {
 
 				System.out.println(indent + "** currently considered PC: " + currentPC);
 				System.out.print(indent);
-				String indentBak = indent;
+				final String indentBak = indent;
 				indent += "  ";
-				
-				handlerPC.generateTestCases(testCount, newState, currentDepth, maxDepth);
-				
+
+				this.handlerPC.generateTestCases(testCount, initialState, newState, currentDepth);
+
 				indent = indentBak;
 				System.out.println(indent + "BACK"); 
-				
 			}
 
 		}
@@ -95,21 +94,15 @@ public class PathExplorer {
 		System.out.println(indent + "DONE"); 
 	}
 
-	private boolean alreadyExplored(Collection<Clause> newPC, Collection<Clause> oldPC){
-		Collection<Clause> donePC = Arrays.asList(Arrays.copyOfRange(
+	private static boolean alreadyExplored(Collection<Clause> newPC, Collection<Clause> oldPC) {
+		final List<Clause> donePC = Arrays.asList(Arrays.copyOfRange(
 				oldPC.toArray(new Clause[0]), 0, 
 				newPC.size()));
-		if (donePC.toString().equals(newPC.toString())){
+		if (donePC.toString().equals(newPC.toString())) {
 			return true;
-		}else{
+		} else {
 			return false;
 		}
 	}
-
-
-
-
-
-
 }
 

@@ -49,13 +49,11 @@ public class Main {
 		o.setEvosuitePath(Settings.EVOSUITE_PATH);
 		o.setSushiLibPath(Settings.SUSHI_LIB_PATH);
 		
-		TestCase tc = new TestCase(o);
-		TestIdentifier testCount = new TestIdentifier();
-		RunnerPath rp = new RunnerPath(o);
-		
-		PathExplorer pe = new PathExplorer(o, rp);
+		PathExplorer pe = new PathExplorer(o);
 
-		pe.explore(testCount, tc, 0, o.getMaxDepth());
+		TestIdentifier testCount = new TestIdentifier();
+		TestCase tc = new TestCase(o);
+		pe.explore(testCount, tc, 0);
 	}
 	
 }

@@ -2,10 +2,6 @@ package exec;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.io.BufferedWriter;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 
 
 import jbse.algo.exc.CannotManageStateException;
@@ -39,96 +35,106 @@ import jbse.rewr.RewriterOperationOnSimplex;
 import jbse.rules.ClassInitRulesRepo;
 import jbse.rules.LICSRulesRepo;
 import jbse.tree.StateTree.BranchPoint;
-import sushi.execution.jbse.StateFormatterSushiPathCondition;
 
 public class RunnerPath {
-	private State initialState;
-	private DecisionProcedureGuidance dp;
-	private String className;
-	private String parametersSignature;
-	private String methodName;
-	private String z3Path;
-	private String tmpPath;
-	private String[] classpath;
-	
+	private final String[] classpath;
+	private final String z3Path;
+	private final RunnerParameters commonParams;
+	private final RunnerParameters commonGuidance;
+		
 	public RunnerPath(Options o) {
-		this.className = o.getGuidedMethod().get(0);
-		this.parametersSignature = o.getGuidedMethod().get(1);
-		this.methodName = o.getGuidedMethod().get(2);
 		this.classpath = new String[3];
 		this.classpath[0] = o.getBinPath().toString();
 		this.classpath[1] = o.getJBSELibraryPath().toString();
 		this.classpath[2] = o.getJREPath().toString();
 		this.z3Path = o.getZ3Path().toString();
-		this.tmpPath = o.getTmpDirectoryBase().toString();
+		
+		//builds the template parameters object for the guided (symbolic) execution
+		this.commonParams = new RunnerParameters();
+		this.commonParams.setMethodSignature(o.getGuidedMethod().get(0), o.getGuidedMethod().get(1), o.getGuidedMethod().get(2));
+		this.commonParams.addClasspath(this.classpath);
+		this.commonParams.setBreadthMode(BreadthMode.ALL_DECISIONS_NONTRIVIAL);
+		
+		//builds the template parameters object for the guiding (concrete) execution
+		this.commonGuidance = new RunnerParameters();
+		this.commonGuidance.addClasspath(this.classpath);
+		this.commonGuidance.setStateIdentificationMode(StateIdentificationMode.COMPACT);
+		this.commonGuidance.setBreadthMode(BreadthMode.ALL_DECISIONS);
 	}
 
-	private RunnerParameters commonParams = null;
-	private RunnerParameters commonGuidance = null;
-
-	private  RunnerParameters getCommonParams() throws DecisionException {
-		if (commonParams == null) {
-			//builds the parameters for the guided (symbolic) execution
-			RunnerParameters p = new RunnerParameters();
-
-			//the guided method (to be executed symbolically)
-			String subjectClassName = className;
-			String subjectParametersSignature = parametersSignature;
-			String subjectMethodName = methodName;
-
-			CalculatorRewriting calc = new CalculatorRewriting();
-			calc.addRewriter(new RewriterOperationOnSimplex());
-
-
-			p.addClasspath(classpath);
-			p.setMethodSignature(subjectClassName, subjectParametersSignature, subjectMethodName);
-			p.setCalculator(calc);
-			DecisionProcedureAlgorithms pd = new DecisionProcedureAlgorithms(
-					new DecisionProcedureClassInit( //useless?
-							new DecisionProcedureLICS( //useless?
-									new DecisionProcedureSMTLIB2_AUFNIRA(
-											new DecisionProcedureAlwSat(), 
-											calc, z3Path + " -smt2 -in -t:10"), 
-									calc, new LICSRulesRepo()), 
-							calc, new ClassInitRulesRepo()), calc);
-			p.setDecisionProcedure(pd);
-			p.setBreadthMode(BreadthMode.ALL_DECISIONS_NONTRIVIAL);
-
-			commonParams = p;
-
+	private static class ActionsRunner extends Actions {
+		private final int testDepth;
+		private final DecisionProcedureGuidance guid;
+		private int currentDepth = 0;
+		private final ArrayList<State> stateList = new ArrayList<State>();
+		
+		public ActionsRunner(int testDepth, DecisionProcedureGuidance guid) {
+			this.testDepth = testDepth;
+			this.guid = guid;
 		}
-		return commonParams;
-	}
+		
+		public ArrayList<State> getStateList() {
+			return this.stateList;
+		}
+		
+		//this MUST be present, or the guiding execution will not advance!!!!
+		@Override
+		public boolean atStepPre() {
+			try {
+				if (this.getEngine().getCurrentState().getCurrentMethodSignature().equals( 
+						this.guid.getCurrentMethodSignature())) {
+					this.guid.step();
+				}
+			} catch (GuidanceException | CannotManageStateException | ThreadStackEmptyException e) {
+				e.printStackTrace();
+				return true;
+			}
+			//put here your stuff, if you want to do something							
 
-	private RunnerParameters getCommonGuidance(RunnerParameters p) throws DecisionException {
-		if (commonGuidance == null) {
-
-			//builds the parameters for the guiding (concrete) execution
-			RunnerParameters pGuidance = new RunnerParameters();
-			pGuidance.addClasspath(classpath);
-
-			pGuidance.setCalculator(p.getCalculator());
-			pGuidance.setDecisionProcedure(
-					new DecisionProcedureAlgorithms(
-							new DecisionProcedureClassInit(
-									new DecisionProcedureAlwSat(), 
-									(CalculatorRewriting) p.getCalculator(), new ClassInitRulesRepo()), 
-							p.getCalculator())); //for concrete execution
-			pGuidance.setStateIdentificationMode(StateIdentificationMode.COMPACT);
-			pGuidance.setBreadthMode(BreadthMode.ALL_DECISIONS);
-
-
-
-			commonGuidance = pGuidance;
+			return super.atStepPre();
 		}
 
+		@Override
+		public boolean atRoot() {
+			if (this.testDepth == 0) {
+				this.guid.endGuidance();
+			}
+			return super.atRoot();
+		}
 
+		@Override
+		public boolean atBranch(BranchPoint bp) {
+			this.currentDepth++;				
+			if (this.currentDepth == this.testDepth) {
+				this.guid.endGuidance();
+			} else if (this.currentDepth == this.testDepth + 1) {
+				this.stateList.add(this.getEngine().getCurrentState().clone());
+				this.getEngine().stopCurrentTrace();
+			}
 
-		return commonGuidance;
+			return super.atBranch(bp);
+		}
+
+		@Override
+		public boolean atBacktrackPost(BranchPoint bp) {
+			this.stateList.add(this.getEngine().getCurrentState().clone());
+			this.getEngine().stopCurrentTrace();
+
+			return super.atBacktrackPost(bp);
+		}
+
+		@Override
+		public void atEnd() {
+			if (this.testDepth < 0) {
+				final State finalState = this.getEngine().getCurrentState();
+				this.stateList.add(finalState);
+			}
+			super.atEnd();
+		}
 	}
 
-
-
+	private State initialState;
+	
 	/**
 	 * Does symbolic execution guided by a test case up to some depth, 
 	 * then peeks the states on the next branch.  
@@ -161,83 +167,44 @@ public class RunnerPath {
 			FailureException {
 
 		//builds the parameters for the guided (symbolic) execution
-		final RunnerParameters p = getCommonParams();
+		final RunnerParameters p = this.commonParams.clone();
+		final RunnerParameters pGuidance = this.commonGuidance.clone();
 
-		//builds the parameters for the guiding (concrete) execution
-		final RunnerParameters pGuidance = getCommonGuidance(p);
+
+		//the calculator
+		final CalculatorRewriting calc = new CalculatorRewriting();
+		calc.addRewriter(new RewriterOperationOnSimplex());
+		p.setCalculator(calc);
+		pGuidance.setCalculator(calc);
+		
+		//the decision procedure
+		p.setDecisionProcedure(new DecisionProcedureAlgorithms(
+				new DecisionProcedureClassInit( //useless?
+						new DecisionProcedureLICS( //useless?
+								new DecisionProcedureSMTLIB2_AUFNIRA(
+										new DecisionProcedureAlwSat(), 
+										calc, this.z3Path + " -smt2 -in -t:10"), 
+								calc, new LICSRulesRepo()), 
+						calc, new ClassInitRulesRepo()), calc));
+
+		//the decision procedure
+		pGuidance.setDecisionProcedure(
+				new DecisionProcedureAlgorithms(
+						new DecisionProcedureClassInit(
+								new DecisionProcedureAlwSat(), 
+								calc, new ClassInitRulesRepo()), 
+						calc)); //for concrete execution
 
 		//the guiding method (to be executed concretely)
-		final String testClassName = testCase.getClassName();
-		final String testParametersSignature = testCase.getParameterSignature();
-		final String testMethodName = testCase.getMethodName();
-		pGuidance.setMethodSignature(testClassName, testParametersSignature, testMethodName);
+		pGuidance.setMethodSignature(testCase.getClassName(), testCase.getParameterSignature(), testCase.getMethodName());
 
 		//the guidance decision procedure
 		final DecisionProcedureGuidance guid = new DecisionProcedureGuidance(p.getDecisionProcedure(),
 				p.getCalculator(), pGuidance, p.getMethodSignature());
 		p.setDecisionProcedure(guid);
-
-		//the return value
-		final List<State> stateList = new ArrayList<State>();
-
-		p.setActions(new Actions() {
-			private int currentDepth = 0;
-			
-			//this MUST be present, or the guiding execution will not advance!!!!
-			@Override
-			public boolean atStepPre() {
-				try {
-					if (this.getEngine().getCurrentState().getCurrentMethodSignature().equals( 
-							guid.getCurrentMethodSignature())) {
-						guid.step();
-					}
-				} catch (GuidanceException | CannotManageStateException | ThreadStackEmptyException e) {
-					e.printStackTrace();
-					return true;
-				}
-				//put here your stuff, if you want to do something							
-
-				return super.atStepPre();
-			}
-
-			@Override
-			public boolean atRoot() {
-				if (testDepth == 0) {
-					guid.endGuidance();
-				}
-				return super.atRoot();
-			}
-
-			@Override
-			public boolean atBranch(BranchPoint bp) {
-				this.currentDepth++;				
-				if (this.currentDepth == testDepth) {
-					guid.endGuidance();
-				} else if (this.currentDepth == testDepth + 1) {
-					stateList.add(this.getEngine().getCurrentState().clone());
-					this.getEngine().stopCurrentTrace();
-				}
-
-				return super.atBranch(bp);
-			}
-
-			@Override
-			public boolean atBacktrackPost(BranchPoint bp) {
-				stateList.add(this.getEngine().getCurrentState().clone());
-				this.getEngine().stopCurrentTrace();
-
-				return super.atBacktrackPost(bp);
-			}
-
-			@Override
-			public void atEnd() {
-				if (testDepth < 0) {
-					final State finalState = this.getEngine().getCurrentState();
-					stateList.add(finalState);
-				}
-				super.atEnd();
-			}
-		});
+		
+		final ActionsRunner actions = new ActionsRunner(testDepth, guid);
+		p.setActions(actions);
 
 		//builds the runner
 		final RunnerBuilder rb = new RunnerBuilder();
@@ -245,43 +212,18 @@ public class RunnerPath {
 		r.run();
 
 		this.initialState = rb.getEngine().getInitialState();
-		this.dp = guid;
 
-		return stateList;
+		return actions.getStateList();
 
 	}
-
+	
 	/**
 	 * Must be invoked after an invocation of {@link #runProgram(TestCase, int)}.
-	 * Generates the EvoSuite wrapper for the path condition of some state.
+	 * Returns the initial state of symbolic execution.
 	 * 
-	 * @param testCount a {@link TestIdentifier} (used only to disambiguate
-	 *        file names).
-	 * @param state a {@link State}; must be some state in the execution 
-	 *        triggered by {@link #runProgram(TestCase, int)}.
-	 * @return a {@link String}, the file name of the generated EvoSuite wrapper.
+	 * @return a {@link State}.
 	 */
-	public String emitEvoSuiteWrapper(TestIdentifier testCount, State state) {
-		final StateFormatterSushiPathCondition fmt = new StateFormatterSushiPathCondition(testCount.getTestCount(), () -> this.initialState, () -> {
-			try {
-				return dp.getModel();
-			} catch (DecisionException e1) {
-				return null;
-			}
-		});
-		fmt.formatPrologue();
-		fmt.formatState(state);
-		fmt.formatEpilogue();
-
-		final String fileName = tmpPath + "/EvoSuiteWrapper_" + testCount.getTestCount() +".java";
-		try (final BufferedWriter w = Files.newBufferedWriter(Paths.get(fileName))) {
-			w.write(fmt.emit());
-		} catch (IOException e) {
-			e.printStackTrace();
-			return null;
-		}
-		fmt.cleanup();
-
-		return fileName;
+	public State getInitialState() {
+		return this.initialState;
 	}
 }
