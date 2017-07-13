@@ -27,4 +27,5 @@ public class EvosuiteResult {
 		return this.startDepth;
 	}
 	
+	
 }

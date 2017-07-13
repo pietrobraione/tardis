@@ -61,6 +61,7 @@ public class Main {
 		testCaseBuffer.add(item);
 		PathExplorer performerJBSE = new PathExplorer(o, testCaseBuffer, pathConditionBuffer, o.getNumOfThreads());
 		PathConditionHandler performerEvosuite = new PathConditionHandler(o, pathConditionBuffer, testCaseBuffer, o.getNumOfThreads());
+		
 		for(int i = 0; i < o.getNumOfThreads(); i++){
 			performerJBSE.execute();
 			performerEvosuite.execute();

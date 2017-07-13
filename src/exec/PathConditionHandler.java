@@ -209,7 +209,6 @@ public class PathConditionHandler extends Performer<JBSEResult, EvosuiteResult>{
 		 this.getOutputQueue().add(new EvosuiteResult(newTC, depth + 1));
 	}
 
-
 	@Override
 	protected Runnable makeJob(JBSEResult item) {
 		Runnable job = new Runnable() {
