@@ -3,7 +3,11 @@ package exec;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import java.util.concurrent.LinkedBlockingQueue;
 
+import concurrent.EvosuiteResult;
+import concurrent.JBSEResult;
+import concurrent.Performer;
 import jbse.algo.exc.CannotManageStateException;
 import jbse.bc.exc.InvalidClassFileFactoryClassException;
 import jbse.common.exc.ClasspathException;
@@ -19,16 +23,14 @@ import jbse.mem.State;
 import jbse.mem.exc.ContradictionException;
 import jbse.mem.exc.ThreadStackEmptyException;
 
-public class PathExplorer {
+public class PathExplorer extends Performer<EvosuiteResult, JBSEResult>{
 	private final int maxDepth;
 	private final RunnerPath rp;
-	private final PathConditionHandler handlerPC;
-	static private String indent = "";
 
-	public PathExplorer(Options o) {
+	public PathExplorer(Options o, LinkedBlockingQueue<EvosuiteResult> in, LinkedBlockingQueue<JBSEResult> out, int numOfThreads ) {
+		super(in, out, numOfThreads);
 		this.maxDepth = o.getMaxDepth();
 		this.rp = new RunnerPath(o);
-		this.handlerPC = new PathConditionHandler(o);
 	}
 
 	/**
@@ -50,7 +52,7 @@ public class PathExplorer {
 	 * @throws EngineStuckException
 	 * @throws FailureException
 	 */
-	public void explore(TestIdentifier testCount, TestCase tc, int startDepth) 
+	public void explore(TestCase tc, int startDepth) 
 			throws DecisionException, CannotBuildEngineException, InitializationException, 
 			InvalidClassFileFactoryClassException, NonexistingObservedVariablesException, 
 			ClasspathException, CannotBacktrackException, CannotManageStateException, 
@@ -59,17 +61,11 @@ public class PathExplorer {
 		if (this.maxDepth <= 0) {
 			return;
 		}
-
 		//runs the test case up to the final state, and takes the final state's path condition
 		final State tcFinalState = this.rp.runProgram(tc, -1).get(0);
 		final Collection<Clause> tcFinalPC = tcFinalState.getPathCondition();
 		final int tcFinalDepth = tcFinalState.getDepth();
-		testCount.testIncrease();
-		System.out.println(indent + "Test_" + testCount.getTestCount() + ": Executed PC= " + tcFinalPC); 
-
 		for (int currentDepth = startDepth; currentDepth < Math.min(this.maxDepth, tcFinalDepth - 1); currentDepth++) {
-			System.out.println(indent + "DEPTH=" + currentDepth);
-
 			final List<State> newStates = this.rp.runProgram(tc, currentDepth);
 			final State initialState = this.rp.getInitialState();
 			for (State newState : newStates) {
@@ -77,21 +73,9 @@ public class PathExplorer {
 				if (alreadyExplored(currentPC, tcFinalPC)) {
 					continue;
 				}
-
-				System.out.println(indent + "** currently considered PC: " + currentPC);
-				System.out.print(indent);
-				final String indentBak = indent;
-				indent += "  ";
-
-				this.handlerPC.generateTestCases(testCount, initialState, newState, currentDepth);
-
-				indent = indentBak;
-				System.out.println(indent + "BACK"); 
+				this.getOutputQueue().add(new JBSEResult(initialState, newState, currentDepth));
 			}
-
 		}
-
-		System.out.println(indent + "DONE"); 
 	}
 
 	private static boolean alreadyExplored(Collection<Clause> newPC, Collection<Clause> oldPC) {
@@ -103,6 +87,27 @@ public class PathExplorer {
 		} else {
 			return false;
 		}
+	}
+
+	
+	@Override
+	protected Runnable makeJob(EvosuiteResult item) {
+		Runnable job = new Runnable() {
+			@Override
+			public void run() {
+					try {
+						explore(item.getTestCase(), item.getStartDepth());
+					} catch (DecisionException | CannotBuildEngineException | InitializationException |
+							InvalidClassFileFactoryClassException | NonexistingObservedVariablesException |
+							ClasspathException | CannotBacktrackException | CannotManageStateException |
+							ThreadStackEmptyException | ContradictionException | EngineStuckException |
+							FailureException e ) {
+						
+						e.printStackTrace();
+					} 
+			}
+		};
+		return job;
 	}
 }
 

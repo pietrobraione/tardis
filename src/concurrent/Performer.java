@@ -1,18 +1,42 @@
 package concurrent;
 
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 
-public abstract class Performer {
+public abstract class Performer<I,O>{
 	
-	public LinkedBlockingQueue<JBSEResult> q1 = new LinkedBlockingQueue<>();
-	public LinkedBlockingQueue<EvosuiteResult> q2 = new LinkedBlockingQueue<>();
-	public int numOfThreads;
+	private LinkedBlockingQueue<I> in;
+	private LinkedBlockingQueue<O> out;
+	private int numOfThreads;
+	private ExecutorService threadPool;
 	
-	public Performer(LinkedBlockingQueue<JBSEResult> q1, LinkedBlockingQueue<EvosuiteResult> q2, int numOfThreads){
-		this.q1 = q1;
-		this.q2 = q2;
+	public Performer(LinkedBlockingQueue<I> in, LinkedBlockingQueue<O> out, int numOfThreads){
+		this.in = in;
+		this.out = out;
 		this.numOfThreads = numOfThreads;
+		this.threadPool = Executors.newFixedThreadPool(this.numOfThreads);
 	}
 	
-	public abstract void execute();
+	protected abstract Runnable makeJob(I item);
+	
+	protected LinkedBlockingQueue<I> getInputQueue(){
+		return this.in;
+	}
+	
+	protected LinkedBlockingQueue<O> getOutputQueue(){
+		return this.out;
+	}
+	
+	public void execute(){
+		try {
+			Runnable job = this.makeJob(getInputQueue().take());
+			this.threadPool.execute(job);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+	}
+	
+
+	
 }

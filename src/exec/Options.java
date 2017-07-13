@@ -37,6 +37,10 @@ public class Options {
 			usage = "The maximum depth at which generation of tests is performed")
 	private int maxdepth;
 	
+	@Option(name = "-num_threads",
+			usage = "The number of threads in the thread pool")
+	private int numOfThreads;
+	
 	@Option(name = "-bin",
 			usage = "The bin directory of the project to analyze")
 	private Path binPath = Paths.get(".", "bin");
@@ -113,6 +117,14 @@ public class Options {
 	
 	public void setMaxDepth(int maxdepth) {
 		this.maxdepth = maxdepth;
+	}
+	
+	public int getNumOfThreads() {
+		return this.numOfThreads;
+	}
+	
+	public void setNumOfThreads(int numOfThreads) {
+		this.numOfThreads = numOfThreads;
 	}
 	
 	public Path getBinPath() {
