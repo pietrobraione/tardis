@@ -118,7 +118,7 @@ public class PathConditionHandler extends Performer<JBSEResult, EvosuiteResult>{
 			ClasspathException, CannotBacktrackException, CannotManageStateException, 
 			ThreadStackEmptyException, ContradictionException, EngineStuckException, 
 			FailureException {
-		//compiles the Evosuite wrapper
+		//generates and compiles the Evosuite wrapper
 		final String fileName = emitEvoSuiteWrapper(testCount, initialState, finalState);
 		final Path logFileJavacPath = Paths.get(this.tmpPath + "/javac-log-" + testCount + ".txt");
 		final String[] javacParameters = { "-d", binPath, fileName };
@@ -200,12 +200,11 @@ public class PathConditionHandler extends Performer<JBSEResult, EvosuiteResult>{
 			e.printStackTrace();
 			//TODO rethrow or handle the error otherwise
 		}
-		//creates the TestCase and explores it
+		
+		System.out.println("Generated test case " + testCaseClassName + ", depth: " + depth + ", path condition: " + finalState.getPathCondition());
+		
+		//creates the TestCase and schedules it for further exploration
 		final TestCase newTC = new TestCase(testCaseClassName, "()V", "test0");
-		/*System.out.println("Test " + testCount);
-		System.out.println("**DEPTH: " + depth);
-		System.out.println("**Currently considered PC: " + finalState.getPathCondition());
-		System.out.println("**New test case: " + newTC);*/
 		this.getOutputQueue().add(new EvosuiteResult(newTC, depth + 1));
 	}
 
