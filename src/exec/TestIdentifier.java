@@ -1,18 +1,16 @@
 package exec;
 
 public class TestIdentifier {
-	
 	private int testCount;
 	
-	public TestIdentifier(){
-		this.testCount = 0;
+	public TestIdentifier() {
+		this.testCount = 1;
 	}
 	
-	public void testIncrease(){
+	public void testIncrease() {
 		this.testCount++;
 	}
-	public int getTestCount(){
+	public int getTestCount() {
 		return this.testCount;
 	}
-
 }

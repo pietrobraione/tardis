@@ -23,14 +23,14 @@ import jbse.mem.State;
 import jbse.mem.exc.ContradictionException;
 import jbse.mem.exc.ThreadStackEmptyException;
 
-public class PathExplorer extends Performer<EvosuiteResult, JBSEResult>{
+public class PathExplorer extends Performer<EvosuiteResult, JBSEResult> {
+	private final Options o;
 	private final int maxDepth;
-	private final RunnerPath rp;
 
-	public PathExplorer(Options o, LinkedBlockingQueue<EvosuiteResult> in, LinkedBlockingQueue<JBSEResult> out, int numOfThreads ) {
+	public PathExplorer(Options o, LinkedBlockingQueue<EvosuiteResult> in, LinkedBlockingQueue<JBSEResult> out, int numOfThreads) {
 		super(in, out, numOfThreads);
+		this.o = o;
 		this.maxDepth = o.getMaxDepth();
-		this.rp = new RunnerPath(o);
 	}
 
 	/**
@@ -62,12 +62,13 @@ public class PathExplorer extends Performer<EvosuiteResult, JBSEResult>{
 			return;
 		}
 		//runs the test case up to the final state, and takes the final state's path condition
-		final State tcFinalState = this.rp.runProgram(tc, -1).get(0);
+		final RunnerPath rp = new RunnerPath(this.o);
+		final State tcFinalState = rp.runProgram(tc, -1).get(0);
 		final Collection<Clause> tcFinalPC = tcFinalState.getPathCondition();
 		final int tcFinalDepth = tcFinalState.getDepth();
 		for (int currentDepth = startDepth; currentDepth < Math.min(this.maxDepth, tcFinalDepth - 1); currentDepth++) {
-			final List<State> newStates = this.rp.runProgram(tc, currentDepth);
-			final State initialState = this.rp.getInitialState();
+			final List<State> newStates = rp.runProgram(tc, currentDepth);
+			final State initialState = rp.getInitialState();
 			for (State newState : newStates) {
 				final Collection<Clause> currentPC = newState.getPathCondition();
 				if (alreadyExplored(currentPC, tcFinalPC)) {
@@ -92,20 +93,17 @@ public class PathExplorer extends Performer<EvosuiteResult, JBSEResult>{
 	
 	@Override
 	protected Runnable makeJob(EvosuiteResult item) {
-		Runnable job = new Runnable() {
-			@Override
-			public void run() {
-					try {
-						explore(item.getTestCase(), item.getStartDepth());
-					} catch (DecisionException | CannotBuildEngineException | InitializationException |
-							InvalidClassFileFactoryClassException | NonexistingObservedVariablesException |
-							ClasspathException | CannotBacktrackException | CannotManageStateException |
-							ThreadStackEmptyException | ContradictionException | EngineStuckException |
-							FailureException e ) {
-						
-						e.printStackTrace();
-					} 
-			}
+		final Runnable job = () -> {
+			try {
+				explore(item.getTestCase(), item.getStartDepth());
+			} catch (DecisionException | CannotBuildEngineException | InitializationException |
+					InvalidClassFileFactoryClassException | NonexistingObservedVariablesException |
+					ClasspathException | CannotBacktrackException | CannotManageStateException |
+					ThreadStackEmptyException | ContradictionException | EngineStuckException |
+					FailureException e ) {
+
+				e.printStackTrace();
+			} 
 		};
 		return job;
 	}
