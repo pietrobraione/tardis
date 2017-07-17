@@ -181,11 +181,15 @@ public class PathConditionHandler extends Performer<JBSEResult, EvosuiteResult>{
 			//TODO rethrow or handle the error otherwise
 		}
 
-		//compiles the generated test
-		//TODO here we are assuming EvoSuite was able to find a test, handle the situation where EvoSuite does not generate anything
+		//checks if EvoSuite generated a test, exits in the negative case
 		final String testCaseClassName = this.guidedClass + "_" + testCount + "_Test";
 		final String testCaseScaff = this.outPath + "/" + testCaseClassName + "_scaffolding.java";
 		final String testCase = this.outPath + "/" + testCaseClassName + ".java";
+		if (!new File(testCase).exists() || !new File(testCaseScaff).exists()) {
+			return;
+		}
+		
+		//compiles the generated test
 		final Path javacLogFile = Paths.get(this.tmpPath + "/javac-log-test-" +  testCount + ".txt");
 		final String[] javacParametersTestScaff = { "-cp", classpathCompilation, "-d", this.binPath, testCaseScaff };
 		final String[] javacParametersTestCase = { "-cp", classpathCompilation, "-d", this.binPath, testCase };
