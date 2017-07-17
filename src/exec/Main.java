@@ -39,8 +39,8 @@ public class Main {
 		
 		int maxdepth = 50;
 		int numOfThreads = 5;
-		Options o = new Options();
 		
+		Options o = new Options();
 		o.setTestMethod(testClass, testMethodSignature, testMethod);
 		o.setGuidedMethod(className, parametersSignature, methodName);
 		o.setMaxDepth(maxdepth);
@@ -59,11 +59,10 @@ public class Main {
 		TestCase tc = new TestCase(o);
 		EvosuiteResult item = new EvosuiteResult(tc, 0);
 		testCaseBuffer.add(item);
-		PathExplorer performerJBSE = new PathExplorer(o, testCaseBuffer, pathConditionBuffer, o.getNumOfThreads());
-		PathConditionHandler performerEvosuite = new PathConditionHandler(o, pathConditionBuffer, testCaseBuffer, o.getNumOfThreads());
+		PathExplorer performerJBSE = new PathExplorer(o, testCaseBuffer, pathConditionBuffer);
+		PathConditionHandler performerEvosuite = new PathConditionHandler(o, pathConditionBuffer, testCaseBuffer);
 		
 		performerJBSE.execute();
 		performerEvosuite.execute();
 	}
-	
 }

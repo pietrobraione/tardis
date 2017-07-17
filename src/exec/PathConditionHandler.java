@@ -45,8 +45,8 @@ public class PathConditionHandler extends Performer<JBSEResult, EvosuiteResult>{
 	private final TestIdentifier testCount;
 
 
-	public PathConditionHandler(Options o, LinkedBlockingQueue<JBSEResult> in, LinkedBlockingQueue<EvosuiteResult> out, int numOfThreads) {
-		super(in, out, numOfThreads);
+	public PathConditionHandler(Options o, LinkedBlockingQueue<JBSEResult> in, LinkedBlockingQueue<EvosuiteResult> out) {
+		super(in, out, o.getNumOfThreads());
 		this.guidedClass = o.getGuidedMethod().get(0);
 		this.guidedSignature = o.getGuidedMethod().get(1);
 		this.guidedMethod = o.getGuidedMethod().get(2);
@@ -62,7 +62,7 @@ public class PathConditionHandler extends Performer<JBSEResult, EvosuiteResult>{
 	/**
 	 * Generates the EvoSuite wrapper for the path condition of some state.
 	 * 
-	 * @param testCount a {@link TestIdentifier} (used only to disambiguate
+	 * @param testCount an {@code int}, the number of the test (used only to disambiguate
 	 *        file names).
 	 * @param initialState a {@link State}; must be the initial state in the execution 
 	 *        for which we want to generate the wrapper.
@@ -70,13 +70,13 @@ public class PathConditionHandler extends Performer<JBSEResult, EvosuiteResult>{
 	 *        for which we want to generate the wrapper.
 	 * @return a {@link String}, the file name of the generated EvoSuite wrapper.
 	 */
-	private String emitEvoSuiteWrapper(TestIdentifier testCount, State initialState, State finalState) {
-		final StateFormatterSushiPathCondition fmt = new StateFormatterSushiPathCondition(testCount.getTestCount(), () -> initialState);
+	private String emitEvoSuiteWrapper(int testCount, State initialState, State finalState) {
+		final StateFormatterSushiPathCondition fmt = new StateFormatterSushiPathCondition(testCount, () -> initialState);
 		fmt.formatPrologue();
 		fmt.formatState(finalState);
 		fmt.formatEpilogue();
 
-		final String fileName = this.tmpPath + "/EvoSuiteWrapper_" + testCount.getTestCount() +".java";
+		final String fileName = this.tmpPath + "/EvoSuiteWrapper_" + testCount +".java";
 		try (final BufferedWriter w = Files.newBufferedWriter(Paths.get(fileName))) {
 			w.write(fmt.emit());
 		} catch (IOException e) {
@@ -94,7 +94,7 @@ public class PathConditionHandler extends Performer<JBSEResult, EvosuiteResult>{
 	 * condition, and then explores the generated test case starting from
 	 * the depth of the path condition.
 	 * 
-	 * @param testCount a {@link TestIdentifier}. Only used to disambiguate file names.
+	 * @param testCount an {@code int}, the number of the test. Only used to disambiguate file names.
 	 * @param initialState a {@link State}, the initial state of a symbolic execution.
 	 * @param finalState a {@link State}, the final state of the symbolic execution whose
 	 *        initial state is {@code initialState}. The test case will cover its path condition.
@@ -119,7 +119,7 @@ public class PathConditionHandler extends Performer<JBSEResult, EvosuiteResult>{
 			ThreadStackEmptyException, ContradictionException, EngineStuckException, 
 			FailureException {
 		//compiles the Evosuite wrapper
-		final String fileName = emitEvoSuiteWrapper(this.testCount, initialState, finalState);
+		final String fileName = emitEvoSuiteWrapper(testCount, initialState, finalState);
 		final Path logFileJavacPath = Paths.get(this.tmpPath + "/javac-log-" + testCount + ".txt");
 		final String[] javacParameters = { "-d", binPath, fileName };
 		final JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
@@ -202,10 +202,10 @@ public class PathConditionHandler extends Performer<JBSEResult, EvosuiteResult>{
 		}
 		//creates the TestCase and explores it
 		final TestCase newTC = new TestCase(testCaseClassName, "()V", "test0");
-		System.out.println("Test " + testCount);
+		/*System.out.println("Test " + testCount);
 		System.out.println("**DEPTH: " + depth);
 		System.out.println("**Currently considered PC: " + finalState.getPathCondition());
-		System.out.println("**New test case: " + newTC);
+		System.out.println("**New test case: " + newTC);*/
 		this.getOutputQueue().add(new EvosuiteResult(newTC, depth + 1));
 	}
 

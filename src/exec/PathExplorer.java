@@ -27,8 +27,8 @@ public class PathExplorer extends Performer<EvosuiteResult, JBSEResult> {
 	private final Options o;
 	private final int maxDepth;
 
-	public PathExplorer(Options o, LinkedBlockingQueue<EvosuiteResult> in, LinkedBlockingQueue<JBSEResult> out, int numOfThreads) {
-		super(in, out, numOfThreads);
+	public PathExplorer(Options o, LinkedBlockingQueue<EvosuiteResult> in, LinkedBlockingQueue<JBSEResult> out) {
+		super(in, out, o.getNumOfThreads());
 		this.o = o;
 		this.maxDepth = o.getMaxDepth();
 	}
@@ -65,6 +65,7 @@ public class PathExplorer extends Performer<EvosuiteResult, JBSEResult> {
 		final RunnerPath rp = new RunnerPath(this.o);
 		final State tcFinalState = rp.runProgram(tc, -1).get(0);
 		final Collection<Clause> tcFinalPC = tcFinalState.getPathCondition();
+		System.out.println("Run test case " + tc.getClassName() +", path condition " + tcFinalPC.toString());
 		final int tcFinalDepth = tcFinalState.getDepth();
 		for (int currentDepth = startDepth; currentDepth < Math.min(this.maxDepth, tcFinalDepth - 1); currentDepth++) {
 			final List<State> newStates = rp.runProgram(tc, currentDepth);
