@@ -15,8 +15,6 @@ import java.io.File;
 import javax.tools.JavaCompiler;
 import javax.tools.ToolProvider;
 
-import concurrent.EvosuiteResult;
-import concurrent.JBSEResult;
 import concurrent.Performer;
 import jbse.algo.exc.CannotManageStateException;
 import jbse.bc.exc.InvalidClassFileFactoryClassException;
@@ -76,7 +74,7 @@ public class PathConditionHandler extends Performer<JBSEResult, EvosuiteResult>{
 		fmt.formatState(finalState);
 		fmt.formatEpilogue();
 
-		final String fileName = this.tmpPath + "/EvoSuiteWrapper_" + testCount +".java";
+		final String fileName = this.tmpPath + "/EvoSuiteWrapper_" + testCount + ".java";
 		try (final BufferedWriter w = Files.newBufferedWriter(Paths.get(fileName))) {
 			w.write(fmt.emit());
 		} catch (IOException e) {

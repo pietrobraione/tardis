@@ -6,6 +6,7 @@ import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import org.kohsuke.args4j.Option;
 import org.kohsuke.args4j.spi.PathOptionHandler;
@@ -88,6 +89,14 @@ public class Options {
 			usage = "Path to Sushi library",
 			handler = PathOptionHandler.class)
 	private Path sushiPath = Paths.get(".", "lib", "sushi-lib.jar");
+		
+	@Option(name = "-time_budget_duration",
+			usage = "Duration of the time budget")
+	private long timeBudgetDuration = 10;
+	
+	@Option(name = "-time_budget_Unit",
+			usage = "Unit of the time budget")
+	private TimeUnit timeBudgetTimeUnit = TimeUnit.MINUTES;
 	
 	public List<String> getTestMethod() {
 		return this.testMethodSignature;
@@ -207,4 +216,19 @@ public class Options {
 		this.sushiPath = sushiPath;
 	}
 	
+	public long getTimeBudgetDuration() {
+		return this.timeBudgetDuration;
+	}
+	
+	public void setTimeBudgetDuration(long timeBudgetDuration) {
+		this.timeBudgetDuration = timeBudgetDuration;
+	}
+	
+	public TimeUnit getTimeBudgetTimeUnit() {
+		return this.timeBudgetTimeUnit;
+	}
+	
+	public void setTimeBudgetTimeUnit(TimeUnit timeBudgetTimeUnit) {
+		this.timeBudgetTimeUnit = timeBudgetTimeUnit;
+	}
 }

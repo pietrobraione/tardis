@@ -1,6 +1,4 @@
-package concurrent;
-
-import exec.TestCase;
+package exec;
 
 public class EvosuiteResult {
 	private TestCase tc;
