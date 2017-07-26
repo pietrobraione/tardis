@@ -17,8 +17,8 @@ public class Main {
 		final TestCase tc = new TestCase(this.o);
 		final EvosuiteResult item = new EvosuiteResult(tc, 0);
 		testCaseBuffer.add(item);
-		final PathExplorer performerJBSE = new PathExplorer(this.o, testCaseBuffer, pathConditionBuffer);
-		final PathConditionHandler performerEvosuite = new PathConditionHandler(this.o, pathConditionBuffer, testCaseBuffer);
+		final PerformerJBSE performerJBSE = new PerformerJBSE(this.o, testCaseBuffer, pathConditionBuffer);
+		final PerformerEvosuite performerEvosuite = new PerformerEvosuite(this.o, pathConditionBuffer, testCaseBuffer);
 		final TerminationManager terminationManager = new TerminationManager(this.o, performerJBSE, performerEvosuite);
 		
 		//starts

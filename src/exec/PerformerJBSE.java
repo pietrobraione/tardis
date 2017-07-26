@@ -21,11 +21,11 @@ import jbse.mem.State;
 import jbse.mem.exc.ContradictionException;
 import jbse.mem.exc.ThreadStackEmptyException;
 
-public class PathExplorer extends Performer<EvosuiteResult, JBSEResult> {
+public class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 	private final Options o;
 	private final int maxDepth;
 
-	public PathExplorer(Options o, LinkedBlockingQueue<EvosuiteResult> in, LinkedBlockingQueue<JBSEResult> out) {
+	public PerformerJBSE(Options o, LinkedBlockingQueue<EvosuiteResult> in, LinkedBlockingQueue<JBSEResult> out) {
 		super(in, out, o.getNumOfThreads());
 		this.o = o;
 		this.maxDepth = o.getMaxDepth();

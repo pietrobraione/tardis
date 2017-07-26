@@ -31,7 +31,7 @@ import jbse.mem.exc.ContradictionException;
 import jbse.mem.exc.ThreadStackEmptyException;
 import sushi.execution.jbse.StateFormatterSushiPathCondition;
 
-public class PathConditionHandler extends Performer<JBSEResult, EvosuiteResult>{
+public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult>{
 	private final String guidedClass;
 	private final String guidedSignature;
 	private final String guidedMethod;
@@ -43,7 +43,7 @@ public class PathConditionHandler extends Performer<JBSEResult, EvosuiteResult>{
 	private final TestIdentifier testCount;
 
 
-	public PathConditionHandler(Options o, LinkedBlockingQueue<JBSEResult> in, LinkedBlockingQueue<EvosuiteResult> out) {
+	public PerformerEvosuite(Options o, LinkedBlockingQueue<JBSEResult> in, LinkedBlockingQueue<EvosuiteResult> out) {
 		super(in, out, o.getNumOfThreads());
 		this.guidedClass = o.getGuidedMethod().get(0);
 		this.guidedSignature = o.getGuidedMethod().get(1);
