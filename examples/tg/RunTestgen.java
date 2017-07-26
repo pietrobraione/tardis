@@ -20,8 +20,8 @@ public class RunTestgen {
 		final TimeUnit timeBudgetTimeUnit = TimeUnit.MINUTES;
 		
 		final Options o = new Options();
-		o.setTestMethod(testClass, testMethodSignature, testMethod);
-		o.setGuidedMethod(className, parametersSignature, methodName);
+		o.setTargetMethod(className, parametersSignature, methodName);
+		o.setInitialTestCase(testClass, testMethodSignature, testMethod);
 		o.setMaxDepth(maxdepth);
 		o.setNumOfThreads(numOfThreads);
 		o.setTmpDirectoryBase(Settings.TMP_BASE_PATH);

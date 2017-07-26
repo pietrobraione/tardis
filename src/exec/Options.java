@@ -102,7 +102,7 @@ public class Options {
 		return this.testMethodSignature;
 	}
 	
-	public void setTestMethod(String... signature) {
+	public void setInitialTestCase(String... signature) {
 		if (signature.length != 3) {
 			return;
 		}
@@ -113,7 +113,7 @@ public class Options {
 		return this.guidedMethodSignature;
 	}
 	
-	public void setGuidedMethod(String... signature) {
+	public void setTargetMethod(String... signature) {
 		if (signature.length != 3) {
 			return;
 		}
