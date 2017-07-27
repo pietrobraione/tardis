@@ -15,6 +15,10 @@ import org.kohsuke.args4j.spi.PathOptionHandler;
 import sushi.configure.SignatureHandler;
 
 public class Options implements Cloneable {
+	@Option(name = "-help",
+			usage = "Prints usage and exits")
+	private boolean help = false;
+
 	@Option(name = "-initial_test",
 			usage = "Java signature of the initial test case method for seeding concolic exploration",
 			handler = SignatureHandler.class)
@@ -88,7 +92,15 @@ public class Options implements Cloneable {
 	@Option(name = "-time_budget_unit",
 			usage = "Unit of the time budget: NANOSECONDS, MICROSECONDS, MILLISECONDS, SECONDS, MINUTES, HOURS, DAYS")
 	private TimeUnit timeBudgetTimeUnit = TimeUnit.MINUTES;
+
+	public boolean getHelp() {
+		return this.help;
+	}
 	
+	public void setHelp(boolean help) {
+		this.help = help;
+	}
+		
 	public List<String> getInitialTestCase() {
 		return Collections.unmodifiableList(this.initialTestCaseSignature);
 	}

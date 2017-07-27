@@ -16,7 +16,7 @@ public class RunTestgen {
 		final String testMethod = "test0";
 		final int maxdepth = 50;
 		final int numOfThreads = 5;
-		final long timeBudgetDuration = 1;
+		final long timeBudgetDuration = 5;
 		final TimeUnit timeBudgetTimeUnit = TimeUnit.MINUTES;
 		
 		final Options o = new Options();

@@ -2,16 +2,14 @@ package concurrent;
 
 import java.util.concurrent.TimeUnit;
 
-import exec.Options;
-
-public class TerminationManager {
+public class TimeoutManager {
 	private final long duration;
 	private final TimeUnit timeUnit;
 	private final Performer<?,?>[] performers;
 	
-	public TerminationManager(Options o, Performer<?,?>...performers) {
-		this.duration = o.getTimeBudgetDuration();
-		this.timeUnit = o.getTimeBudgetTimeUnit();
+	public TimeoutManager(long duration, TimeUnit timeUnit, Performer<?,?>...performers) {
+		this.duration = duration;
+		this.timeUnit = timeUnit;
 		this.performers = performers.clone();
 	}
 	
