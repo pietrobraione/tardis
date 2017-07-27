@@ -5,20 +5,20 @@ import java.util.concurrent.TimeUnit;
 import exec.Options;
 
 public class TerminationManager {
-	private long duration;
-	private TimeUnit timeUnit;
-	private Performer<?,?>[] performers;
+	private final long duration;
+	private final TimeUnit timeUnit;
+	private final Performer<?,?>[] performers;
 	
 	public TerminationManager(Options o, Performer<?,?>...performers) {
 		this.duration = o.getTimeBudgetDuration();
 		this.timeUnit = o.getTimeBudgetTimeUnit();
-		this.performers = performers;
+		this.performers = performers.clone();
 	}
 	
-	public void execute() {
+	public void start() {
 		final Thread chrono = new Thread(() ->  {
 			try {
-				Thread.sleep(this.timeUnit.toMillis(this.duration));
+				this.timeUnit.sleep(this.duration);
 			} catch (InterruptedException e) {
 				//should never happen
 				e.printStackTrace();
