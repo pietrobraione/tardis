@@ -39,8 +39,8 @@ import jbse.tree.StateTree.BranchPoint;
 public class RunnerPath {
 	private final String[] classpath;
 	private final String z3Path;
-	private final RunnerParameters commonParams;
-	private final RunnerParameters commonGuidance;
+	private final RunnerParameters commonParamsGuided;
+	private final RunnerParameters commonParamsGuiding;
 		
 	public RunnerPath(Options o) {
 		this.classpath = new String[3];
@@ -50,16 +50,16 @@ public class RunnerPath {
 		this.z3Path = o.getZ3Path().toString();
 		
 		//builds the template parameters object for the guided (symbolic) execution
-		this.commonParams = new RunnerParameters();
-		this.commonParams.setMethodSignature(o.getGuidedMethod().get(0), o.getGuidedMethod().get(1), o.getGuidedMethod().get(2));
-		this.commonParams.addClasspath(this.classpath);
-		this.commonParams.setBreadthMode(BreadthMode.ALL_DECISIONS_NONTRIVIAL);
+		this.commonParamsGuided = new RunnerParameters();
+		this.commonParamsGuided.setMethodSignature(o.getTargetMethod().get(0), o.getTargetMethod().get(1), o.getTargetMethod().get(2));
+		this.commonParamsGuided.addClasspath(this.classpath);
+		this.commonParamsGuided.setBreadthMode(BreadthMode.ALL_DECISIONS_NONTRIVIAL);
 		
 		//builds the template parameters object for the guiding (concrete) execution
-		this.commonGuidance = new RunnerParameters();
-		this.commonGuidance.addClasspath(this.classpath);
-		this.commonGuidance.setStateIdentificationMode(StateIdentificationMode.COMPACT);
-		this.commonGuidance.setBreadthMode(BreadthMode.ALL_DECISIONS);
+		this.commonParamsGuiding = new RunnerParameters();
+		this.commonParamsGuiding.addClasspath(this.classpath);
+		this.commonParamsGuiding.setStateIdentificationMode(StateIdentificationMode.COMPACT);
+		this.commonParamsGuiding.setBreadthMode(BreadthMode.ALL_DECISIONS);
 	}
 
 	private static class ActionsRunner extends Actions {
@@ -133,19 +133,19 @@ public class RunnerPath {
 		}
 	}
 
-	private State initialState;
+	private State initialState = null;
 	
 	/**
-	 * Does symbolic execution guided by a test case up to some depth, 
-	 * then peeks the states on the next branch.  
+	 * Performs symbolic execution of the target method guided by a test case 
+	 * up to some depth, then peeks the states on the next branch.  
 	 * 
 	 * @param testCase a {@link TestCase}, it will guide symbolic execution.
 	 * @param testDepth the maximum depth up to which {@code t} guides 
 	 *        symbolic execution, or a negative value.
 	 * @return a {@link List}{@code <}{@link State}{@code >} containing
-	 *         all the states at depth {@code stateDepth + 1}. In case 
-	 *         {@code stateDepth < 0} executes the test up to the final
-	 *         state and returns a list containing only the final state.
+	 *         all the states on branch at depth {@code stateDepth + 1}. 
+	 *         In case {@code stateDepth < 0} executes the test up to the 
+	 *         final state and returns a list containing only the final state.
 	 * @throws DecisionException
 	 * @throws CannotBuildEngineException
 	 * @throws InitializationException
@@ -167,18 +167,17 @@ public class RunnerPath {
 			FailureException {
 
 		//builds the parameters for the guided (symbolic) execution
-		final RunnerParameters p = this.commonParams.clone();
-		final RunnerParameters pGuidance = this.commonGuidance.clone();
+		final RunnerParameters pGuided = this.commonParamsGuided.clone();
+		final RunnerParameters pGuiding = this.commonParamsGuiding.clone();
 
-
-		//the calculator
+		//sets the calculator
 		final CalculatorRewriting calc = new CalculatorRewriting();
 		calc.addRewriter(new RewriterOperationOnSimplex());
-		p.setCalculator(calc);
-		pGuidance.setCalculator(calc);
+		pGuided.setCalculator(calc);
+		pGuiding.setCalculator(calc);
 		
-		//the decision procedure
-		p.setDecisionProcedure(new DecisionProcedureAlgorithms(
+		//sets the decision procedures
+		pGuided.setDecisionProcedure(new DecisionProcedureAlgorithms(
 				new DecisionProcedureClassInit( //useless?
 						new DecisionProcedureLICS( //useless?
 								new DecisionProcedureSMTLIB2_AUFNIRA(
@@ -186,42 +185,41 @@ public class RunnerPath {
 										calc, this.z3Path + " -smt2 -in -t:10"), 
 								calc, new LICSRulesRepo()), 
 						calc, new ClassInitRulesRepo()), calc));
-
-		//the decision procedure
-		pGuidance.setDecisionProcedure(
+		pGuiding.setDecisionProcedure(
 				new DecisionProcedureAlgorithms(
 						new DecisionProcedureClassInit(
 								new DecisionProcedureAlwSat(), 
 								calc, new ClassInitRulesRepo()), 
 						calc)); //for concrete execution
 
-		//the guiding method (to be executed concretely)
-		pGuidance.setMethodSignature(testCase.getClassName(), testCase.getParameterSignature(), testCase.getMethodName());
+		//sets the guiding method (to be executed concretely)
+		pGuiding.setMethodSignature(testCase.getClassName(), testCase.getParameterSignature(), testCase.getMethodName());
 
-		//the guidance decision procedure
-		final DecisionProcedureGuidance guid = new DecisionProcedureGuidance(p.getDecisionProcedure(),
-				p.getCalculator(), pGuidance, p.getMethodSignature());
-		p.setDecisionProcedure(guid);
+		//creates the guidance decision procedure and sets it
+		final DecisionProcedureGuidance guid = new DecisionProcedureGuidance(pGuided.getDecisionProcedure(),
+				pGuided.getCalculator(), pGuiding, pGuided.getMethodSignature());
+		pGuided.setDecisionProcedure(guid);
 		
+		//sets the actions
 		final ActionsRunner actions = new ActionsRunner(testDepth, guid);
-		p.setActions(actions);
+		pGuided.setActions(actions);
 
-		//builds the runner
+		//builds the runner and runs it
 		final RunnerBuilder rb = new RunnerBuilder();
-		final Runner r = rb.build(p);
+		final Runner r = rb.build(pGuided);
 		r.run();
 
+		//outputs
 		this.initialState = rb.getEngine().getInitialState();
-
 		return actions.getStateList();
-
 	}
 	
 	/**
 	 * Must be invoked after an invocation of {@link #runProgram(TestCase, int)}.
 	 * Returns the initial state of symbolic execution.
 	 * 
-	 * @return a {@link State}.
+	 * @return a {@link State} or {@code null} if this method is invoked
+	 *         before an invocation of {@link #runProgram(TestCase, int)}.
 	 */
 	public State getInitialState() {
 		return this.initialState;

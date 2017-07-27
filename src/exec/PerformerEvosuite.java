@@ -32,28 +32,28 @@ import jbse.mem.exc.ThreadStackEmptyException;
 import sushi.execution.jbse.StateFormatterSushiPathCondition;
 
 public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult>{
-	private final String guidedClass;
-	private final String guidedSignature;
-	private final String guidedMethod;
+	private final String targetClass;
+	private final String targetSignature;
+	private final String targetMethod;
 	private final String binPath;
 	private final String tmpPath;
 	private final String evosuitePath;
 	private final String sushiLibPath;
 	private final String outPath;
-	private final TestIdentifier testCount;
+	private final TestIdentifier testIdentifier;
 
 
 	public PerformerEvosuite(Options o, LinkedBlockingQueue<JBSEResult> in, LinkedBlockingQueue<EvosuiteResult> out) {
 		super(in, out, o.getNumOfThreads());
-		this.guidedClass = o.getGuidedMethod().get(0);
-		this.guidedSignature = o.getGuidedMethod().get(1);
-		this.guidedMethod = o.getGuidedMethod().get(2);
+		this.targetClass = o.getTargetMethod().get(0);
+		this.targetSignature = o.getTargetMethod().get(1);
+		this.targetMethod = o.getTargetMethod().get(2);
 		this.binPath = o.getBinPath().toString();
 		this.tmpPath = o.getTmpDirectoryBase().toString();
 		this.evosuitePath = o.getEvosuitePath().toString();
 		this.sushiLibPath = o.getSushiLibPath().toString();
 		this.outPath = o.getOutDirectory().toString();
-		this.testCount = new TestIdentifier();
+		this.testIdentifier = new TestIdentifier();
 	}
 
 
@@ -142,7 +142,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult>{
 		evosuiteParameters.add("-jar");
 		evosuiteParameters.add(this.evosuitePath);
 		evosuiteParameters.add("-class");
-		evosuiteParameters.add(this.guidedClass.replace('/', '.'));
+		evosuiteParameters.add(this.targetClass.replace('/', '.'));
 		evosuiteParameters.add("-mem");
 		evosuiteParameters.add("2048");
 		evosuiteParameters.add("-DCP=" + classpathEvosuite); 
@@ -165,7 +165,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult>{
 		evosuiteParameters.add("-Dmax_size=1");
 		evosuiteParameters.add("-Dmax_initial_tests=1");
 		evosuiteParameters.add("-Dinline=false");
-		evosuiteParameters.add("-Dpath_condition=" + this.guidedClass.replace('/', '.') + "," + this.guidedMethod + this.guidedSignature + ",EvoSuiteWrapper_" + testCount);
+		evosuiteParameters.add("-Dpath_condition=" + this.targetClass.replace('/', '.') + "," + this.targetMethod + this.targetSignature + ",EvoSuiteWrapper_" + testCount);
 		evosuiteParameters.add("-Dpath_condition_check_first_target_call_only=true");
 
 		//launches Evosuite
@@ -180,7 +180,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult>{
 		}
 
 		//checks if EvoSuite generated a test, exits in the negative case
-		final String testCaseClassName = this.guidedClass + "_" + testCount + "_Test";
+		final String testCaseClassName = this.targetClass + "_" + testCount + "_Test";
 		final String testCaseScaff = this.outPath + "/" + testCaseClassName + "_scaffolding.java";
 		final String testCase = this.outPath + "/" + testCaseClassName + ".java";
 		if (!new File(testCase).exists() || !new File(testCaseScaff).exists()) {
@@ -208,8 +208,8 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult>{
 
 	@Override
 	protected Runnable makeJob(JBSEResult item) {
-		final int testCount = this.testCount.getTestCount();
-		this.testCount.testIncrease();
+		final int testCount = this.testIdentifier.getTestCount();
+		this.testIdentifier.testCountIncrease();
 		final Runnable job = () -> {
 			try {
 				generateTestCases(item.getInitialState(), item.getFinalState(), item.getDepth(), testCount);
@@ -218,7 +218,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult>{
 					ClasspathException | CannotBacktrackException | CannotManageStateException |
 					ThreadStackEmptyException | ContradictionException | EngineStuckException |
 					FailureException e ) {
-
+				//TODO handle
 				e.printStackTrace();
 			} 
 		};

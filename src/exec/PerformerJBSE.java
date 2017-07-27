@@ -27,7 +27,7 @@ public class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 
 	public PerformerJBSE(Options o, LinkedBlockingQueue<EvosuiteResult> in, LinkedBlockingQueue<JBSEResult> out) {
 		super(in, out, o.getNumOfThreads());
-		this.o = o;
+		this.o = o.clone();
 		this.maxDepth = o.getMaxDepth();
 	}
 

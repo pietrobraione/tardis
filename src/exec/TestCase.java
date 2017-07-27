@@ -1,59 +1,57 @@
 package exec;
 
-
 public class TestCase {
-	private String className;
-	private String parameterSignature;
-	private String methodName;
+	private final String className;
+	private final String parameterSignature;
+	private final String methodName;
 	
-	public TestCase(){
-		this.className = "";
-		this.parameterSignature = "";
-		this.methodName = "";
+	/**
+	 * Constructor. Builds a {@link TestCase} for the 
+	 * initial test case.
+	 * 
+	 * @param o a {@link Options} object.
+	 */
+	public TestCase(Options o) {
+		this.className = o.getInitialTestCase().get(0);
+		this.parameterSignature = o.getInitialTestCase().get(1);
+		this.methodName = o.getInitialTestCase().get(2);
 	}
 	
-	public TestCase(Options o){
-		this.className = o.getTestMethod().get(0);
-		this.parameterSignature = o.getTestMethod().get(1);
-		this.methodName = o.getTestMethod().get(2);
+	/**
+	 * Constructor. Builds a {@link TestCase} from the specification 
+	 * of a test method.
+	 * 
+	 * @param className a {@link String}, the name of the class of the test method.
+	 * @param parameterSignature a {@link String}, the signature of the parameters of the 
+	 *        test method.
+	 * @param methodName a {@link String}, the name of the test method.
+	 */
+	public TestCase(String className, String parameterSignature, String methodName) {
+		this.className = className;
+		this.parameterSignature = parameterSignature;
+		this.methodName = methodName;
 	}
-	
-	public TestCase(String cn, String ps, String mn){
-		this.className = cn;
-		this.parameterSignature = ps;
-		this.methodName = mn;
-	}
-	
-	//copy constructor
-	public TestCase(TestCase otherTc){
+
+	/**
+	 * Copy constructor.
+	 * 
+	 * @param otherTc a {@link TestCase}.
+	 */
+	public TestCase(TestCase otherTc) {
 		this.className = otherTc.getClassName();
 		this.parameterSignature = otherTc.getParameterSignature();
 		this.methodName = otherTc.getMethodName();
-	}
-	
-	public void setClassName(String cName){
-		this.className = cName;
 	}
 	
 	public String getClassName(){
 		return this.className;
 	}
 	
-	public void setParameterSignature(String parSig){
-		this.parameterSignature = parSig;
-	}
-	
 	public String getParameterSignature(){
 		return this.parameterSignature;
-	}
-	
-	public void setMethodName(String mName){
-		this.methodName = mName;
 	}
 	
 	public String getMethodName(){
 		return this.methodName;
 	}
-	
-
 }

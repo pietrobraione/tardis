@@ -4,6 +4,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -13,30 +14,20 @@ import org.kohsuke.args4j.spi.PathOptionHandler;
 
 import sushi.configure.SignatureHandler;
 
-public class Options {
-
-	private static Options instance = null;
-
-	public static Options I() {
-		if (instance == null) {
-			instance = new Options();
-		}
-		return instance;
-	}
-		
-	@Option(name = "-test_method",
-			usage = "Java signature of the test method for the guiding (concrete) execution",
+public class Options implements Cloneable {
+	@Option(name = "-initial_test",
+			usage = "Java signature of the initial test case method for seeding concolic exploration",
 			handler = SignatureHandler.class)
-	private List<String> testMethodSignature;
+	private List<String> initialTestCaseSignature;
 	
-	@Option(name = "-guided_method",
-			usage = "Java signature of the guided method (to be executed symbolically)",
+	@Option(name = "-target_method",
+			usage = "Java signature of the target method (the method to test)",
 			handler = SignatureHandler.class)
-	private List<String> guidedMethodSignature;
+	private List<String> targetMethodSignature;
 	
 	@Option(name = "-max_depth",
 			usage = "The maximum depth at which generation of tests is performed")
-	private int maxdepth;
+	private int maxDepth;
 	
 	@Option(name = "-num_threads",
 			usage = "The number of threads in the thread pool")
@@ -94,38 +85,38 @@ public class Options {
 			usage = "Duration of the time budget")
 	private long timeBudgetDuration = 10;
 	
-	@Option(name = "-time_budget_Unit",
-			usage = "Unit of the time budget")
+	@Option(name = "-time_budget_unit",
+			usage = "Unit of the time budget: NANOSECONDS, MICROSECONDS, MILLISECONDS, SECONDS, MINUTES, HOURS, DAYS")
 	private TimeUnit timeBudgetTimeUnit = TimeUnit.MINUTES;
 	
-	public List<String> getTestMethod() {
-		return this.testMethodSignature;
+	public List<String> getInitialTestCase() {
+		return Collections.unmodifiableList(this.initialTestCaseSignature);
 	}
 	
 	public void setInitialTestCase(String... signature) {
 		if (signature.length != 3) {
 			return;
 		}
-		this.testMethodSignature = Arrays.asList(signature);
+		this.initialTestCaseSignature = Arrays.asList(signature.clone());
 	}
 	
-	public List<String> getGuidedMethod() {
-		return this.guidedMethodSignature;
+	public List<String> getTargetMethod() {
+		return Collections.unmodifiableList(this.targetMethodSignature);
 	}
 	
 	public void setTargetMethod(String... signature) {
 		if (signature.length != 3) {
 			return;
 		}
-		this.guidedMethodSignature = Arrays.asList(signature);
+		this.targetMethodSignature = Arrays.asList(signature.clone());
 	}
 	
 	public int getMaxDepth() {
-		return this.maxdepth;
+		return this.maxDepth;
 	}
 	
 	public void setMaxDepth(int maxdepth) {
-		this.maxdepth = maxdepth;
+		this.maxDepth = maxdepth;
 	}
 	
 	public int getNumOfThreads() {
@@ -230,5 +221,17 @@ public class Options {
 	
 	public void setTimeBudgetTimeUnit(TimeUnit timeBudgetTimeUnit) {
 		this.timeBudgetTimeUnit = timeBudgetTimeUnit;
+	}
+	
+	@Override
+	public Options clone() {
+		try {
+			//all objects referred by fields of an Options object 
+			//are not mutable, so shallow copy is OK
+			return (Options) super.clone();
+		} catch (CloneNotSupportedException e) {
+			//this should never happen
+			throw new AssertionError("super.clone() raised CloneNotSupportedException");
+		}
 	}
 }

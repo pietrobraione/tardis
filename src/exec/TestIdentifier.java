@@ -7,7 +7,7 @@ public class TestIdentifier {
 		this.testCount = 1;
 	}
 	
-	public void testIncrease() {
+	public void testCountIncrease() {
 		this.testCount++;
 	}
 	public int getTestCount() {
