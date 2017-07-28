@@ -10,7 +10,7 @@ import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.ParserProperties;
 
-import concurrent.TimeoutManager;
+import concurrent.TerminationManager;
 
 public class Main {
 	private Options o;
@@ -32,7 +32,7 @@ public class Main {
 		//creates and wires the components of the architecture
 		final PerformerJBSE performerJBSE = new PerformerJBSE(this.o, testCaseBuffer, pathConditionBuffer);
 		final PerformerEvosuite performerEvosuite = new PerformerEvosuite(this.o, pathConditionBuffer, testCaseBuffer);
-		final TimeoutManager terminationManager = new TimeoutManager(this.o.getTimeBudgetDuration(), this.o.getTimeBudgetTimeUnit(), performerJBSE, performerEvosuite);
+		final TerminationManager terminationManager = new TerminationManager(this.o.getTimeBudgetDuration(), this.o.getTimeBudgetTimeUnit(), performerJBSE, performerEvosuite);
 		
 		//starts everything
 		performerJBSE.start();
