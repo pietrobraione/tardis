@@ -57,9 +57,9 @@ public class PausableFixedThreadPoolExecutor extends ThreadPoolExecutor {
 	 * Resumes this thread pool from a {@link #pause()}.
 	 */
 	final void resume() {
+		this.paused = false;
 		this.lock.lock();
 		try {
-			this.paused = false;
 			this.notPaused.signalAll();
 		} finally {
 			this.lock.unlock();

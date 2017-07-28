@@ -65,10 +65,10 @@ public abstract class Performer<I,O> {
 	}
 	
 	final void resume() {
+		this.paused = false;
+		this.threadPool.resume();
 		this.lock.lock();
 		try {
-			this.paused = false;
-			this.threadPool.resume();
 			this.notPaused.signalAll();
 		} finally {
 			this.lock.unlock();
