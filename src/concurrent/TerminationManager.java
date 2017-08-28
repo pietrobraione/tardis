@@ -3,66 +3,79 @@ package concurrent;
 import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
 
-public class TerminationManager {
+public final class TerminationManager {
 	private final long duration;
 	private final TimeUnit timeUnit;
 	private final Performer<?,?>[] performers;
-	private final ShutdownManager shutdownManager;
+	private final Thread timeoutDetector;
 	private final Thread terminationDetector;
-	
-	private class ShutdownManager extends Thread {
-		private Thread toStop;
+	private volatile boolean timedOut;
 		
-		public void setToStop(Thread toStop) {
-			this.toStop = toStop;
-		}
-		
-		@Override
-		public void run() {
-			try {
-				TerminationManager.this.timeUnit.sleep(TerminationManager.this.duration);
-				this.toStop.interrupt();
-			} catch (InterruptedException e) {
-				//possibly interrupted by termination detector, 
-				//go on and stop all performers
-			}
-			for (Performer<?,?> p : TerminationManager.this.performers) {
-				p.stop();
-			}
-		}
-	}
-	
 	public TerminationManager(long duration, TimeUnit timeUnit, Performer<?,?>...performers) {
 		this.duration = duration;
 		this.timeUnit = timeUnit;
 		this.performers = performers.clone();
-		this.shutdownManager = new ShutdownManager();
-		this.terminationDetector = new Thread(() -> {
+		this.timedOut = false;
+		this.timeoutDetector = new Thread(() -> {
 			try {
-				while (!Thread.currentThread().isInterrupted()) {
-					TimeUnit.SECONDS.sleep(1);
-					for (Performer<?,?> p : this.performers) {
-						p.pause();
-					}
-					final boolean allIdle = Arrays.stream(this.performers).map(Performer::isIdle).reduce(Boolean.TRUE, (a, b) -> a && b);
-					for (Performer<?,?> p : this.performers) {
-						p.resume();
-					}
-					if (allIdle) {
-						this.shutdownManager.interrupt();
-						return; //terminates
-					}
-				}
+				this.timeUnit.sleep(this.duration);
+				this.timedOut = true;
 			} catch (InterruptedException e) {
 				//just terminates
 			}
 		});
-		this.shutdownManager.setToStop(this.terminationDetector);
+		this.terminationDetector = new Thread(() -> {
+			try {
+				while (true) {
+					TimeUnit.SECONDS.sleep(1);
+					
+					//exits upon timeout
+					if (this.timedOut) {
+						break;
+					}
+					
+					//exits upon termination
+					//double check
+					final boolean allIdleUnsafe = allIdle();
+					if (allIdleUnsafe) {
+						//synchronizes and repeats the check
+						pauseAll();
+						final boolean allIdleSafe = allIdle();
+						resumeAll();
+						if (allIdleSafe) {
+							this.timeoutDetector.interrupt();
+							break;
+						}
+					}
+				}
+			} catch (InterruptedException e) {
+				//this should never happen
+				e.printStackTrace(); //TODO handle
+			}
+			
+			//quits
+			stopAll();
+		});
+	}
+	
+	private void pauseAll() {
+		Arrays.stream(this.performers).forEach(Performer::pause);
+	}
+	
+	private void resumeAll() {
+		Arrays.stream(this.performers).forEach(Performer::resume);
+	}
+	
+	private void stopAll() {
+		Arrays.stream(this.performers).forEach(Performer::stop);
+	}
+	
+	private boolean allIdle() {
+		return Arrays.stream(this.performers).map(Performer::isIdle).reduce(Boolean.TRUE, (a, b) -> a && b);
 	}
 	
 	public void start() {
-		shutdownManager.start();
-
-		terminationDetector.start();
+		this.timeoutDetector.start();
+		this.terminationDetector.start();
 	}
 }
