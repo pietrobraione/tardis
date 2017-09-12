@@ -116,10 +116,15 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult>{
 			ClasspathException, CannotBacktrackException, CannotManageStateException, 
 			ThreadStackEmptyException, ContradictionException, EngineStuckException, 
 			FailureException {
+		//some paths
+		final String classpathWrapperCompilation = this.binPath + File.pathSeparator + this.sushiLibPath;
+		final String classpathEvosuite = classpathWrapperCompilation + File.pathSeparator + this.tmpPath;
+		final String classpathTestCompilation = classpathWrapperCompilation + File.pathSeparator + this.evosuitePath;
+
 		//generates and compiles the Evosuite wrapper
 		final String fileName = emitEvoSuiteWrapper(testCount, initialState, finalState);
 		final Path logFileJavacPath = Paths.get(this.tmpPath + "/javac-log-" + testCount + ".txt");
-		final String[] javacParameters = { "-d", binPath, fileName };
+		final String[] javacParameters = { "-cp", classpathWrapperCompilation, "-d", this.tmpPath, fileName };
 		final JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
 		if (compiler == null) {
 			//TODO throw an exception
@@ -130,10 +135,6 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult>{
 			e.printStackTrace();
 			//TODO rethrow or handle the error otherwise
 		}
-
-		//some configuration - test method, paths
-		final String classpathEvosuite = this.binPath + File.pathSeparator + this.sushiLibPath;
-		final String classpathCompilation = classpathEvosuite + File.pathSeparator + this.evosuitePath;
 
 		//prepares the Evosuite parameters
 		final List<String> evosuiteParameters = new ArrayList<String>();
@@ -189,8 +190,8 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult>{
 		
 		//compiles the generated test
 		final Path javacLogFile = Paths.get(this.tmpPath + "/javac-log-test-" +  testCount + ".txt");
-		final String[] javacParametersTestScaff = { "-cp", classpathCompilation, "-d", this.binPath, testCaseScaff };
-		final String[] javacParametersTestCase = { "-cp", classpathCompilation, "-d", this.binPath, testCase };
+		final String[] javacParametersTestScaff = { "-cp", classpathTestCompilation, "-d", this.binPath, testCaseScaff };
+		final String[] javacParametersTestCase = { "-cp", classpathTestCompilation, "-d", this.binPath, testCase };
 		try (final OutputStream w = new BufferedOutputStream(Files.newOutputStream(javacLogFile))) {
 			compiler.run(null, w, w, javacParametersTestScaff);
 			compiler.run(null, w, w, javacParametersTestCase);
