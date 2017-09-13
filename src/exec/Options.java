@@ -84,7 +84,11 @@ public class Options implements Cloneable {
 			usage = "Path to Sushi library",
 			handler = PathOptionHandler.class)
 	private Path sushiPath = Paths.get(".", "lib", "sushi-lib.jar");
-		
+	
+	@Option(name = "-evosuite_time_budget",
+			usage = "Time budget in seconds for evosuite")
+	private int timeBudgetEvosuite = 180;
+	
 	@Option(name = "-time_budget_duration",
 			usage = "Duration of the time budget")
 	private long timeBudgetDuration = 10;
@@ -217,6 +221,14 @@ public class Options implements Cloneable {
 	
 	public void setSushiLibPath(Path sushiPath) {
 		this.sushiPath = sushiPath;
+	}
+	
+	public int getEvosuiteBudget() {
+		return this.timeBudgetEvosuite;
+	}
+	
+	public void setEvosuiteBudget(int budgetEvosuite) {
+		this.timeBudgetEvosuite = budgetEvosuite;
 	}
 	
 	public long getTimeBudgetDuration() {
