@@ -2,6 +2,9 @@ package exec;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -40,6 +43,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult>{
 	private final String evosuitePath;
 	private final String sushiLibPath;
 	private final String outPath;
+	private final int timeBudget;
 	private final TestIdentifier testIdentifier;
 
 
@@ -53,6 +57,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult>{
 		this.evosuitePath = o.getEvosuitePath().toString();
 		this.sushiLibPath = o.getSushiLibPath().toString();
 		this.outPath = o.getOutDirectory().toString();
+		this.timeBudget = o.getEvosuiteBudget();
 		this.testIdentifier = new TestIdentifier();
 	}
 
@@ -149,10 +154,10 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult>{
 		evosuiteParameters.add("-DCP=" + classpathEvosuite); 
 		evosuiteParameters.add("-Dassertions=false");
 		evosuiteParameters.add("-Dhtml=false");
-		evosuiteParameters.add("-Dglobal_timeout=600");
+		evosuiteParameters.add("-Dglobal_timeout=" + this.timeBudget);
 		evosuiteParameters.add("-Dreport_dir=" + this.tmpPath);
 		evosuiteParameters.add("-Djunit_suffix=" + "_" + testCount  + "_Test");
-		evosuiteParameters.add("-Dsearch_budget=600");
+		evosuiteParameters.add("-Dsearch_budget=" + this.timeBudget);
 		evosuiteParameters.add("-Dtest_dir=" + outPath);
 		evosuiteParameters.add("-Dvirtual_fs=false");
 		evosuiteParameters.add("-Dselection_function=ROULETTEWHEEL");
@@ -200,11 +205,25 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult>{
 			//TODO rethrow or handle the error otherwise
 		}
 		
-		System.out.println("Generated test case " + testCaseClassName + ", depth: " + depth + ", path condition: " + finalState.getPathCondition());
-		
 		//creates the TestCase and schedules it for further exploration
-		final TestCase newTC = new TestCase(testCaseClassName, "()V", "test0");
-		this.getOutputQueue().add(new EvosuiteResult(newTC, depth + 1));
+		try {
+			classLoader(testCaseClassName);
+			System.out.println("Generated test case " + testCaseClassName + ", depth: " + depth + ", path condition: " + finalState.getPathCondition());
+			final TestCase newTC = new TestCase(testCaseClassName, "()V", "test0");
+			this.getOutputQueue().add(new EvosuiteResult(newTC, depth + 1));
+		} catch (NoSuchMethodException e) { 
+			//EvoSuite failed to generate the test case, thus we just ignore it 
+			System.out.println("EvoSuite failed to generate the test case " + testCaseClassName + " for PC: " + finalState.getPathCondition());
+		}
+	}
+				
+	private void classLoader(String className) throws NoSuchMethodException{
+		try{
+			URLClassLoader cloader = URLClassLoader.newInstance(new URL[]{Paths.get(binPath).toUri().toURL()}); 
+			cloader.loadClass(className.replace('/',  '.')).getDeclaredMethod("test0", null);
+		}catch (SecurityException | ClassNotFoundException | MalformedURLException e) {
+			e.printStackTrace();
+		} 			
 	}
 
 	@Override
