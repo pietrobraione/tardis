@@ -6,7 +6,6 @@ import java.util.List;
 
 import jbse.algo.exc.CannotManageStateException;
 import jbse.apps.run.DecisionProcedureGuidance;
-import jbse.apps.run.GuidanceException;
 import jbse.bc.exc.InvalidClassFileFactoryClassException;
 import jbse.common.exc.ClasspathException;
 import jbse.dec.DecisionProcedureAlgorithms;
@@ -37,6 +36,8 @@ import jbse.rules.LICSRulesRepo;
 import jbse.tree.StateTree.BranchPoint;
 
 public class RunnerPath {
+	private static final String COMMANDLINE_LAUNCH_Z3 = System.getProperty("os.name").toLowerCase().contains("windows") ? " /smt2 /in /t:10" : " -smt2 -in -t:10";
+	
 	private final String[] classpath;
 	private final String z3Path;
 	private final RunnerParameters commonParamsGuided;
@@ -77,23 +78,6 @@ public class RunnerPath {
 			return this.stateList;
 		}
 		
-		//this MUST be present, or the guiding execution will not advance!!!!
-		@Override
-		public boolean atStepPre() {
-			try {
-				if (this.getEngine().getCurrentState().getCurrentMethodSignature().equals( 
-						this.guid.getCurrentMethodSignature())) {
-					this.guid.step();
-				}
-			} catch (GuidanceException | CannotManageStateException | ThreadStackEmptyException e) {
-				e.printStackTrace();
-				return true;
-			}
-			//put here your stuff, if you want to do something							
-
-			return super.atStepPre();
-		}
-
 		@Override
 		public boolean atRoot() {
 			if (this.testDepth == 0) {
@@ -182,7 +166,7 @@ public class RunnerPath {
 						new DecisionProcedureLICS( //useless?
 								new DecisionProcedureSMTLIB2_AUFNIRA(
 										new DecisionProcedureAlwSat(), 
-										calc, this.z3Path + " -smt2 -in -t:10"), 
+										calc, this.z3Path + COMMANDLINE_LAUNCH_Z3), 
 								calc, new LICSRulesRepo()), 
 						calc, new ClassInitRulesRepo()), calc));
 		pGuiding.setDecisionProcedure(
