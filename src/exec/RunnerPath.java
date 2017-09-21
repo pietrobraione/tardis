@@ -150,7 +150,7 @@ public class RunnerPath {
 			ThreadStackEmptyException, ContradictionException, EngineStuckException, 
 			FailureException {
 
-		//builds the parameters for the guided (symbolic) execution
+		//builds the parameters
 		final RunnerParameters pGuided = this.commonParamsGuided.clone();
 		final RunnerParameters pGuiding = this.commonParamsGuiding.clone();
 
@@ -180,8 +180,9 @@ public class RunnerPath {
 		pGuiding.setMethodSignature(testCase.getClassName(), testCase.getParameterSignature(), testCase.getMethodName());
 
 		//creates the guidance decision procedure and sets it
+		final int numberOfHits = 1; //TODO calculate the number of hits based on the test
 		final DecisionProcedureGuidance guid = new DecisionProcedureGuidance(pGuided.getDecisionProcedure(),
-				pGuided.getCalculator(), pGuiding, pGuided.getMethodSignature());
+				pGuided.getCalculator(), pGuiding, pGuided.getMethodSignature(), numberOfHits);
 		pGuided.setDecisionProcedure(guid);
 		
 		//sets the actions
