@@ -13,7 +13,7 @@ import org.kohsuke.args4j.ParserProperties;
 import concurrent.TerminationManager;
 
 public final class Main {
-	private Options o;
+	private final Options o;
 	
 	public Main(Options o) {
 		this.o = o;
