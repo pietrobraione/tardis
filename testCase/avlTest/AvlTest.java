@@ -1,6 +1,7 @@
 package avlTest;
 
 public class AvlTest {
+	/*
 	public void testIsEmpty(){
 		AvlTree tree = new AvlTree();
 		tree.isEmpty();
@@ -18,7 +19,7 @@ public class AvlTest {
 		AvlTree tree = new AvlTree();
 		tree.insertElem(3);
 		tree.findMax();
-	}
+	}*/
 	public void testInsertElem(){
 		AvlTree tree = new AvlTree();
 		tree.insertElem(10);

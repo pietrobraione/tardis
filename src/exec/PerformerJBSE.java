@@ -76,6 +76,7 @@ public class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 				this.getOutputQueue().add(new JBSEResult(initialState, newState, currentDepth));
 			}
 		}
+		System.out.println("foo");
 	}
 
 	private static boolean alreadyExplored(Collection<Clause> newPC, Collection<Clause> oldPC) {

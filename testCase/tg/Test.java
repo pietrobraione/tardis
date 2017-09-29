@@ -9,7 +9,7 @@ public class Test{
 		t.anotherNode.setInfo(0);
 		n.setInfo(0);
 		t.getNode(n, i);	
-	}
+	}/*
 	public void test1(){
 		Testgen t = new Testgen();
 		int i = -1;
@@ -20,6 +20,6 @@ public class Test{
 		n.setNext(null);
 		t.anotherNode.setNext(new Testgen.Node());
 		t.getNode(n, i);	
-	}
+	}*/
 
 }

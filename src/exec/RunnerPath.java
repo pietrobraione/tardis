@@ -1,8 +1,15 @@
 package exec;
 
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.github.javaparser.JavaParser;
+import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 
 import jbse.algo.exc.CannotManageStateException;
 import jbse.apps.run.DecisionProcedureGuidance;
@@ -37,9 +44,11 @@ import jbse.tree.StateTree.BranchPoint;
 
 public class RunnerPath {
 	private static final String COMMANDLINE_LAUNCH_Z3 = System.getProperty("os.name").toLowerCase().contains("windows") ? " /smt2 /in /t:10" : " -smt2 -in -t:10";
-	
+
 	private final String[] classpath;
 	private final String z3Path;
+	private final String outPath;
+	private final String targetMethod;
 	private final RunnerParameters commonParamsGuided;
 	private final RunnerParameters commonParamsGuiding;
 		
@@ -49,6 +58,8 @@ public class RunnerPath {
 		this.classpath[1] = o.getJBSELibraryPath().toString();
 		this.classpath[2] = o.getJREPath().toString();
 		this.z3Path = o.getZ3Path().toString();
+		this.outPath = o.getOutDirectory().toString();
+		this.targetMethod = o.getTargetMethod().get(2);
 		
 		//builds the template parameters object for the guided (symbolic) execution
 		this.commonParamsGuided = new RunnerParameters();
@@ -178,9 +189,9 @@ public class RunnerPath {
 
 		//sets the guiding method (to be executed concretely)
 		pGuiding.setMethodSignature(testCase.getClassName(), testCase.getParameterSignature(), testCase.getMethodName());
-
 		//creates the guidance decision procedure and sets it
-		final int numberOfHits = 1; //TODO calculate the number of hits based on the test
+		final int numberOfHits = countNumberOfInvocation(testCase.getClassName(), targetMethod);//TODO calculate the number of hits based on the test
+		//System.out.println(numberOfHits);
 		final DecisionProcedureGuidance guid = new DecisionProcedureGuidance(pGuided.getDecisionProcedure(),
 				pGuided.getCalculator(), pGuiding, pGuided.getMethodSignature(), numberOfHits);
 		pGuided.setDecisionProcedure(guid);
@@ -198,6 +209,36 @@ public class RunnerPath {
 		this.initialState = rb.getEngine().getInitialState();
 		return actions.getStateList();
 	}
+	
+	private static class CountVisitor extends VoidVisitorAdapter<Object> {
+		final String methodName;
+        int methodCallCounter = 0;
+        
+        public CountVisitor(String methodName) {
+        	this.methodName = methodName;
+        }
+        
+        @Override
+        public void visit(MethodCallExpr n, Object arg) {
+            super.visit(n, arg);
+            //System.out.println(Thread.currentThread().getName()+ "_" + className + "_" +  methodName + " = " + n.getNameAsString());
+            if(n.getNameAsString().equals(this.methodName)){
+            	this.methodCallCounter++;
+            }
+        }
+    }
+	
+	private int countNumberOfInvocation(String className, String methodName){
+        final CountVisitor v = new CountVisitor(methodName);
+		try {
+			final FileInputStream in = new FileInputStream(outPath + "/" + className + ".java");
+            v.visit(JavaParser.parse(in), null);
+		} catch (FileNotFoundException e) {
+			e.printStackTrace();
+		}
+		return v.methodCallCounter;
+	}
+	
 	
 	/**
 	 * Must be invoked after an invocation of {@link #runProgram(TestCase, int)}.
