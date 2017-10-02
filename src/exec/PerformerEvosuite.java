@@ -208,7 +208,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult>{
 		
 		//creates the TestCase and schedules it for further exploration
 		try {
-			classLoader(testCaseClassName);
+			checkTestExists(testCaseClassName);
 			System.out.println("Generated test case " + testCaseClassName + ", depth: " + depth + ", path condition: " + finalState.getPathCondition());
 			final TestCase newTC = new TestCase(testCaseClassName, "()V", "test0");
 			this.getOutputQueue().add(new EvosuiteResult(newTC, depth + 1));
@@ -218,11 +218,11 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult>{
 		}
 	}
 				
-	private void classLoader(String className) throws NoSuchMethodException{
-		try{
-			URLClassLoader cloader = URLClassLoader.newInstance(new URL[]{Paths.get(binPath).toUri().toURL()}); 
-			cloader.loadClass(className.replace('/',  '.')).getDeclaredMethod("test0", null);
-		}catch (SecurityException | ClassNotFoundException | MalformedURLException e) {
+	private void checkTestExists(String className) throws NoSuchMethodException{
+		try {
+			final URLClassLoader cloader = URLClassLoader.newInstance(new URL[]{Paths.get(binPath).toUri().toURL()}); 
+			cloader.loadClass(className.replace('/',  '.')).getDeclaredMethod("test0");
+		} catch (SecurityException | ClassNotFoundException | MalformedURLException e) {
 			e.printStackTrace();
 		} 			
 	}

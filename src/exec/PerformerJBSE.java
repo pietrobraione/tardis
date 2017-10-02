@@ -63,7 +63,7 @@ public class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 		final RunnerPath rp = new RunnerPath(this.o);
 		final State tcFinalState = rp.runProgram(tc, -1).get(0);
 		final Collection<Clause> tcFinalPC = tcFinalState.getPathCondition();
-		System.out.println("Run test case " + tc.getClassName() +", path condition " + tcFinalPC.toString());
+		System.out.println("JBSE: Run test case " + tc.getClassName() + ", path condition " + tcFinalPC.toString());
 		final int tcFinalDepth = tcFinalState.getDepth();
 		for (int currentDepth = startDepth; currentDepth < Math.min(this.maxDepth, tcFinalDepth - 1); currentDepth++) {
 			final List<State> newStates = rp.runProgram(tc, currentDepth);
@@ -74,9 +74,9 @@ public class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 					continue;
 				}
 				this.getOutputQueue().add(new JBSEResult(initialState, newState, currentDepth));
+				System.out.println("JBSE: from test case "+ tc.getClassName() + " generated path condition " + currentPC);
 			}
 		}
-		System.out.println("foo");
 	}
 
 	private static boolean alreadyExplored(Collection<Clause> newPC, Collection<Clause> oldPC) {
