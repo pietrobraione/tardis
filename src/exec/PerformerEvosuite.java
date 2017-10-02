@@ -209,12 +209,12 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult>{
 		//creates the TestCase and schedules it for further exploration
 		try {
 			checkTestExists(testCaseClassName);
-			System.out.println("Generated test case " + testCaseClassName + ", depth: " + depth + ", path condition: " + finalState.getPathCondition());
+			System.out.println("[EVOSUITE] Generated test case " + testCaseClassName + ", depth: " + depth + ", path condition: " + finalState.getPathCondition());
 			final TestCase newTC = new TestCase(testCaseClassName, "()V", "test0");
 			this.getOutputQueue().add(new EvosuiteResult(newTC, depth + 1));
 		} catch (NoSuchMethodException e) { 
 			//EvoSuite failed to generate the test case, thus we just ignore it 
-			System.out.println("EvoSuite failed to generate the test case " + testCaseClassName + " for PC: " + finalState.getPathCondition());
+			System.out.println("[EVOSUITE] Failed to generate the test case " + testCaseClassName + " for PC: " + finalState.getPathCondition());
 		}
 	}
 				
