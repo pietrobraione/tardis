@@ -9,7 +9,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.nio.file.Files;
 import java.io.BufferedOutputStream;
 import java.io.BufferedWriter;
@@ -18,6 +17,8 @@ import java.io.File;
 import javax.tools.JavaCompiler;
 import javax.tools.ToolProvider;
 
+import concurrent.InputBuffer;
+import concurrent.OutputBuffer;
 import concurrent.Performer;
 import jbse.algo.exc.CannotManageStateException;
 import jbse.bc.exc.InvalidClassFileFactoryClassException;
@@ -47,7 +48,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult>{
 	private final TestIdentifier testIdentifier;
 
 
-	public PerformerEvosuite(Options o, LinkedBlockingQueue<JBSEResult> in, LinkedBlockingQueue<EvosuiteResult> out) {
+	public PerformerEvosuite(Options o, InputBuffer<JBSEResult> in, OutputBuffer<EvosuiteResult> out) {
 		super(in, out, o.getNumOfThreads());
 		this.targetClass = o.getTargetMethod().get(0);
 		this.targetSignature = o.getTargetMethod().get(1);
@@ -211,7 +212,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult>{
 			checkTestExists(testCaseClassName);
 			System.out.println("[EVOSUITE] Generated test case " + testCaseClassName + ", depth: " + depth + ", path condition: " + finalState.getPathCondition());
 			final TestCase newTC = new TestCase(testCaseClassName, "()V", "test0");
-			this.getOutputQueue().add(new EvosuiteResult(newTC, depth + 1));
+			this.getOutputBuffer().add(new EvosuiteResult(newTC, depth + 1));
 		} catch (NoSuchMethodException e) { 
 			//EvoSuite failed to generate the test case, thus we just ignore it 
 			System.out.println("[EVOSUITE] Failed to generate the test case " + testCaseClassName + " for PC: " + finalState.getPathCondition());

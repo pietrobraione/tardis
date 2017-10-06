@@ -1,12 +1,11 @@
 package concurrent;
 
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
 public abstract class Performer<I,O> {
-	private final LinkedBlockingQueue<I> in;
-	private final LinkedBlockingQueue<O> out;
+	private final InputBuffer<I> in;
+	private final OutputBuffer<O> out;
 	private final PausableFixedThreadPoolExecutor threadPool;
 	private final Thread mainThread;
 	private final ReentrantLock lockPause;
@@ -14,7 +13,7 @@ public abstract class Performer<I,O> {
 	private final Condition conditionPaused;
 	private volatile boolean paused;
 
-	public Performer(LinkedBlockingQueue<I> in, LinkedBlockingQueue<O> out, int numOfThreads) {
+	public Performer(InputBuffer<I> in, OutputBuffer<O> out, int numOfThreads) {
 		this.in = in;
 		this.out = out;
 		this.threadPool = new PausableFixedThreadPoolExecutor(numOfThreads);
@@ -40,7 +39,7 @@ public abstract class Performer<I,O> {
 	
 	protected abstract Runnable makeJob(I item);
 
-	protected final LinkedBlockingQueue<O> getOutputQueue() {
+	protected final OutputBuffer<O> getOutputBuffer() {
 		return this.out;
 	}
 	

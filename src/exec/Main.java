@@ -2,7 +2,6 @@ package exec;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -21,8 +20,8 @@ public final class Main {
 	
 	public void start() {
 		//creates the communication queues between the performers
-		final LinkedBlockingQueue<JBSEResult> pathConditionBuffer = new LinkedBlockingQueue<>();
-		final LinkedBlockingQueue<EvosuiteResult> testCaseBuffer = new LinkedBlockingQueue<>();
+		final QueueInputOutputBuffer<JBSEResult> pathConditionBuffer = new QueueInputOutputBuffer<>();
+		final QueueInputOutputBuffer<EvosuiteResult> testCaseBuffer = new QueueInputOutputBuffer<>();
 		
 		//seeds testCaseBuffer with the initial test case
 		final TestCase tc = new TestCase(this.o);

@@ -3,8 +3,9 @@ package exec;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
-import java.util.concurrent.LinkedBlockingQueue;
 
+import concurrent.InputBuffer;
+import concurrent.OutputBuffer;
 import concurrent.Performer;
 import jbse.algo.exc.CannotManageStateException;
 import jbse.bc.exc.InvalidClassFileFactoryClassException;
@@ -25,7 +26,7 @@ public class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 	private final Options o;
 	private final int maxDepth;
 
-	public PerformerJBSE(Options o, LinkedBlockingQueue<EvosuiteResult> in, LinkedBlockingQueue<JBSEResult> out) {
+	public PerformerJBSE(Options o, InputBuffer<EvosuiteResult> in, OutputBuffer<JBSEResult> out) {
 		super(in, out, o.getNumOfThreads());
 		this.o = o.clone();
 		this.maxDepth = o.getMaxDepth();
@@ -74,7 +75,7 @@ public class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 				if (alreadyExplored(currentPC, tcFinalPC)) {
 					continue;
 				}
-				this.getOutputQueue().add(new JBSEResult(initialState, newState, currentDepth));
+				this.getOutputBuffer().add(new JBSEResult(initialState, newState, currentDepth));
 				System.out.println("[JBSE    ] From test case "+ tc.getClassName() + " generated path condition " + currentPC);
 				noPathConditionGenerated = false;
 			}
