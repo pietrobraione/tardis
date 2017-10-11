@@ -27,7 +27,7 @@ public class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 	private final int maxDepth;
 
 	public PerformerJBSE(Options o, InputBuffer<EvosuiteResult> in, OutputBuffer<JBSEResult> out) {
-		super(in, out, o.getNumOfThreads());
+		super(in, out, o.getTimeBudgetDuration(), o.getTimeBudgetTimeUnit(), o.getNumOfThreads(), 1);
 		this.o = o.clone();
 		this.maxDepth = o.getMaxDepth();
 	}
@@ -98,7 +98,8 @@ public class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 
 	
 	@Override
-	protected Runnable makeJob(EvosuiteResult item) {
+	protected Runnable makeJob(List<EvosuiteResult> items) {
+		final EvosuiteResult item = items.get(0);
 		final Runnable job = () -> {
 			try {
 				explore(item.getTestCase(), item.getStartDepth());

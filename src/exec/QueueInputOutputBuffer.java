@@ -1,6 +1,7 @@
 package exec;
 
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 
 import concurrent.InputBuffer;
 import concurrent.OutputBuffer;
@@ -14,8 +15,8 @@ public class QueueInputOutputBuffer<E> implements InputBuffer<E>, OutputBuffer<E
 	}
 
 	@Override
-	public E take() throws InterruptedException {
-		return this.queue.take();
+	public E poll(long timeout, TimeUnit unit) throws InterruptedException {
+		return this.queue.poll(timeout, unit);
 	}
 
 	@Override

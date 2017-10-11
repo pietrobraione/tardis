@@ -96,6 +96,18 @@ public class Options implements Cloneable {
 	@Option(name = "-time_budget_unit",
 			usage = "Unit of the time budget: NANOSECONDS, MICROSECONDS, MILLISECONDS, SECONDS, MINUTES, HOURS, DAYS")
 	private TimeUnit timeBudgetTimeUnit = TimeUnit.MINUTES;
+	
+	@Option(name = "-timeout_mosa_task_creation_duration",
+			usage = "Duration of the timeout after which a MOSA job is created")
+	private long timeoutMosaTaskCreationDuration = 30;
+	
+	@Option(name = "-timeout_mosa_task_creation_unit",
+			usage = "Unit of the timeout after which a MOSA job is created: NANOSECONDS, MICROSECONDS, MILLISECONDS, SECONDS, MINUTES, HOURS, DAYS")
+	private TimeUnit timeoutMosaTaskCreationUnit = TimeUnit.SECONDS;
+
+	@Option(name = "-num_mosa_targets",
+			usage = "Maximum number of target passed to a MOSA job")
+	private int numMosaTargets = 1;
 
 	public boolean getHelp() {
 		return this.help;
@@ -245,6 +257,30 @@ public class Options implements Cloneable {
 	
 	public void setTimeBudgetTimeUnit(TimeUnit timeBudgetTimeUnit) {
 		this.timeBudgetTimeUnit = timeBudgetTimeUnit;
+	}
+	
+	public long getTimeoutMosaTaskCreationDuration() {
+		return this.timeoutMosaTaskCreationDuration;
+	}
+	
+	public void setTimeoutMosaTaskCreationDuration(long timeoutMosaTaskCreationDuration) {
+		this.timeoutMosaTaskCreationDuration = timeoutMosaTaskCreationDuration;
+	}
+	
+	public TimeUnit getTimeoutMosaTaskCreationUnit() {
+		return this.timeoutMosaTaskCreationUnit;
+	}
+	
+	public void setTimeoutMosaTaskCreationUnit(TimeUnit timeoutMosaTaskCreationUnit) {
+		this.timeoutMosaTaskCreationUnit = timeoutMosaTaskCreationUnit;
+	}
+	
+	public int getNumMosaTargets() {
+		return this.numMosaTargets;
+	}
+	
+	public void setNumMosaTargets(int numMosaTargets) {
+		this.numMosaTargets = numMosaTargets;
 	}
 	
 	@Override

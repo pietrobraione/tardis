@@ -1,22 +1,31 @@
 package concurrent;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
 public abstract class Performer<I,O> {
 	private final InputBuffer<I> in;
 	private final OutputBuffer<O> out;
+	private final long timeout;
+	private final TimeUnit unit;
 	private final PausableFixedThreadPoolExecutor threadPool;
+	private final int numInputs;
 	private final Thread mainThread;
 	private final ReentrantLock lockPause;
 	private final Condition conditionNotPaused;
 	private final Condition conditionPaused;
 	private volatile boolean paused;
 
-	public Performer(InputBuffer<I> in, OutputBuffer<O> out, int numOfThreads) {
+	public Performer(InputBuffer<I> in, OutputBuffer<O> out, long timeout, TimeUnit unit, int numOfThreads, int numInputs) {
 		this.in = in;
 		this.out = out;
+		this.timeout = timeout;
+		this.unit = unit;
 		this.threadPool = new PausableFixedThreadPoolExecutor(numOfThreads);
+		this.numInputs = numInputs;
 		this.mainThread = new Thread(() -> {
 			while (true) {
 				try {
@@ -37,7 +46,7 @@ public abstract class Performer<I,O> {
 		this.paused = false;
 	}
 	
-	protected abstract Runnable makeJob(I item);
+	protected abstract Runnable makeJob(List<I> item);
 
 	protected final OutputBuffer<O> getOutputBuffer() {
 		return this.out;
@@ -97,7 +106,7 @@ public abstract class Performer<I,O> {
 	 * empty.
 	 */
 	final boolean isIdle() {
-		return this.in.isEmpty() && this.threadPool.isIdle();
+		return this.in.isEmpty() && this.items.isEmpty() && this.threadPool.isIdle();
 	}
 	
 	private void waitIfPaused() throws InterruptedException {
@@ -113,10 +122,21 @@ public abstract class Performer<I,O> {
 		}
 	}
 	
+	private ArrayList<I> items;
+	
 	private void waitInputAndSubmitJob() throws InterruptedException {
-		final I item = this.in.take();
-		final Runnable job = makeJob(item);
-		this.threadPool.execute(job);
+		if (this.items == null) {
+			this.items = new ArrayList<>();
+		}
+		final I item = this.in.poll(this.timeout, this.unit);
+		if (item != null) {
+			this.items.add(item);
+		}
+		if ((item == null && this.items.size() > 0) || this.items.size() == this.numInputs) {
+			final Runnable job = makeJob(this.items);
+			this.threadPool.execute(job);
+			this.items = null;
+		}
 	}
 
 	private void signalResumed() {

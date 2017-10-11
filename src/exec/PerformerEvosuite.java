@@ -49,7 +49,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult>{
 
 
 	public PerformerEvosuite(Options o, InputBuffer<JBSEResult> in, OutputBuffer<EvosuiteResult> out) {
-		super(in, out, o.getNumOfThreads());
+		super(in, out, o.getTimeoutMosaTaskCreationDuration(), o.getTimeoutMosaTaskCreationUnit(), o.getNumOfThreads(), o.getNumMosaTargets());
 		this.targetClass = o.getTargetMethod().get(0);
 		this.targetSignature = o.getTargetMethod().get(1);
 		this.targetMethod = o.getTargetMethod().get(2);
@@ -229,9 +229,10 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult>{
 	}
 
 	@Override
-	protected Runnable makeJob(JBSEResult item) {
+	protected Runnable makeJob(List<JBSEResult> items) {
 		final int testCount = this.testIdentifier.getTestCount();
 		this.testIdentifier.testCountIncrease();
+		final JBSEResult item = items.get(0); //TODO use MOSA!
 		final Runnable job = () -> {
 			try {
 				generateTestCases(item.getInitialState(), item.getFinalState(), item.getDepth(), testCount);
