@@ -173,7 +173,6 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult>{
 		evosuiteParameters.add("-Dmax_initial_tests=1");
 		evosuiteParameters.add("-Dinline=false");
 		evosuiteParameters.add("-Dpath_condition=" + this.targetClass.replace('/', '.') + "," + this.targetMethod + this.targetSignature + ",EvoSuiteWrapper_" + testCount);
-		//evosuiteParameters.add("-Dpath_condition_check_first_target_call_only=true");
 		evosuiteParameters.add("-Dpath_condition_target=LAST_ONLY");
 
 		//launches Evosuite
