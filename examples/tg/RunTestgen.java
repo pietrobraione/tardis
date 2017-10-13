@@ -32,6 +32,7 @@ public class RunTestgen {
 		o.setOutDirectory(Settings.OUT_PATH);
 		o.setEvosuitePath(Settings.EVOSUITE_PATH);
 		o.setSushiLibPath(Settings.SUSHI_LIB_PATH);
+		o.setUseMOSA(true);
 		o.setTimeBudgetDuration(timeBudgetDuration);
 		o.setTimeBudgetTimeUnit(timeBudgetTimeUnit);
 	

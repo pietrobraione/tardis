@@ -108,6 +108,10 @@ public class Options implements Cloneable {
 	@Option(name = "-num_mosa_targets",
 			usage = "Maximum number of target passed to a MOSA job")
 	private int numMosaTargets = 1;
+	
+	@Option(name = "-use_mosa",
+			usage = "Set to true if you want to use MOSA, false for ordinary EvoSuite")
+	private boolean useMOSA = false;
 
 	public boolean getHelp() {
 		return this.help;
@@ -281,6 +285,14 @@ public class Options implements Cloneable {
 	
 	public void setNumMosaTargets(int numMosaTargets) {
 		this.numMosaTargets = numMosaTargets;
+	}
+	
+	public boolean getUseMOSA() {
+		return this.useMOSA;
+	}
+	
+	public void setUseMOSA(boolean useMOSA) {
+		this.useMOSA = useMOSA;
 	}
 	
 	@Override

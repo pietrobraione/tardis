@@ -45,7 +45,9 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult>{
 	private final String sushiLibPath;
 	private final String outPath;
 	private final int timeBudget;
+	private final boolean useMosa;
 	private final TestIdentifier testIdentifier;
+	
 
 
 	public PerformerEvosuite(Options o, InputBuffer<JBSEResult> in, OutputBuffer<EvosuiteResult> out) {
@@ -59,7 +61,9 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult>{
 		this.sushiLibPath = o.getSushiLibPath().toString();
 		this.outPath = o.getOutDirectory().toString();
 		this.timeBudget = o.getEvosuiteBudget();
+		this.useMosa = o.getUseMOSA();
 		this.testIdentifier = new TestIdentifier();
+		
 	}
 
 
@@ -154,7 +158,6 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult>{
 		evosuiteParameters.add("2048");
 		evosuiteParameters.add("-DCP=" + classpathEvosuite); 
 		evosuiteParameters.add("-Dassertions=false");
-		evosuiteParameters.add("-Dhtml=false");
 		evosuiteParameters.add("-Dglobal_timeout=" + this.timeBudget);
 		evosuiteParameters.add("-Dreport_dir=" + this.tmpPath);
 		evosuiteParameters.add("-Djunit_suffix=" + "_" + testCount  + "_Test");
@@ -162,18 +165,28 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult>{
 		evosuiteParameters.add("-Dtest_dir=" + outPath);
 		evosuiteParameters.add("-Dvirtual_fs=false");
 		evosuiteParameters.add("-Dselection_function=ROULETTEWHEEL");
-		evosuiteParameters.add("-Dcrossover_function=SINGLEPOINT");
 		evosuiteParameters.add("-Dcriterion=PATHCONDITION");		
-		evosuiteParameters.add("-Davoid_replicas_of_individuals=true"); 
 		evosuiteParameters.add("-Dsushi_statistics=true");
-		evosuiteParameters.add("-Dcrossover_implementation=SUSHI_HYBRID");
-		evosuiteParameters.add("-Duse_minimizer_during_crossover=true");
-		evosuiteParameters.add("-Dno_change_iterations_before_reset=30");
-		evosuiteParameters.add("-Dmax_size=1");
-		evosuiteParameters.add("-Dmax_initial_tests=1");
+		if (useMosa) {
+			evosuiteParameters.add("-Duse_minimizer_during_crossover=false"); //TODO temporary until Giovanni implements minimization during crossover
+			evosuiteParameters.add("-Dcrossover_function=SUSHI_HYBRID");
+			evosuiteParameters.add("-Dalgorithm=DYNAMOSA");
+			evosuiteParameters.add("-generateMOSuite");
+		} else {
+			evosuiteParameters.add("-Dhtml=false");
+			evosuiteParameters.add("-Duse_minimizer_during_crossover=true");
+			evosuiteParameters.add("-Dcrossover_function=SINGLEPOINT");
+			evosuiteParameters.add("-Dcrossover_implementation=SUSHI_HYBRID");
+			evosuiteParameters.add("-Dno_change_iterations_before_reset=30");
+			evosuiteParameters.add("-Davoid_replicas_of_individuals=true"); 
+			evosuiteParameters.add("-Dmax_size=1");
+			evosuiteParameters.add("-Dmax_initial_tests=1");
+		}
 		evosuiteParameters.add("-Dinline=false");
 		evosuiteParameters.add("-Dpath_condition=" + this.targetClass.replace('/', '.') + "," + this.targetMethod + this.targetSignature + ",EvoSuiteWrapper_" + testCount);
 		evosuiteParameters.add("-Dpath_condition_target=LAST_ONLY");
+		
+		
 
 		//launches Evosuite
 		final Path logFileEvosuitePath = Paths.get(this.tmpPath + "/evosuite-log-" + testCount + ".txt");
