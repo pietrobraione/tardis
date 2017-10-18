@@ -30,9 +30,10 @@ public class RunTestgen {
 		o.setJREPath(Settings.JRE_PATH);
 		o.setBinPath(Settings.BIN_PATH);
 		o.setOutDirectory(Settings.OUT_PATH);
-		o.setEvosuitePath(Settings.EVOSUITE_PATH);
 		o.setSushiLibPath(Settings.SUSHI_LIB_PATH);
-		o.setUseMOSA(true);
+		o.setEvosuitePath(Settings.EVOSUITE_PATH);
+		//o.setUseMOSA(true);
+		//o.setNumMOSATargets(5); //TODO aspettiamo che Giovanni produca una versione di MOSA che emette i test separatamente e che segnala quando ha generato un test
 		o.setTimeBudgetDuration(timeBudgetDuration);
 		o.setTimeBudgetTimeUnit(timeBudgetTimeUnit);
 	

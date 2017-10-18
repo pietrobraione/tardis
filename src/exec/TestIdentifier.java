@@ -7,8 +7,8 @@ public class TestIdentifier {
 		this.testCount = 1;
 	}
 	
-	public void testCountIncrease() {
-		this.testCount++;
+	public void testCountAdd(int amount) {
+		this.testCount += amount;
 	}
 	public int getTestCount() {
 		return this.testCount;
