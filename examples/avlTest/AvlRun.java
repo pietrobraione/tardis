@@ -16,9 +16,8 @@ public class AvlRun {
 		final String testMethod = "testFind";
 		final int maxdepth = 50;
 		final int numOfThreads = 5;
-		final int evosuiteTimeBudget = 90;
-		final long timeBudgetDuration = 30;
-		final TimeUnit timeBudgetTimeUnit = TimeUnit.MINUTES;
+		final long globalTimeBudgetDuration = 30;
+		final TimeUnit globalTimeBudgetTimeUnit = TimeUnit.MINUTES;
 		
 		final Options o = new Options();
 		o.setTargetMethod(className, parametersSignature, methodName);
@@ -31,12 +30,12 @@ public class AvlRun {
 		o.setJREPath(Settings.JRE_PATH);
 		o.setBinPath(Settings.BIN_PATH);
 		o.setOutDirectory(Settings.OUT_PATH);
-		o.setEvosuitePath(Settings.EVOSUITE_PATH);
+		o.setEvosuitePath(Settings.EVOSUITE_MOSA_PATH);
 		o.setSushiLibPath(Settings.SUSHI_LIB_PATH);
 		o.setUseMOSA(true);
-		o.setEvosuiteBudget(evosuiteTimeBudget);
-		o.setTimeBudgetDuration(timeBudgetDuration);
-		o.setTimeBudgetTimeUnit(timeBudgetTimeUnit);
+		o.setNumMOSATargets(1 /* 5 10 20 50 */);
+		o.setGlobalTimeBudgetDuration(globalTimeBudgetDuration);
+		o.setGlobalTimeBudgetUnit(globalTimeBudgetTimeUnit);
 	
 		final Main m = new Main(o);
 		m.start();

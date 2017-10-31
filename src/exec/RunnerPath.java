@@ -4,6 +4,7 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ast.expr.MethodCallExpr;
@@ -64,6 +65,10 @@ public class RunnerPath {
 		this.commonParamsGuided.setMethodSignature(o.getTargetMethod().get(0), o.getTargetMethod().get(1), o.getTargetMethod().get(2));
 		this.commonParamsGuided.addClasspath(this.classpath);
 		this.commonParamsGuided.setBreadthMode(BreadthMode.ALL_DECISIONS_NONTRIVIAL);
+		for (Map.Entry<String, Integer> e : o.getHeapScope().entrySet()) {
+			this.commonParamsGuided.setHeapScope(e.getKey(), e.getValue());
+		}
+		this.commonParamsGuided.setCountScope(o.getCountScope());
 		
 		//builds the template parameters object for the guiding (concrete) execution
 		this.commonParamsGuiding = new RunnerParameters();
@@ -210,33 +215,33 @@ public class RunnerPath {
 	
 	private static class CountVisitor extends VoidVisitorAdapter<Object> {
 		final String methodName;
-        int methodCallCounter = 0;
-        
-        public CountVisitor(String methodName) {
-        	this.methodName = methodName;
-        }
-        
-        @Override
-        public void visit(MethodCallExpr n, Object arg) {
-            super.visit(n, arg);
-            //System.out.println(Thread.currentThread().getName()+ "_" + className + "_" +  methodName + " = " + n.getNameAsString());
-            if(n.getNameAsString().equals(this.methodName)){
-            	this.methodCallCounter++;
-            }
-        }
-    }
-	
+		int methodCallCounter = 0;
+
+		public CountVisitor(String methodName) {
+			this.methodName = methodName;
+		}
+
+		@Override
+		public void visit(MethodCallExpr n, Object arg) {
+			super.visit(n, arg);
+			//System.out.println(Thread.currentThread().getName()+ "_" + className + "_" +  methodName + " = " + n.getNameAsString());
+			if (n.getNameAsString().equals(this.methodName)) {
+				this.methodCallCounter++;
+			}
+		}
+	}
+
 	private int countNumberOfInvocation(String className, String methodName){
-        final CountVisitor v = new CountVisitor(methodName);
+		final CountVisitor v = new CountVisitor(methodName);
 		try {
 			final FileInputStream in = new FileInputStream(outPath + "/" + className + ".java");
-            v.visit(JavaParser.parse(in), null);
+			v.visit(JavaParser.parse(in), null);
 		} catch (FileNotFoundException e) {
 			e.printStackTrace();
 		}
 		return v.methodCallCounter;
 	}
-	
+
 	
 	/**
 	 * Must be invoked after an invocation of {@link #runProgram(TestCase, int)}.

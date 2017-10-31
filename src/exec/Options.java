@@ -6,10 +6,13 @@ import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import org.kohsuke.args4j.Option;
+import org.kohsuke.args4j.spi.MapOptionHandler;
 import org.kohsuke.args4j.spi.PathOptionHandler;
 
 import sushi.configure.SignatureHandler;
@@ -76,7 +79,7 @@ public class Options implements Cloneable {
 	private Path jrePath = Paths.get(".", "data", "jre", "rt.jar");
 	
 	@Option(name = "-evosuite",
-			usage = "Path to Evosuite",
+			usage = "Path to Evosuite or MOSA",
 			handler = PathOptionHandler.class)
 	private Path evosuitePath = Paths.get(".", "lib", "evosuite.jar");
 	
@@ -85,17 +88,21 @@ public class Options implements Cloneable {
 			handler = PathOptionHandler.class)
 	private Path sushiPath = Paths.get(".", "lib", "sushi-lib.jar");
 	
-	@Option(name = "-evosuite_time_budget",
-			usage = "Time budget in seconds for evosuite")
-	private int timeBudgetEvosuite = 180;
+	@Option(name = "-evosuite_time_budget_duration",
+			usage = "Duration of the time budget for EvoSuite")
+	private int evosuiteTimeBudgetDuration = 180;
 	
-	@Option(name = "-time_budget_duration",
-			usage = "Duration of the time budget")
-	private long timeBudgetDuration = 10;
+	@Option(name = "-evosuite_time_budget_unit",
+			usage = "Unit of the time budget for EvoSuite: NANOSECONDS, MICROSECONDS, MILLISECONDS, SECONDS, MINUTES, HOURS, DAYS")
+	private TimeUnit evosuiteTimeBudgetUnit = TimeUnit.SECONDS;
 	
-	@Option(name = "-time_budget_unit",
-			usage = "Unit of the time budget: NANOSECONDS, MICROSECONDS, MILLISECONDS, SECONDS, MINUTES, HOURS, DAYS")
-	private TimeUnit timeBudgetTimeUnit = TimeUnit.MINUTES;
+	@Option(name = "-global_time_budget_duration",
+			usage = "Duration of the global time budget")
+	private long globalTimeBudgetDuration = 10;
+	
+	@Option(name = "-global_time_budget_unit",
+			usage = "Unit of the global time budget: NANOSECONDS, MICROSECONDS, MILLISECONDS, SECONDS, MINUTES, HOURS, DAYS")
+	private TimeUnit globalTimeBudgetUnit = TimeUnit.MINUTES;
 	
 	@Option(name = "-timeout_mosa_task_creation_duration",
 			usage = "Duration of the timeout after which a MOSA job is created")
@@ -112,6 +119,15 @@ public class Options implements Cloneable {
 	@Option(name = "-use_mosa",
 			usage = "Set to true if you want to use MOSA, false for ordinary EvoSuite")
 	private boolean useMOSA = false;
+	
+	@Option(name = "-heap_scope",
+			usage = "JBSE heap scope in the form <className1>=<maxNumInstances1>; multiple heap scopes can be specified",
+			handler = MapOptionHandler.class)
+	private Map<String, Integer> heapScope;
+	
+	@Option(name = "-count_scope",
+			usage = "JBSE count scope, 0 means unlimited")
+	private int countScope = 0;
 
 	public boolean getHelp() {
 		return this.help;
@@ -239,28 +255,36 @@ public class Options implements Cloneable {
 		this.sushiPath = sushiPath;
 	}
 	
-	public int getEvosuiteBudget() {
-		return this.timeBudgetEvosuite;
+	public int getEvosuiteTimeBudgetDuration() {
+		return this.evosuiteTimeBudgetDuration;
 	}
 	
-	public void setEvosuiteBudget(int budgetEvosuite) {
-		this.timeBudgetEvosuite = budgetEvosuite;
+	public void setEvosuiteTimeBudgetDuration(int evosuiteTimeBudgetDuration) {
+		this.evosuiteTimeBudgetDuration = evosuiteTimeBudgetDuration;
 	}
 	
-	public long getTimeBudgetDuration() {
-		return this.timeBudgetDuration;
+	public TimeUnit getEvosuiteTimeBudgetUnit() {
+		return this.evosuiteTimeBudgetUnit;
 	}
 	
-	public void setTimeBudgetDuration(long timeBudgetDuration) {
-		this.timeBudgetDuration = timeBudgetDuration;
+	public void setEvosuiteTimeBudgetUnit(TimeUnit evosuiteTimeBudgetUnit) {
+		this.evosuiteTimeBudgetUnit = evosuiteTimeBudgetUnit;
 	}
 	
-	public TimeUnit getTimeBudgetTimeUnit() {
-		return this.timeBudgetTimeUnit;
+	public long getGlobalTimeBudgetDuration() {
+		return this.globalTimeBudgetDuration;
 	}
 	
-	public void setTimeBudgetTimeUnit(TimeUnit timeBudgetTimeUnit) {
-		this.timeBudgetTimeUnit = timeBudgetTimeUnit;
+	public void setGlobalTimeBudgetDuration(long globalTimeBudgetDuration) {
+		this.globalTimeBudgetDuration = globalTimeBudgetDuration;
+	}
+	
+	public TimeUnit getGlobalTimeBudgetUnit() {
+		return this.globalTimeBudgetUnit;
+	}
+	
+	public void setGlobalTimeBudgetUnit(TimeUnit globalTimeBudgetUnit) {
+		this.globalTimeBudgetUnit = globalTimeBudgetUnit;
 	}
 	
 	public long getTimeoutMOSATaskCreationDuration() {
@@ -295,12 +319,45 @@ public class Options implements Cloneable {
 		this.useMOSA = useMOSA;
 	}
 	
+	public void setHeapScope(String className, int scope) {
+		if (className == null) {
+			return;
+		}
+		if (this.heapScope == null) {
+			this.heapScope = new HashMap<>();
+		}
+		this.heapScope.put(className, Integer.valueOf(scope));
+	}
+	
+	public void setHeapScopeUnlimited(String className) {
+		if (this.heapScope == null) {
+			return;
+		}
+		this.heapScope.remove(className);
+	}
+	
+	public void setHeapScopeUnlimited() {
+		this.heapScope = new HashMap<>();
+	}
+	
+	public Map<String, Integer> getHeapScope() {
+		return Collections.unmodifiableMap(this.heapScope);
+	}
+	
+	public void setCountScope(int countScope) {
+		this.countScope = countScope;
+	}
+	
+	public int getCountScope() {
+		return this.countScope;
+	}
+	
 	@Override
 	public Options clone() {
 		try {
-			//all objects referred by fields of an Options object 
-			//are not mutable, so shallow copy is OK
-			return (Options) super.clone();
+			final Options theClone = (Options) super.clone();
+			theClone.heapScope = new HashMap<>(this.heapScope);
+			return theClone;
 		} catch (CloneNotSupportedException e) {
 			//this should never happen
 			throw new AssertionError("super.clone() raised CloneNotSupportedException");

@@ -1,5 +1,7 @@
 package exec;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -31,9 +33,16 @@ public final class Main {
 		//creates and wires the components of the architecture
 		final PerformerJBSE performerJBSE = new PerformerJBSE(this.o, testCaseBuffer, pathConditionBuffer);
 		final PerformerEvosuite performerEvosuite = new PerformerEvosuite(this.o, pathConditionBuffer, testCaseBuffer);
-		final TerminationManager terminationManager = new TerminationManager(this.o.getTimeBudgetDuration(), this.o.getTimeBudgetTimeUnit(), performerJBSE, performerEvosuite);
+		final TerminationManager terminationManager = new TerminationManager(this.o.getGlobalTimeBudgetDuration(), this.o.getGlobalTimeBudgetUnit(), performerJBSE, performerEvosuite);
+		
+		//logs
+		final DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss");
+		terminationManager.setOnStop(() -> {
+			System.out.println("[MAIN    ] Ending at " + dtf.format(LocalDateTime.now()));
+		}); 
 		
 		//starts everything
+		System.out.println("[MAIN    ] Starting at " + dtf.format(LocalDateTime.now()));
 		performerJBSE.start();
 		performerEvosuite.start();
 		terminationManager.start();
@@ -59,7 +68,7 @@ public final class Main {
 			printUsage(parser);
 			System.exit(0);
 		}
-		
+
 		//runs
 		final Main m = new Main(o);
 		m.start();

@@ -27,7 +27,7 @@ public class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 	private final int maxDepth;
 
 	public PerformerJBSE(Options o, InputBuffer<EvosuiteResult> in, OutputBuffer<JBSEResult> out) {
-		super(in, out, o.getTimeBudgetDuration(), o.getTimeBudgetTimeUnit(), o.getNumOfThreads(), 1);
+		super(in, out, o.getGlobalTimeBudgetDuration(), o.getGlobalTimeBudgetUnit(), o.getNumOfThreads(), 1);
 		this.o = o.clone();
 		this.maxDepth = o.getMaxDepth();
 	}
@@ -76,19 +76,18 @@ public class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 					continue;
 				}
 				this.getOutputBuffer().add(new JBSEResult(initialState, newState, currentDepth));
-				System.out.println("[JBSE    ] From test case "+ tc.getClassName() + " generated path condition " + currentPC);
+				System.out.println("[JBSE    ] From test case " + tc.getClassName() + " generated path condition " + currentPC);
 				noPathConditionGenerated = false;
 			}
 		}
 		if (noPathConditionGenerated) {
-			System.out.println("[JBSE    ] From test case "+ tc.getClassName() + " no path condition generated");
+			System.out.println("[JBSE    ] From test case " + tc.getClassName() + " no path condition generated");
 		}
 	}
 
 	private static boolean alreadyExplored(Collection<Clause> newPC, Collection<Clause> oldPC) {
-		final List<Clause> donePC = Arrays.asList(Arrays.copyOfRange(
-				oldPC.toArray(new Clause[0]), 0, 
-				newPC.size()));
+		final List<Clause> donePC = 
+				Arrays.asList(Arrays.copyOfRange(oldPC.toArray(new Clause[0]), 0, newPC.size()));
 		if (donePC.toString().equals(newPC.toString())) {
 			return true;
 		} else {
@@ -108,9 +107,8 @@ public class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 					ClasspathException | CannotBacktrackException | CannotManageStateException |
 					ThreadStackEmptyException | ContradictionException | EngineStuckException |
 					FailureException e ) {
-
-				e.printStackTrace();
-			} 
+				System.out.println("[JBSE    ] Unexpected exception raised while exploring test case " + item.getTestCase().getClassName() + ": " + e.getMessage());
+			}
 		};
 		return job;
 	}

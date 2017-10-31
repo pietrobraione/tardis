@@ -33,9 +33,9 @@ public class RunTestgen {
 		o.setSushiLibPath(Settings.SUSHI_LIB_PATH);
 		o.setEvosuitePath(Settings.EVOSUITE_MOSA_PATH);
 		o.setUseMOSA(true);
-		o.setNumMOSATargets(5); //TODO aspettiamo che Giovanni produca una versione di MOSA che emette i test separatamente e che segnala quando ha generato un test
-		o.setTimeBudgetDuration(timeBudgetDuration);
-		o.setTimeBudgetTimeUnit(timeBudgetTimeUnit);
+		o.setNumMOSATargets(5);
+		o.setGlobalTimeBudgetDuration(timeBudgetDuration);
+		o.setGlobalTimeBudgetUnit(timeBudgetTimeUnit);
 	
 		final Main m = new Main(o);
 		m.start();

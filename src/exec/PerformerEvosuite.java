@@ -36,7 +36,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 	private final String evosuitePath;
 	private final String sushiLibPath;
 	private final String outPath;
-	private final int timeBudget;
+	private final long timeBudgetSeconds;
 	private final boolean useMOSA;
 	private final TestIdentifier testIdentifier;
 	private final JavaCompiler compiler;
@@ -51,7 +51,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 		this.evosuitePath = o.getEvosuitePath().toString();
 		this.sushiLibPath = o.getSushiLibPath().toString();
 		this.outPath = o.getOutDirectory().toString();
-		this.timeBudget = o.getEvosuiteBudget();
+		this.timeBudgetSeconds = o.getEvosuiteTimeBudgetUnit().toSeconds(o.getEvosuiteTimeBudgetDuration());
 		this.useMOSA = o.getUseMOSA();
 		this.testIdentifier = new TestIdentifier();
 		this.compiler = ToolProvider.getSystemJavaCompiler();
@@ -194,19 +194,20 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 		retVal.add("2048");
 		retVal.add("-DCP=" + classpathEvosuite); 
 		retVal.add("-Dassertions=false");
-		retVal.add("-Dglobal_timeout=" + this.timeBudget);
+		retVal.add("-Dglobal_timeout=" + this.timeBudgetSeconds);
 		retVal.add("-Dreport_dir=" + this.tmpPath);
-		retVal.add("-Dsearch_budget=" + this.timeBudget);
+		retVal.add("-Dsearch_budget=" + this.timeBudgetSeconds);
 		retVal.add("-Dtest_dir=" + outPath);
 		retVal.add("-Dvirtual_fs=false");
 		retVal.add("-Dselection_function=ROULETTEWHEEL");
 		retVal.add("-Dcriterion=PATHCONDITION");		
 		retVal.add("-Dsushi_statistics=true");
 		retVal.add("-Dinline=false");
-		//retVal.add("-Dsushi_modifiers_local_search=true"); does not work
+		retVal.add("-Dsushi_modifiers_local_search=true");
 		retVal.add("-Dpath_condition_target=LAST_ONLY");
 		retVal.add("-Duse_minimizer_during_crossover=true");
 		retVal.add("-Davoid_replicas_of_individuals=true"); 
+		retVal.add("-Dno_change_iterations_before_reset=30");
 		if (this.useMOSA) {
 			retVal.add("-Demit_tests_incrementally=true");
 			retVal.add("-Dcrossover_function=SUSHI_HYBRID");
@@ -217,7 +218,6 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 			retVal.add("-Dhtml=false");
 			retVal.add("-Dcrossover_function=SINGLEPOINT");
 			retVal.add("-Dcrossover_implementation=SUSHI_HYBRID");
-			retVal.add("-Dno_change_iterations_before_reset=30");
 			retVal.add("-Dmax_size=1");
 			retVal.add("-Dmax_initial_tests=1");
 		}

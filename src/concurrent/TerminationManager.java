@@ -10,6 +10,7 @@ public final class TerminationManager {
 	private final Thread timeoutDetector;
 	private final Thread terminationDetector;
 	private volatile boolean timedOut;
+	private Runnable actionOnStop = null;
 		
 	public TerminationManager(long duration, TimeUnit timeUnit, Performer<?,?>...performers) {
 		this.duration = duration;
@@ -55,6 +56,9 @@ public final class TerminationManager {
 			
 			//quits
 			stopAll();
+			if (this.actionOnStop != null) {
+				this.actionOnStop.run();
+			}
 		});
 	}
 	
@@ -77,5 +81,9 @@ public final class TerminationManager {
 	public void start() {
 		this.timeoutDetector.start();
 		this.terminationDetector.start();
+	}
+	
+	public void setOnStop(Runnable actionOnStop) {
+		this.actionOnStop = actionOnStop;
 	}
 }
