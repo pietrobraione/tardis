@@ -14,7 +14,7 @@ public class RunTestgen {
 		final String testClass = "tg/Test";
 		final String testMethodSignature = "()V";
 		final String testMethod = "test0";
-		final int maxdepth = 50;
+		final int maxDepth = 50;
 		final int numOfThreads = 5;
 		final long timeBudgetDuration = 10;
 		final TimeUnit timeBudgetTimeUnit = TimeUnit.MINUTES;
@@ -22,7 +22,7 @@ public class RunTestgen {
 		final Options o = new Options();
 		o.setTargetMethod(className, parametersSignature, methodName);
 		o.setInitialTestCase(testClass, testMethodSignature, testMethod);
-		o.setMaxDepth(maxdepth);
+		o.setMaxDepth(maxDepth);
 		o.setNumOfThreads(numOfThreads);
 		o.setTmpDirectoryBase(Settings.TMP_BASE_PATH);
 		o.setZ3Path(Settings.Z3_PATH);

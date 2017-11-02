@@ -42,7 +42,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 	private final JavaCompiler compiler;
 
 	public PerformerEvosuite(Options o, InputBuffer<JBSEResult> in, OutputBuffer<EvosuiteResult> out) {
-		super(in, out, o.getTimeoutMOSATaskCreationDuration(), o.getTimeoutMOSATaskCreationUnit(), o.getNumOfThreads(), (o.getUseMOSA() ? o.getNumMOSATargets() : 1));
+		super(in, out, o.getNumOfThreads(), (o.getUseMOSA() ? o.getNumMOSATargets() : 1), o.getTimeoutMOSATaskCreationDuration(), o.getTimeoutMOSATaskCreationUnit());
 		this.targetClass = o.getTargetMethod().get(0);
 		this.targetSignature = o.getTargetMethod().get(1);
 		this.targetMethod = o.getTargetMethod().get(2);

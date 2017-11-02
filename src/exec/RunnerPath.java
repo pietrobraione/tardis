@@ -65,10 +65,14 @@ public class RunnerPath {
 		this.commonParamsGuided.setMethodSignature(o.getTargetMethod().get(0), o.getTargetMethod().get(1), o.getTargetMethod().get(2));
 		this.commonParamsGuided.addClasspath(this.classpath);
 		this.commonParamsGuided.setBreadthMode(BreadthMode.ALL_DECISIONS_NONTRIVIAL);
-		for (Map.Entry<String, Integer> e : o.getHeapScope().entrySet()) {
-			this.commonParamsGuided.setHeapScope(e.getKey(), e.getValue());
+		if (o.getHeapScope() != null) {
+			for (Map.Entry<String, Integer> e : o.getHeapScope().entrySet()) {
+				this.commonParamsGuided.setHeapScope(e.getKey(), e.getValue());
+			}
 		}
-		this.commonParamsGuided.setCountScope(o.getCountScope());
+		if (o.getCountScope() > 0) {
+			this.commonParamsGuided.setCountScope(o.getCountScope());
+		}
 		
 		//builds the template parameters object for the guiding (concrete) execution
 		this.commonParamsGuiding = new RunnerParameters();

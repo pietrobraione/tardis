@@ -27,7 +27,7 @@ public class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 	private final int maxDepth;
 
 	public PerformerJBSE(Options o, InputBuffer<EvosuiteResult> in, OutputBuffer<JBSEResult> out) {
-		super(in, out, o.getGlobalTimeBudgetDuration(), o.getGlobalTimeBudgetUnit(), o.getNumOfThreads(), 1);
+		super(in, out, o.getNumOfThreads(), 1, o.getGlobalTimeBudgetDuration(), o.getGlobalTimeBudgetUnit());
 		this.o = o.clone();
 		this.maxDepth = o.getMaxDepth();
 	}

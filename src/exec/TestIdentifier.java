@@ -4,7 +4,7 @@ public class TestIdentifier {
 	private int testCount;
 	
 	public TestIdentifier() {
-		this.testCount = 1;
+		this.testCount = 0;
 	}
 	
 	public void testCountAdd(int amount) {

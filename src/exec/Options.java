@@ -106,7 +106,7 @@ public class Options implements Cloneable {
 	
 	@Option(name = "-timeout_mosa_task_creation_duration",
 			usage = "Duration of the timeout after which a MOSA job is created")
-	private long timeoutMOSATaskCreationDuration = 30;
+	private long timeoutMOSATaskCreationDuration = 5;
 	
 	@Option(name = "-timeout_mosa_task_creation_unit",
 			usage = "Unit of the timeout after which a MOSA job is created: NANOSECONDS, MICROSECONDS, MILLISECONDS, SECONDS, MINUTES, HOURS, DAYS")
@@ -341,7 +341,7 @@ public class Options implements Cloneable {
 	}
 	
 	public Map<String, Integer> getHeapScope() {
-		return Collections.unmodifiableMap(this.heapScope);
+		return (this.heapScope == null ? null : Collections.unmodifiableMap(this.heapScope));
 	}
 	
 	public void setCountScope(int countScope) {
@@ -356,7 +356,9 @@ public class Options implements Cloneable {
 	public Options clone() {
 		try {
 			final Options theClone = (Options) super.clone();
-			theClone.heapScope = new HashMap<>(this.heapScope);
+			if (this.heapScope != null) {
+				theClone.heapScope = new HashMap<>(this.heapScope);
+			}
 			return theClone;
 		} catch (CloneNotSupportedException e) {
 			//this should never happen

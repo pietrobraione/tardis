@@ -9,24 +9,26 @@ import java.util.concurrent.locks.ReentrantLock;
 public abstract class Performer<I,O> {
 	private final InputBuffer<I> in;
 	private final OutputBuffer<O> out;
-	private final long timeout;
-	private final TimeUnit unit;
 	private final PausableFixedThreadPoolExecutor threadPool;
 	private final int numInputs;
+	private final long timeoutDuration;
+	private final TimeUnit timeoutUnit;
 	private final Thread mainThread;
 	private final ReentrantLock lockPause;
 	private final Condition conditionNotPaused;
 	private final Condition conditionPaused;
 	private volatile boolean paused;
+	private I seed;
 
-	public Performer(InputBuffer<I> in, OutputBuffer<O> out, long timeout, TimeUnit unit, int numOfThreads, int numInputs) {
+	public Performer(InputBuffer<I> in, OutputBuffer<O> out, int numOfThreads, int numInputs, long timeoutDuration, TimeUnit timeoutUnit) {
 		this.in = in;
 		this.out = out;
-		this.timeout = timeout;
-		this.unit = unit;
 		this.threadPool = new PausableFixedThreadPoolExecutor(numOfThreads);
 		this.numInputs = numInputs;
+		this.timeoutDuration = timeoutDuration;
+		this.timeoutUnit = timeoutUnit;
 		this.mainThread = new Thread(() -> {
+			submitSeedIfPresent();
 			while (true) {
 				try {
 					waitIfPaused();
@@ -44,12 +46,24 @@ public abstract class Performer<I,O> {
 		this.conditionNotPaused = this.lockPause.newCondition();
 		this.conditionPaused = this.lockPause.newCondition();
 		this.paused = false;
+		this.seed = null;
 	}
 	
-	protected abstract Runnable makeJob(List<I> item);
+	protected abstract Runnable makeJob(List<I> items);
 
 	protected final OutputBuffer<O> getOutputBuffer() {
 		return this.out;
+	}
+	
+	/**
+	 * Seeds the performer with a single initial item,
+	 * that is executed immediately as the performer 
+	 * is started. Should be invoked before {@link #start()}.
+	 * 
+	 * @param seed the {@code I} that seeds the performer.
+	 */
+	public final void seed(I seed) {
+		this.seed = seed;
 	}
 	
 	/**
@@ -109,6 +123,16 @@ public abstract class Performer<I,O> {
 		return this.in.isEmpty() && this.items.isEmpty() && this.threadPool.isIdle();
 	}
 	
+	private void submitSeedIfPresent() {
+		if (this.seed == null) {
+			return;
+		}
+		final ArrayList<I> itemsTmp = new ArrayList<>();
+		itemsTmp.add(this.seed);
+		final Runnable job = makeJob(itemsTmp);
+		this.threadPool.execute(job);
+	}
+	
 	private void waitIfPaused() throws InterruptedException {
 		final ReentrantLock lock = this.lockPause;
 		lock.lock();
@@ -128,7 +152,7 @@ public abstract class Performer<I,O> {
 		if (this.items == null) {
 			this.items = new ArrayList<>();
 		}
-		final I item = this.in.poll(this.timeout, this.unit);
+		final I item = this.in.poll(this.timeoutDuration, this.timeoutUnit);
 		if (item != null) {
 			this.items.add(item);
 		}

@@ -3,6 +3,7 @@ package exec;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -12,6 +13,16 @@ import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.ParserProperties;
 
 import concurrent.TerminationManager;
+import jbse.bc.ClassFileFactoryJavassist;
+import jbse.bc.Classpath;
+import jbse.bc.Signature;
+import jbse.bc.exc.BadClassFileException;
+import jbse.bc.exc.InvalidClassFileFactoryClassException;
+import jbse.bc.exc.MethodCodeNotFoundException;
+import jbse.bc.exc.MethodNotFoundException;
+import jbse.mem.State;
+import jbse.rewr.CalculatorRewriting;
+import jbse.rewr.RewriterOperationOnSimplex;
 
 public final class Main {
 	private final Options o;
@@ -25,27 +36,49 @@ public final class Main {
 		final QueueInputOutputBuffer<JBSEResult> pathConditionBuffer = new QueueInputOutputBuffer<>();
 		final QueueInputOutputBuffer<EvosuiteResult> testCaseBuffer = new QueueInputOutputBuffer<>();
 		
-		//seeds testCaseBuffer with the initial test case
-		final TestCase tc = new TestCase(this.o);
-		final EvosuiteResult item = new EvosuiteResult(tc, 0);
-		testCaseBuffer.add(item);
-		
 		//creates and wires the components of the architecture
 		final PerformerJBSE performerJBSE = new PerformerJBSE(this.o, testCaseBuffer, pathConditionBuffer);
 		final PerformerEvosuite performerEvosuite = new PerformerEvosuite(this.o, pathConditionBuffer, testCaseBuffer);
 		final TerminationManager terminationManager = new TerminationManager(this.o.getGlobalTimeBudgetDuration(), this.o.getGlobalTimeBudgetUnit(), performerJBSE, performerEvosuite);
 		
-		//logs
+		//sets logging
 		final DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss");
 		terminationManager.setOnStop(() -> {
 			System.out.println("[MAIN    ] Ending at " + dtf.format(LocalDateTime.now()));
 		}); 
+		
+		//seeds the EvoSuite performer with the initial test case
+		final JBSEResult seed = seed();
+		if (seed == null) {
+			System.exit(1);
+		}
+		performerEvosuite.seed(seed);
 		
 		//starts everything
 		System.out.println("[MAIN    ] Starting at " + dtf.format(LocalDateTime.now()));
 		performerJBSE.start();
 		performerEvosuite.start();
 		terminationManager.start();
+	}
+	
+	private JBSEResult seed() {
+		try {
+			final String[] classpath = new String[3];
+			classpath[0] = this.o.getBinPath().toString();
+			classpath[1] = this.o.getJBSELibraryPath().toString();
+			classpath[2] = this.o.getJREPath().toString();
+			final CalculatorRewriting calc = new CalculatorRewriting();
+			calc.addRewriter(new RewriterOperationOnSimplex());
+			final State s = new State(new Classpath(classpath), ClassFileFactoryJavassist.class, new HashMap<>(), calc);
+			s.pushFrameSymbolic(new Signature(this.o.getTargetMethod().get(0), this.o.getTargetMethod().get(1), this.o.getTargetMethod().get(2)));
+			final JBSEResult retVal = new JBSEResult(s, s, -1);
+			return retVal;
+		} catch (BadClassFileException | MethodNotFoundException | MethodCodeNotFoundException e) {
+			System.out.println("[MAIN    ] Error: The target class or target method does not exist, or the target method is abstract");
+		} catch (InvalidClassFileFactoryClassException e) {
+			System.out.println("[MAIN    ] Unexpected internal error: Wrong class file factory");
+		}
+		return null;
 	}
 	
 	//Here starts the static part of the class, for managing the command line
