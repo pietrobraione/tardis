@@ -47,12 +47,17 @@ public final class Main {
 			System.out.println("[MAIN    ] Ending at " + dtf.format(LocalDateTime.now()));
 		}); 
 		
-		//seeds the EvoSuite performer with the initial test case
-		final JBSEResult seed = seed();
-		if (seed == null) {
-			System.exit(1);
+		//seeds the initial test case
+		if (this.o.getInitialTestCase() == null) {
+			final JBSEResult seed = seedJBSE();
+			if (seed == null) {
+				System.exit(1);
+			}
+			performerEvosuite.seed(seed);
+		} else {
+			final EvosuiteResult seed = seedEvosuite();
+			performerJBSE.seed(seed);
 		}
-		performerEvosuite.seed(seed);
 		
 		//starts everything
 		System.out.println("[MAIN    ] Starting at " + dtf.format(LocalDateTime.now()));
@@ -61,7 +66,7 @@ public final class Main {
 		terminationManager.start();
 	}
 	
-	private JBSEResult seed() {
+	private JBSEResult seedJBSE() {
 		try {
 			final String[] classpath = new String[3];
 			classpath[0] = this.o.getBinPath().toString();
@@ -79,6 +84,12 @@ public final class Main {
 			System.out.println("[MAIN    ] Unexpected internal error: Wrong class file factory");
 		}
 		return null;
+	}
+	
+	private EvosuiteResult seedEvosuite() {
+		final TestCase tc = new TestCase(this.o);
+		final EvosuiteResult retVal = new EvosuiteResult(tc, 0);
+		return retVal;
 	}
 	
 	//Here starts the static part of the class, for managing the command line
