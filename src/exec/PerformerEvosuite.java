@@ -53,7 +53,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 		this.outPath = o.getOutDirectory().toString();
 		this.timeBudgetSeconds = o.getEvosuiteTimeBudgetUnit().toSeconds(o.getEvosuiteTimeBudgetDuration());
 		this.useMOSA = o.getUseMOSA();
-		this.testIdentifier = new TestIdentifier();
+		this.testIdentifier = new TestIdentifier(o.getInitialTestCase() == null ? 0 : 1);
 		this.compiler = ToolProvider.getSystemJavaCompiler();
 		if (this.compiler == null) {
 			System.out.println("[EVOSUITE] Failed to find a system Java compiler. Did you install a JDK?");

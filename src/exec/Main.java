@@ -50,9 +50,6 @@ public final class Main {
 		//seeds the initial test case
 		if (this.o.getInitialTestCase() == null) {
 			final JBSEResult seed = seedJBSE();
-			if (seed == null) {
-				System.exit(1);
-			}
 			performerEvosuite.seed(seed);
 		} else {
 			final EvosuiteResult seed = seedEvosuite();
@@ -80,10 +77,12 @@ public final class Main {
 			return retVal;
 		} catch (BadClassFileException | MethodNotFoundException | MethodCodeNotFoundException e) {
 			System.out.println("[MAIN    ] Error: The target class or target method does not exist, or the target method is abstract");
+			System.exit(1);
 		} catch (InvalidClassFileFactoryClassException e) {
 			System.out.println("[MAIN    ] Unexpected internal error: Wrong class file factory");
+			System.exit(2);
 		}
-		return null;
+		return null; //to keep the compiler happy
 	}
 	
 	private EvosuiteResult seedEvosuite() {

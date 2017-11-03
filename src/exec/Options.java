@@ -138,7 +138,7 @@ public class Options implements Cloneable {
 	}
 		
 	public List<String> getInitialTestCase() {
-		return Collections.unmodifiableList(this.initialTestCaseSignature);
+		return (this.initialTestCaseSignature == null ? null : Collections.unmodifiableList(this.initialTestCaseSignature));
 	}
 	
 	public void setInitialTestCase(String... signature) {
@@ -146,6 +146,10 @@ public class Options implements Cloneable {
 			return;
 		}
 		this.initialTestCaseSignature = Arrays.asList(signature.clone());
+	}
+	
+	public void setInitialTestCaseNone() {
+		this.initialTestCaseSignature = null;
 	}
 	
 	public List<String> getTargetMethod() {

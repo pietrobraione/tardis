@@ -3,8 +3,8 @@ package exec;
 public class TestIdentifier {
 	private int testCount;
 	
-	public TestIdentifier() {
-		this.testCount = 0;
+	public TestIdentifier(int start) {
+		this.testCount = start;
 	}
 	
 	public void testCountAdd(int amount) {
