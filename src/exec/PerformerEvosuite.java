@@ -10,8 +10,10 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import java.nio.file.Files;
 import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
@@ -28,9 +30,6 @@ import jbse.mem.State;
 import sushi.execution.jbse.StateFormatterSushiPathCondition;
 
 public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
-	private final String targetClass;
-	private final String targetSignature;
-	private final String targetMethod;
 	private final String binPath;
 	private final String tmpPath;
 	private final String evosuitePath;
@@ -43,9 +42,6 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 
 	public PerformerEvosuite(Options o, InputBuffer<JBSEResult> in, OutputBuffer<EvosuiteResult> out) {
 		super(in, out, o.getNumOfThreads(), (o.getUseMOSA() ? o.getNumMOSATargets() : 1), o.getTimeoutMOSATaskCreationDuration(), o.getTimeoutMOSATaskCreationUnit());
-		this.targetClass = o.getTargetMethod().get(0);
-		this.targetSignature = o.getTargetMethod().get(1);
-		this.targetMethod = o.getTargetMethod().get(2);
 		this.binPath = o.getBinPath().toString();
 		this.tmpPath = o.getTmpDirectoryBase().toString();
 		this.evosuitePath = o.getEvosuitePath().toString();
@@ -87,33 +83,60 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 		
 		//generates and compiles the wrappers
 		emitAndCompileEvoSuiteWrappers(testCountInitial, items);
-
-		//builds the EvoSuite command line
-		final List<String> evosuiteCommand = buildEvoSuiteCommand(testCountInitial, items); 
-
-		//launches EvoSuite
-		final Path evosuiteLogFilePath = Paths.get(this.tmpPath + "/evosuite-log-" + testCountInitial + ".txt");
-		final Process processEvosuite;
-		try {
-			processEvosuite = launchEvoSuite(testCountInitial, evosuiteCommand, evosuiteLogFilePath);
-		} catch (IOException e) {
-			System.out.println("[EVOSUITE] Unexpected I/O error while running EvoSuite: " + e.getMessage());
-			return; //TODO throw an exception?
-		}
-
-		//launches a thread that waits for tests and schedules 
-		//JBSE for exploring them
-		final Thread t = new Thread(() -> detectTestsAndScheduleJBSE(testCountInitial, items, evosuiteLogFilePath));
-		t.start();
 		
-		//kills the thread when EvoSuite is over
-		try {
-			processEvosuite.waitFor();
-		} catch (InterruptedException e) {
-			//this should never happen
-			System.out.println("[EVOSUITE] Unexpected interruption of EvoSuite: " + e.getMessage());
+		//splits items in sublists having same target method
+		final Map<String, List<JBSEResult>> splitItems = 
+				items.stream().collect(Collectors.groupingBy(r -> r.getTargetClassName() + ":" + r.getTargetMethodDescriptor() + ":" + r.getTargetMethodName()));
+
+		//launches an EvoSuite process for each sublist
+		final ArrayList<Thread> threadsEvosuiteEnd = new ArrayList<>();
+		int testCountStart = testCountInitial;
+		for (List<JBSEResult> subItems : splitItems.values()) {
+			final int testCount = testCountStart; //copy into final variable to keep compiler happy
+			testCountStart += subItems.size(); //for the next iteration
+			
+			//builds the EvoSuite command line
+			final List<String> evosuiteCommand = buildEvoSuiteCommand(testCount, subItems); 
+
+			//launches EvoSuite
+			final Path evosuiteLogFilePath = Paths.get(this.tmpPath + "/evosuite-log-" + testCount + ".txt");
+			final Process processEvosuite;
+			try {
+				processEvosuite = launchEvoSuite(testCount, evosuiteCommand, evosuiteLogFilePath);
+			} catch (IOException e) {
+				System.out.println("[EVOSUITE] Unexpected I/O error while running EvoSuite: " + e.getMessage());
+				return; //TODO throw an exception?
+			}
+
+			//launches a thread that waits for tests and schedules 
+			//JBSE for exploring them
+			final Thread tJBSE = new Thread(() -> detectTestsAndScheduleJBSE(testCount, subItems, evosuiteLogFilePath));
+			tJBSE.start();
+			
+			//launches another thread that waits for EvoSuite to end
+			//and then kills the previous thread
+			final Thread tEvosuiteEnd = new Thread(() -> {
+				try {
+					processEvosuite.waitFor();
+				} catch (InterruptedException e) {
+					//this should never happen
+					System.out.println("[EVOSUITE] Unexpected interruption of EvoSuite: " + e.getMessage());
+				}
+				tJBSE.interrupt();
+			});
+			tEvosuiteEnd.start();
+			threadsEvosuiteEnd.add(tEvosuiteEnd);
 		}
-		t.interrupt();
+		
+		//waits for all the Evosuite processes to end (if it didn't the performer
+		//would consider the job over and would incorrectly detect whether it is idle)
+		for (Thread tEvosuiteEnd : threadsEvosuiteEnd) {
+			try {
+				tEvosuiteEnd.join();
+			} catch (InterruptedException e) {
+				//nothing to do
+			}
+		}
 	}
 
 	/**
@@ -178,10 +201,16 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 	 *        the generated tests. The test generated from {@code items.get(i)}
 	 *        will be numbered {@code testCountInitial + i}.
 	 * @param items a {@link List}{@code <}{@link JBSEResult}{@code >}, results of symbolic execution.
+	 *        All the items in {@code items} must refer to the same target method, i.e., must have same
+	 *        {@link JBSEResult#getTargetClassName() class name}, {@link JBSEResult#getTargetMethodDescriptor() method descriptor}, and 
+	 *        {@link JBSEResult#getTargetMethodName() method name}.
 	 * @return a command line in the format of a {@link List}{@code <}{@link String}{@code >},
 	 *         suitable to be passed to a {@link ProcessBuilder}.
 	 */
 	private List<String> buildEvoSuiteCommand(int testCountInitial, List<JBSEResult> items) {
+		final String targetClass = items.get(0).getTargetClassName();
+		final String targetMethodDescriptor = items.get(0).getTargetMethodDescriptor();
+		final String targetMethodName = items.get(0).getTargetMethodName();
 		final String classpathEvosuite = this.binPath + File.pathSeparator + this.sushiLibPath + File.pathSeparator + this.tmpPath;
 		final List<String> retVal = new ArrayList<String>();
 		retVal.add("java");
@@ -189,7 +218,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 		retVal.add("-jar");
 		retVal.add(this.evosuitePath);
 		retVal.add("-class");
-		retVal.add(this.targetClass.replace('/', '.'));
+		retVal.add(targetClass.replace('/', '.'));
 		retVal.add("-mem");
 		retVal.add("2048");
 		retVal.add("-DCP=" + classpathEvosuite); 
@@ -226,7 +255,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 			if (i > testCountInitial) {
 				optionPC.append(":");
 			}
-			optionPC.append(this.targetClass.replace('/', '.') + "," + this.targetMethod + this.targetSignature + ",EvoSuiteWrapper_" + i);
+			optionPC.append(targetClass.replace('/', '.') + "," + targetMethodName + targetMethodDescriptor + ",EvoSuiteWrapper_" + i);
 		}
 		retVal.add(optionPC.toString());
 		
@@ -322,7 +351,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 		
 		
 		//checks if EvoSuite generated the files
-		final String testCaseClassName = this.targetClass + "_" + testCount + "_Test";
+		final String testCaseClassName = item.getTargetClassName() + "_" + testCount + "_Test";
 		final String testCaseScaff = this.outPath + "/" + testCaseClassName + "_scaffolding.java";
 		final String testCase = this.outPath + "/" + testCaseClassName + ".java";
 		if (!new File(testCase).exists() || !new File(testCaseScaff).exists()) {
@@ -348,7 +377,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 			checkTestExists(testCaseClassName);
 			System.out.println("[EVOSUITE] Generated test case " + testCaseClassName + ", depth: " + depth + ", path condition: " + finalState.getPathCondition());
 			final TestCase newTC = new TestCase(testCaseClassName, "()V", "test0");
-			this.getOutputBuffer().add(new EvosuiteResult(newTC, depth + 1));
+			this.getOutputBuffer().add(new EvosuiteResult(item, newTC, depth + 1));
 		} catch (NoSuchMethodException e) { 
 			//EvoSuite failed to generate the test case, thus we just ignore it 
 			System.out.println("[EVOSUITE] Failed to generate the test case " + testCaseClassName + " for PC: " + finalState.getPathCondition() + ": the generated file does not contain a test method");

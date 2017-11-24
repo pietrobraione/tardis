@@ -18,7 +18,7 @@ public abstract class Performer<I,O> {
 	private final Condition conditionNotPaused;
 	private final Condition conditionPaused;
 	private volatile boolean paused;
-	private I seed;
+	private ArrayList<I> seed;
 
 	public Performer(InputBuffer<I> in, OutputBuffer<O> out, int numOfThreads, int numInputs, long timeoutDuration, TimeUnit timeoutUnit) {
 		this.in = in;
@@ -56,14 +56,15 @@ public abstract class Performer<I,O> {
 	}
 	
 	/**
-	 * Seeds the performer with a single initial item,
-	 * that is executed immediately as the performer 
+	 * Seeds the performer with a set of initial items,
+	 * that are executed immediately as the performer 
 	 * is started. Should be invoked before {@link #start()}.
 	 * 
-	 * @param seed the {@code I} that seeds the performer.
+	 * @param seed an {@link ArrayList}{@code <I>} containing
+	 *        the items that seed the performer.
 	 */
-	public final void seed(I seed) {
-		this.seed = seed;
+	public final void seed(List<I> seed) {
+		this.seed = new ArrayList<>(seed);
 	}
 	
 	/**
@@ -127,9 +128,7 @@ public abstract class Performer<I,O> {
 		if (this.seed == null) {
 			return;
 		}
-		final ArrayList<I> itemsTmp = new ArrayList<>();
-		itemsTmp.add(this.seed);
-		final Runnable job = makeJob(itemsTmp);
+		final Runnable job = makeJob(this.seed);
 		this.threadPool.execute(job);
 	}
 	

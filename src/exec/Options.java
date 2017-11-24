@@ -27,6 +27,10 @@ public class Options implements Cloneable {
 			handler = SignatureHandler.class)
 	private List<String> initialTestCaseSignature;
 	
+	@Option(name = "-target_class",
+			usage = "Name of the target method (containing the methods to test)")
+	private String targetClassName;
+	
 	@Option(name = "-target_method",
 			usage = "Java signature of the target method (the method to test)",
 			handler = SignatureHandler.class)
@@ -152,8 +156,17 @@ public class Options implements Cloneable {
 		this.initialTestCaseSignature = null;
 	}
 	
+	public String getTargetClass() {
+		return this.targetClassName;
+	}
+	
+	public void setTargetClass(String targetClassName) {
+		this.targetClassName = targetClassName;
+		this.targetMethodSignature = null;
+	}
+	
 	public List<String> getTargetMethod() {
-		return Collections.unmodifiableList(this.targetMethodSignature);
+		return (this.targetMethodSignature == null ? null : Collections.unmodifiableList(this.targetMethodSignature));
 	}
 	
 	public void setTargetMethod(String... signature) {
@@ -161,6 +174,7 @@ public class Options implements Cloneable {
 			return;
 		}
 		this.targetMethodSignature = Arrays.asList(signature.clone());
+		this.targetClassName = null;
 	}
 	
 	public int getMaxDepth() {

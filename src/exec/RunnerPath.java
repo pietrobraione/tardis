@@ -47,22 +47,24 @@ public class RunnerPath {
 	private final String[] classpath;
 	private final String z3Path;
 	private final String outPath;
-	private final String targetMethod;
+	private final String targetMethodName;
+	private final TestCase testCase;
 	private final RunnerParameters commonParamsGuided;
 	private final RunnerParameters commonParamsGuiding;
 		
-	public RunnerPath(Options o) {
+	public RunnerPath(Options o, EvosuiteResult item) {
 		this.classpath = new String[3];
 		this.classpath[0] = o.getBinPath().toString();
 		this.classpath[1] = o.getJBSELibraryPath().toString();
 		this.classpath[2] = o.getJREPath().toString();
 		this.z3Path = o.getZ3Path().toString();
 		this.outPath = o.getOutDirectory().toString();
-		this.targetMethod = o.getTargetMethod().get(2);
+		this.targetMethodName = item.getTargetMethodName();
+		this.testCase = item.getTestCase();
 		
 		//builds the template parameters object for the guided (symbolic) execution
 		this.commonParamsGuided = new RunnerParameters();
-		this.commonParamsGuided.setMethodSignature(o.getTargetMethod().get(0), o.getTargetMethod().get(1), o.getTargetMethod().get(2));
+		this.commonParamsGuided.setMethodSignature(item.getTargetClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName());
 		this.commonParamsGuided.addClasspath(this.classpath);
 		this.commonParamsGuided.setBreadthMode(BreadthMode.ALL_DECISIONS_NONTRIVIAL);
 		if (o.getHeapScope() != null) {
@@ -138,6 +140,35 @@ public class RunnerPath {
 	private State initialState = null;
 	
 	/**
+	 * Performs symbolic execution of the target method guided by a test case,
+	 * and returns the final state. Equivalent to {@link #runProgram(int) runProgram}{@code (-1).}
+	 * {@link List#get(int) get}{@code (0)}.
+	 * 
+	 * @param testCase a {@link TestCase}, it will guide symbolic execution.
+	 * @return the final {@link State}.
+	 * @throws DecisionException
+	 * @throws CannotBuildEngineException
+	 * @throws InitializationException
+	 * @throws InvalidClassFileFactoryClassException
+	 * @throws NonexistingObservedVariablesException
+	 * @throws ClasspathException
+	 * @throws CannotBacktrackException
+	 * @throws CannotManageStateException
+	 * @throws ThreadStackEmptyException
+	 * @throws ContradictionException
+	 * @throws EngineStuckException
+	 * @throws FailureException
+	 */
+	public State runProgram()
+			throws DecisionException, CannotBuildEngineException, InitializationException, 
+			InvalidClassFileFactoryClassException, NonexistingObservedVariablesException, 
+			ClasspathException, CannotBacktrackException, CannotManageStateException, 
+			ThreadStackEmptyException, ContradictionException, EngineStuckException, 
+			FailureException {
+		return runProgram(-1).get(0);
+	}
+	
+	/**
 	 * Performs symbolic execution of the target method guided by a test case 
 	 * up to some depth, then peeks the states on the next branch.  
 	 * 
@@ -161,7 +192,7 @@ public class RunnerPath {
 	 * @throws EngineStuckException
 	 * @throws FailureException
 	 */
-	public List<State> runProgram(TestCase testCase, int testDepth)
+	public List<State> runProgram(int testDepth)
 			throws DecisionException, CannotBuildEngineException, InitializationException, 
 			InvalidClassFileFactoryClassException, NonexistingObservedVariablesException, 
 			ClasspathException, CannotBacktrackException, CannotManageStateException, 
@@ -195,10 +226,10 @@ public class RunnerPath {
 						calc)); //for concrete execution
 
 		//sets the guiding method (to be executed concretely)
-		pGuiding.setMethodSignature(testCase.getClassName(), testCase.getParameterSignature(), testCase.getMethodName());
+		pGuiding.setMethodSignature(this.testCase.getClassName(), this.testCase.getMethodDescriptor(), this.testCase.getMethodName());
+		
 		//creates the guidance decision procedure and sets it
-		final int numberOfHits = countNumberOfInvocation(testCase.getClassName(), targetMethod);//TODO calculate the number of hits based on the test
-		//System.out.println(numberOfHits);
+		final int numberOfHits = countNumberOfInvocation(this.testCase.getClassName(), this.targetMethodName);//TODO use the whole signature of the target method to avoid ambiguities (that's quite hard)
 		final DecisionProcedureGuidance guid = new DecisionProcedureGuidance(pGuided.getDecisionProcedure(),
 				pGuided.getCalculator(), pGuiding, pGuided.getMethodSignature(), numberOfHits);
 		pGuided.setDecisionProcedure(guid);

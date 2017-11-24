@@ -23,6 +23,7 @@ import jbse.bc.exc.MethodNotFoundException;
 import jbse.mem.State;
 import jbse.rewr.CalculatorRewriting;
 import jbse.rewr.RewriterOperationOnSimplex;
+import sushi.util.ClassReflectionUtils;
 
 public final class Main {
 	private final Options o;
@@ -41,29 +42,31 @@ public final class Main {
 		final PerformerEvosuite performerEvosuite = new PerformerEvosuite(this.o, pathConditionBuffer, testCaseBuffer);
 		final TerminationManager terminationManager = new TerminationManager(this.o.getGlobalTimeBudgetDuration(), this.o.getGlobalTimeBudgetUnit(), performerJBSE, performerEvosuite);
 		
-		//sets logging
-		final DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss");
-		terminationManager.setOnStop(() -> {
-			System.out.println("[MAIN    ] Ending at " + dtf.format(LocalDateTime.now()));
-		}); 
-		
-		//seeds the initial test case
-		if (this.o.getInitialTestCase() == null) {
-			final JBSEResult seed = seedJBSE();
+		//seeds the initial test cases
+		if (this.o.getTargetMethod() == null || this.o.getInitialTestCase() == null) {
+			//the target is a whole class, or is a single method but
+			//there is no initial test case: EvoSuite should start
+			final ArrayList<JBSEResult> seed = seedForEvosuite();
 			performerEvosuite.seed(seed);
 		} else {
-			final EvosuiteResult seed = seedEvosuite();
+			//the target is a single method and there is one
+			//initial test case: JBSE should start
+			final ArrayList<EvosuiteResult> seed = seedForJBSE();
 			performerJBSE.seed(seed);
 		}
 		
 		//starts everything
+		final DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss");
 		System.out.println("[MAIN    ] Starting at " + dtf.format(LocalDateTime.now()));
 		performerJBSE.start();
 		performerEvosuite.start();
 		terminationManager.start();
+		terminationManager.waitTermination();
+		System.out.println("[MAIN    ] Ending at " + dtf.format(LocalDateTime.now()));
 	}
 	
-	private JBSEResult seedJBSE() {
+	private ArrayList<JBSEResult> seedForEvosuite() {
+		//this is the "no initial test case" situation
 		try {
 			final String[] classpath = new String[3];
 			classpath[0] = this.o.getBinPath().toString();
@@ -71,11 +74,23 @@ public final class Main {
 			classpath[2] = this.o.getJREPath().toString();
 			final CalculatorRewriting calc = new CalculatorRewriting();
 			calc.addRewriter(new RewriterOperationOnSimplex());
-			final State s = new State(new Classpath(classpath), ClassFileFactoryJavassist.class, new HashMap<>(), calc);
-			s.pushFrameSymbolic(new Signature(this.o.getTargetMethod().get(0), this.o.getTargetMethod().get(1), this.o.getTargetMethod().get(2)));
-			final JBSEResult retVal = new JBSEResult(s, s, -1);
+			final ArrayList<JBSEResult> retVal = new ArrayList<>();
+			if (this.o.getTargetMethod() == null) {
+				//this.o indicates a target class
+				final List<List<String>> targetMethods = ClassReflectionUtils.getVisibleMethods(this.o.getTargetClass(), true);
+				for (List<String> targetMethod : targetMethods) {
+					final State s = new State(new Classpath(classpath), ClassFileFactoryJavassist.class, new HashMap<>(), calc);
+					s.pushFrameSymbolic(new Signature(targetMethod.get(0), targetMethod.get(1), targetMethod.get(2)));
+					retVal.add(new JBSEResult(targetMethod.get(0), targetMethod.get(1), targetMethod.get(2), s, s, -1));
+				}
+			} else {
+				//this.o indicates a single target method
+				final State s = new State(new Classpath(classpath), ClassFileFactoryJavassist.class, new HashMap<>(), calc);
+				s.pushFrameSymbolic(new Signature(this.o.getTargetMethod().get(0), this.o.getTargetMethod().get(1), this.o.getTargetMethod().get(2)));
+				retVal.add(new JBSEResult(this.o.getTargetMethod().get(0), this.o.getTargetMethod().get(1), this.o.getTargetMethod().get(2), s, s, -1));
+			}
 			return retVal;
-		} catch (BadClassFileException | MethodNotFoundException | MethodCodeNotFoundException e) {
+		} catch (BadClassFileException | ClassNotFoundException | MethodNotFoundException | MethodCodeNotFoundException e) {
 			System.out.println("[MAIN    ] Error: The target class or target method does not exist, or the target method is abstract");
 			System.exit(1);
 		} catch (InvalidClassFileFactoryClassException e) {
@@ -85,9 +100,10 @@ public final class Main {
 		return null; //to keep the compiler happy
 	}
 	
-	private EvosuiteResult seedEvosuite() {
+	private ArrayList<EvosuiteResult> seedForJBSE() {
 		final TestCase tc = new TestCase(this.o);
-		final EvosuiteResult retVal = new EvosuiteResult(tc, 0);
+		final ArrayList<EvosuiteResult> retVal = new ArrayList<>();
+		retVal.add(new EvosuiteResult(this.o.getTargetMethod().get(0), this.o.getTargetMethod().get(1), this.o.getTargetMethod().get(2), tc, 0));
 		return retVal;
 	}
 	

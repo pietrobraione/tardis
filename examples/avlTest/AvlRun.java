@@ -20,7 +20,8 @@ public class AvlRun {
 		final TimeUnit globalTimeBudgetTimeUnit = TimeUnit.MINUTES;
 		
 		final Options o = new Options();
-		o.setTargetMethod(className, parametersSignature, methodName);
+		o.setTargetClass(className);
+		//o.setTargetMethod(className, parametersSignature, methodName);
 		o.setInitialTestCase(testClass, testMethodSignature, testMethod);
 		o.setMaxDepth(maxdepth);
 		o.setNumOfThreads(numOfThreads);
@@ -33,7 +34,7 @@ public class AvlRun {
 		o.setEvosuitePath(Settings.EVOSUITE_MOSA_PATH);
 		o.setSushiLibPath(Settings.SUSHI_LIB_PATH);
 		o.setUseMOSA(true);
-		o.setNumMOSATargets(1 /* 5 10 20 50 */);
+		o.setNumMOSATargets(/*1 */ 5 /*10 20 50 */);
 		o.setGlobalTimeBudgetDuration(globalTimeBudgetDuration);
 		o.setGlobalTimeBudgetUnit(globalTimeBudgetTimeUnit);
 	

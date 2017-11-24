@@ -10,7 +10,6 @@ public final class TerminationManager {
 	private final Thread timeoutDetector;
 	private final Thread terminationDetector;
 	private volatile boolean timedOut;
-	private Runnable actionOnStop = null;
 		
 	public TerminationManager(long duration, TimeUnit timeUnit, Performer<?,?>...performers) {
 		this.duration = duration;
@@ -26,9 +25,13 @@ public final class TerminationManager {
 			}
 		});
 		this.terminationDetector = new Thread(() -> {
-			try {
 				while (true) {
-					TimeUnit.SECONDS.sleep(1);
+					try {
+						TimeUnit.SECONDS.sleep(1);
+					} catch (InterruptedException e) {
+						//this should never happen,
+						//in the case we fall through
+					}
 					
 					//exits upon timeout
 					if (this.timedOut) {
@@ -49,16 +52,9 @@ public final class TerminationManager {
 						}
 					}
 				}
-			} catch (InterruptedException e) {
-				//this should never happen
-				e.printStackTrace(); //TODO handle
-			}
 			
-			//quits
-			stopAll();
-			if (this.actionOnStop != null) {
-				this.actionOnStop.run();
-			}
+				//quits
+				stopAll();
 		});
 	}
 	
@@ -82,8 +78,13 @@ public final class TerminationManager {
 		this.timeoutDetector.start();
 		this.terminationDetector.start();
 	}
-	
-	public void setOnStop(Runnable actionOnStop) {
-		this.actionOnStop = actionOnStop;
+
+	public void waitTermination() {
+		try {
+			this.terminationDetector.join();
+		} catch (InterruptedException e) {
+			//this should never happen,
+			//in the case we fall through
+		}
 	}
 }

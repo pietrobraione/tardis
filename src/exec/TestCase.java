@@ -2,7 +2,7 @@ package exec;
 
 public class TestCase {
 	private final String className;
-	private final String parameterSignature;
+	private final String methodDescriptor;
 	private final String methodName;
 	
 	/**
@@ -13,7 +13,7 @@ public class TestCase {
 	 */
 	public TestCase(Options o) {
 		this.className = o.getInitialTestCase().get(0);
-		this.parameterSignature = o.getInitialTestCase().get(1);
+		this.methodDescriptor = o.getInitialTestCase().get(1);
 		this.methodName = o.getInitialTestCase().get(2);
 	}
 	
@@ -22,13 +22,13 @@ public class TestCase {
 	 * of a test method.
 	 * 
 	 * @param className a {@link String}, the name of the class of the test method.
-	 * @param parameterSignature a {@link String}, the signature of the parameters of the 
+	 * @param methodDescriptor a {@link String}, the descriptor of the parameters of the 
 	 *        test method.
 	 * @param methodName a {@link String}, the name of the test method.
 	 */
-	public TestCase(String className, String parameterSignature, String methodName) {
+	public TestCase(String className, String methodDescriptor, String methodName) {
 		this.className = className;
-		this.parameterSignature = parameterSignature;
+		this.methodDescriptor = methodDescriptor;
 		this.methodName = methodName;
 	}
 
@@ -39,7 +39,7 @@ public class TestCase {
 	 */
 	public TestCase(TestCase otherTc) {
 		this.className = otherTc.getClassName();
-		this.parameterSignature = otherTc.getParameterSignature();
+		this.methodDescriptor = otherTc.getMethodDescriptor();
 		this.methodName = otherTc.getMethodName();
 	}
 	
@@ -47,8 +47,8 @@ public class TestCase {
 		return this.className;
 	}
 	
-	public String getParameterSignature(){
-		return this.parameterSignature;
+	public String getMethodDescriptor(){
+		return this.methodDescriptor;
 	}
 	
 	public String getMethodName(){

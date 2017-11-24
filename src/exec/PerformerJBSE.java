@@ -31,12 +31,29 @@ public class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 		this.o = o.clone();
 		this.maxDepth = o.getMaxDepth();
 	}
+	
+	@Override
+	protected Runnable makeJob(List<EvosuiteResult> items) {
+		final EvosuiteResult item = items.get(0);
+		final Runnable job = () -> {
+			try {
+				explore(item, item.getStartDepth());
+			} catch (DecisionException | CannotBuildEngineException | InitializationException |
+					InvalidClassFileFactoryClassException | NonexistingObservedVariablesException |
+					ClasspathException | CannotBacktrackException | CannotManageStateException |
+					ThreadStackEmptyException | ContradictionException | EngineStuckException |
+					FailureException e ) {
+				System.out.println("[JBSE    ] Unexpected exception raised while exploring test case " + item.getTestCase().getClassName() + ": " + e.getMessage());
+			}
+		};
+		return job;
+	}
 
 	/**
 	 * Executes a test case and generates tests for all the alternative branches
 	 * starting from some depth up to some maximum depth.
 	 * 
-	 * @param tc a {@link TestCase}.
+	 * @param item a {@link EvosuiteResult}.
 	 * @param startDepth the depth to which generation of tests must be started.
 	 * @throws DecisionException
 	 * @throws CannotBuildEngineException
@@ -51,7 +68,7 @@ public class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 	 * @throws EngineStuckException
 	 * @throws FailureException
 	 */
-	public void explore(TestCase tc, int startDepth) 
+	private void explore(EvosuiteResult item, int startDepth) 
 			throws DecisionException, CannotBuildEngineException, InitializationException, 
 			InvalidClassFileFactoryClassException, NonexistingObservedVariablesException, 
 			ClasspathException, CannotBacktrackException, CannotManageStateException, 
@@ -61,21 +78,22 @@ public class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 			return;
 		}
 		//runs the test case up to the final state, and takes the final state's path condition
-		final RunnerPath rp = new RunnerPath(this.o);
-		final State tcFinalState = rp.runProgram(tc, -1).get(0);
+		final TestCase tc = item.getTestCase();
+		final RunnerPath rp = new RunnerPath(this.o, item);
+		final State tcFinalState = rp.runProgram();
 		final Collection<Clause> tcFinalPC = tcFinalState.getPathCondition();
 		System.out.println("[JBSE    ] Run test case " + tc.getClassName() + ", path condition " + tcFinalPC.toString());
 		final int tcFinalDepth = tcFinalState.getDepth();
 		boolean noPathConditionGenerated = true;
 		for (int currentDepth = startDepth; currentDepth < Math.min(this.maxDepth, tcFinalDepth - 1); currentDepth++) {
-			final List<State> newStates = rp.runProgram(tc, currentDepth);
+			final List<State> newStates = rp.runProgram(currentDepth);
 			final State initialState = rp.getInitialState();
 			for (State newState : newStates) {
 				final Collection<Clause> currentPC = newState.getPathCondition();
 				if (alreadyExplored(currentPC, tcFinalPC)) {
 					continue;
 				}
-				this.getOutputBuffer().add(new JBSEResult(initialState, newState, currentDepth));
+				this.getOutputBuffer().add(new JBSEResult(item, initialState, newState, currentDepth));
 				System.out.println("[JBSE    ] From test case " + tc.getClassName() + " generated path condition " + currentPC);
 				noPathConditionGenerated = false;
 			}
@@ -95,23 +113,6 @@ public class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 		}
 	}
 
-	
-	@Override
-	protected Runnable makeJob(List<EvosuiteResult> items) {
-		final EvosuiteResult item = items.get(0);
-		final Runnable job = () -> {
-			try {
-				explore(item.getTestCase(), item.getStartDepth());
-			} catch (DecisionException | CannotBuildEngineException | InitializationException |
-					InvalidClassFileFactoryClassException | NonexistingObservedVariablesException |
-					ClasspathException | CannotBacktrackException | CannotManageStateException |
-					ThreadStackEmptyException | ContradictionException | EngineStuckException |
-					FailureException e ) {
-				System.out.println("[JBSE    ] Unexpected exception raised while exploring test case " + item.getTestCase().getClassName() + ": " + e.getMessage());
-			}
-		};
-		return job;
-	}
 	
 }
 
