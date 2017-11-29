@@ -81,8 +81,6 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 			return; //TODO throw an exception?
 		}
 		
-		//generates and compiles the wrappers
-		emitAndCompileEvoSuiteWrappers(testCountInitial, items);
 		
 		//splits items in sublists having same target method
 		final Map<String, List<JBSEResult>> splitItems = 
@@ -94,6 +92,9 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 		for (List<JBSEResult> subItems : splitItems.values()) {
 			final int testCount = testCountStart; //copy into final variable to keep compiler happy
 			testCountStart += subItems.size(); //for the next iteration
+			
+			//generates and compiles the wrappers
+			emitAndCompileEvoSuiteWrappers(testCount, subItems);
 			
 			//builds the EvoSuite command line
 			final List<String> evosuiteCommand = buildEvoSuiteCommand(testCount, subItems); 
