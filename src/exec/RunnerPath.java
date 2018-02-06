@@ -12,6 +12,7 @@ import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 
 import jbse.algo.exc.CannotManageStateException;
 import jbse.apps.run.DecisionProcedureGuidance;
+import jbse.apps.run.DecisionProcedureGuidanceJDI;
 import jbse.bc.exc.InvalidClassFileFactoryClassException;
 import jbse.common.exc.ClasspathException;
 import jbse.dec.DecisionProcedureAlgorithms;
@@ -230,7 +231,7 @@ public class RunnerPath {
 		
 		//creates the guidance decision procedure and sets it
 		final int numberOfHits = countNumberOfInvocation(this.testCase.getClassName(), this.targetMethodName);//TODO use the whole signature of the target method to avoid ambiguities (that's quite hard)
-		final DecisionProcedureGuidance guid = new DecisionProcedureGuidance(pGuided.getDecisionProcedure(),
+		final DecisionProcedureGuidanceJDI guid = new DecisionProcedureGuidanceJDI(pGuided.getDecisionProcedure(),
 				pGuided.getCalculator(), pGuiding, pGuided.getMethodSignature(), numberOfHits);
 		pGuided.setDecisionProcedure(guid);
 		
