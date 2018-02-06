@@ -54,10 +54,11 @@ public class RunnerPath {
 	private final RunnerParameters commonParamsGuiding;
 		
 	public RunnerPath(Options o, EvosuiteResult item) {
-		this.classpath = new String[3];
+		this.classpath = new String[4];
 		this.classpath[0] = o.getBinPath().toString();
 		this.classpath[1] = o.getJBSELibraryPath().toString();
 		this.classpath[2] = o.getJREPath().toString();
+		this.classpath[3] = o.getEvosuitePath().toString();
 		this.z3Path = o.getZ3Path().toString();
 		this.outPath = o.getOutDirectory().toString();
 		this.targetMethodName = item.getTargetMethodName();
@@ -230,7 +231,7 @@ public class RunnerPath {
 		pGuiding.setMethodSignature(this.testCase.getClassName(), this.testCase.getMethodDescriptor(), this.testCase.getMethodName());
 		
 		//creates the guidance decision procedure and sets it
-		final int numberOfHits = countNumberOfInvocation(this.testCase.getClassName(), this.targetMethodName);//TODO use the whole signature of the target method to avoid ambiguities (that's quite hard)
+		final int numberOfHits = countNumberOfInvocations(this.testCase.getClassName(), this.targetMethodName);
 		final DecisionProcedureGuidanceJDI guid = new DecisionProcedureGuidanceJDI(pGuided.getDecisionProcedure(),
 				pGuided.getCalculator(), pGuiding, pGuided.getMethodSignature(), numberOfHits);
 		pGuided.setDecisionProcedure(guid);
@@ -260,14 +261,14 @@ public class RunnerPath {
 		@Override
 		public void visit(MethodCallExpr n, Object arg) {
 			super.visit(n, arg);
-			//System.out.println(Thread.currentThread().getName()+ "_" + className + "_" +  methodName + " = " + n.getNameAsString());
 			if (n.getNameAsString().equals(this.methodName)) {
 				this.methodCallCounter++;
 			}
 		}
 	}
 
-	private int countNumberOfInvocation(String className, String methodName){
+	private int countNumberOfInvocations(String className, String methodName){
+		//TODO use the whole signature of the target method to avoid ambiguities (that's quite hard)
 		final CountVisitor v = new CountVisitor(methodName);
 		try {
 			final FileInputStream in = new FileInputStream(outPath + "/" + className + ".java");

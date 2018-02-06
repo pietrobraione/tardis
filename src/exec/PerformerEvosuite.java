@@ -81,7 +81,6 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 			return; //TODO throw an exception?
 		}
 		
-		
 		//splits items in sublists having same target method
 		final Map<String, List<JBSEResult>> splitItems = 
 				items.stream().collect(Collectors.groupingBy(r -> r.getTargetClassName() + ":" + r.getTargetMethodDescriptor() + ":" + r.getTargetMethodName()));
@@ -336,7 +335,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 						final int testCount = Integer.parseInt(matcherEmittedTest.group(1));
 						generated.add(testCount);
 						final JBSEResult item = items.get(testCount - testCountInitial);
-						checkTestAndScheduleJBSE(testCount, item);
+						checkTestCompileAndScheduleJBSE(testCount, item);
 					}
 				}
 			}
@@ -346,10 +345,9 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 		}
 	}
 		
-	private void checkTestAndScheduleJBSE(int testCount, JBSEResult item) {
+	private void checkTestCompileAndScheduleJBSE(int testCount, JBSEResult item) {
 		final State finalState = item.getFinalState();
 		final int depth = item.getDepth();
-		
 		
 		//checks if EvoSuite generated the files
 		final String testCaseClassName = item.getTargetClassName() + "_" + testCount + "_Test";
@@ -363,8 +361,8 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 		//compiles the generated test
 		final String classpathCompilationTest = this.binPath + File.pathSeparator + this.sushiLibPath + File.pathSeparator + this.evosuitePath;
 		final Path javacLogFilePath = Paths.get(this.tmpPath + "/javac-log-test-" +  testCount + ".txt");
-		final String[] javacParametersTestScaff = { "-cp", classpathCompilationTest, "-d", this.binPath, testCaseScaff };
-		final String[] javacParametersTestCase = { "-cp", classpathCompilationTest, "-d", this.binPath, testCase };
+		final String[] javacParametersTestScaff = { "-cp", classpathCompilationTest, "-d", this.binPath, testCaseScaff }; //TODO change destination to temp directory
+		final String[] javacParametersTestCase = { "-cp", classpathCompilationTest, "-d", this.binPath, testCase }; //TODO change destination to temp directory
 		try (final OutputStream w = new BufferedOutputStream(Files.newOutputStream(javacLogFilePath))) {
 			this.compiler.run(null, w, w, javacParametersTestScaff);
 			this.compiler.run(null, w, w, javacParametersTestCase);
