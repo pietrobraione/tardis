@@ -13,6 +13,7 @@ import java.util.concurrent.TimeUnit;
 
 import org.kohsuke.args4j.Option;
 import org.kohsuke.args4j.spi.MapOptionHandler;
+import org.kohsuke.args4j.spi.MultiPathOptionHandler;
 import org.kohsuke.args4j.spi.PathOptionHandler;
 
 import sushi.configure.SignatureHandler;
@@ -44,9 +45,10 @@ public class Options implements Cloneable {
 			usage = "The number of threads in the thread pool")
 	private int numOfThreads;
 	
-	@Option(name = "-bin",
-			usage = "The bin directory of the project to analyze")
-	private Path binPath = Paths.get(".", "bin");
+	@Option(name = "-classes",
+			usage = "The classpath of the project to analyze",
+			handler = MultiPathOptionHandler.class)
+	private List<Path> classesPath = Collections.singletonList(Paths.get(".", "bin"));
 	
 	@Option(name = "-tmp_base",
 			usage = "Base directory where the temporary subdirectory is found or created",
@@ -193,12 +195,12 @@ public class Options implements Cloneable {
 		this.numOfThreads = numOfThreads;
 	}
 	
-	public Path getBinPath() {
-		return this.binPath;
+	public List<Path> getClassesPath() {
+		return this.classesPath;
 	}
 	
-	public void setBinPath(Path path) {
-		this.binPath = path;
+	public void setClassesPath(Path... paths) {
+		this.classesPath = Arrays.asList(paths);
 	}
 	
 	public Path getTmpDirectoryBase() {

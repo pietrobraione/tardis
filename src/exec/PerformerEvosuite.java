@@ -42,7 +42,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 
 	public PerformerEvosuite(Options o, InputBuffer<JBSEResult> in, OutputBuffer<EvosuiteResult> out) {
 		super(in, out, o.getNumOfThreads(), (o.getUseMOSA() ? o.getNumMOSATargets() : 1), o.getTimeoutMOSATaskCreationDuration(), o.getTimeoutMOSATaskCreationUnit());
-		this.binPath = o.getBinPath().toString();
+		this.binPath = o.getClassesPath().toString();
 		this.tmpPath = o.getTmpDirectoryBase().toString();
 		this.evosuitePath = o.getEvosuitePath().toString();
 		this.sushiLibPath = o.getSushiLibPath().toString();

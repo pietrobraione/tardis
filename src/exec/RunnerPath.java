@@ -55,7 +55,7 @@ public class RunnerPath {
 		
 	public RunnerPath(Options o, EvosuiteResult item) {
 		this.classpath = new String[4];
-		this.classpath[0] = o.getBinPath().toString();
+		this.classpath[0] = o.getClassesPath().toString();
 		this.classpath[1] = o.getJBSELibraryPath().toString();
 		this.classpath[2] = o.getJREPath().toString();
 		this.classpath[3] = o.getEvosuitePath().toString();

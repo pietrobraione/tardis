@@ -69,7 +69,7 @@ public final class Main {
 		//this is the "no initial test case" situation
 		try {
 			final String[] classpath = new String[3];
-			classpath[0] = this.o.getBinPath().toString();
+			classpath[0] = this.o.getClassesPath().toString();
 			classpath[1] = this.o.getJBSELibraryPath().toString();
 			classpath[2] = this.o.getJREPath().toString();
 			final CalculatorRewriting calc = new CalculatorRewriting();
