@@ -54,11 +54,13 @@ public class RunnerPath {
 	private final RunnerParameters commonParamsGuiding;
 		
 	public RunnerPath(Options o, EvosuiteResult item) {
-		this.classpath = new String[4];
-		this.classpath[0] = o.getClassesPath().toString();
+		this.classpath = new String[o.getClassesPath().size() + 3];
+		this.classpath[0] = o.getJREPath().toString();
 		this.classpath[1] = o.getJBSELibraryPath().toString();
-		this.classpath[2] = o.getJREPath().toString();
-		this.classpath[3] = o.getEvosuitePath().toString();
+		this.classpath[2] = o.getEvosuitePath().toString();
+		for (int i = 3; i < this.classpath.length; ++i) {
+			this.classpath[i] = o.getClassesPath().get(i - 3).toString();
+		}
 		this.z3Path = o.getZ3Path().toString();
 		this.outPath = o.getOutDirectory().toString();
 		this.targetMethodName = item.getTargetMethodName();

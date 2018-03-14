@@ -14,6 +14,8 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 import java.nio.file.Files;
 import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
@@ -30,7 +32,7 @@ import jbse.mem.State;
 import sushi.execution.jbse.StateFormatterSushiPathCondition;
 
 public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
-	private final String binPath;
+	private final String classesPath;
 	private final String tmpPath;
 	private final String evosuitePath;
 	private final String sushiLibPath;
@@ -42,7 +44,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 
 	public PerformerEvosuite(Options o, InputBuffer<JBSEResult> in, OutputBuffer<EvosuiteResult> out) {
 		super(in, out, o.getNumOfThreads(), (o.getUseMOSA() ? o.getNumMOSATargets() : 1), o.getTimeoutMOSATaskCreationDuration(), o.getTimeoutMOSATaskCreationUnit());
-		this.binPath = o.getClassesPath().toString();
+		this.classesPath = String.join(File.pathSeparator, stream(o.getClassesPath()).map(Object::toString).toArray(String[]::new)); 
 		this.tmpPath = o.getTmpDirectoryBase().toString();
 		this.evosuitePath = o.getEvosuitePath().toString();
 		this.sushiLibPath = o.getSushiLibPath().toString();
@@ -56,6 +58,16 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 			//TODO throw an exception
 		}
 	}
+	
+    /**
+     * Converts an iterable to a stream.
+     * See <a href="https://stackoverflow.com/a/23177907/450589">https://stackoverflow.com/a/23177907/450589</a>.
+     * @param it an {@link Iterable}{@code <T>}.
+     * @return a {@link Stream}{@code <T>} for {@code it}.
+     */
+    private static <T> Stream<T> stream(Iterable<T> it) {
+        return StreamSupport.stream(it.spliterator(), false);
+    }
 
 	@Override
 	protected Runnable makeJob(List<JBSEResult> items) {
@@ -176,7 +188,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 	 * @param items a {@link List}{@code <}{@link JBSEResult}{@code >}, results of symbolic execution.
 	 */
 	private void emitAndCompileEvoSuiteWrappers(int testCountInitial, List<JBSEResult> items) {
-		final String classpathCompilationWrapper = this.binPath + File.pathSeparator + this.sushiLibPath;
+		final String classpathCompilationWrapper = this.classesPath + File.pathSeparator + this.sushiLibPath;
 		int i = testCountInitial;
 		for (JBSEResult item : items) {
 			final State initialState = item.getInitialState();
@@ -211,7 +223,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 		final String targetClass = items.get(0).getTargetClassName();
 		final String targetMethodDescriptor = items.get(0).getTargetMethodDescriptor();
 		final String targetMethodName = items.get(0).getTargetMethodName();
-		final String classpathEvosuite = this.binPath + File.pathSeparator + this.sushiLibPath + File.pathSeparator + this.tmpPath;
+		final String classpathEvosuite = this.classesPath + File.pathSeparator + this.sushiLibPath + File.pathSeparator + this.tmpPath;
 		final List<String> retVal = new ArrayList<String>();
 		retVal.add("java");
 		retVal.add("-Xmx4G");
@@ -278,7 +290,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 	 */
 	private void checkTestExists(String className) throws NoSuchMethodException {
 		try {
-			final URLClassLoader cloader = URLClassLoader.newInstance(new URL[]{Paths.get(binPath).toUri().toURL()}); 
+			final URLClassLoader cloader = URLClassLoader.newInstance(new URL[]{Paths.get(this.classesPath).toUri().toURL()}); 
 			cloader.loadClass(className.replace('/',  '.')).getDeclaredMethod("test0");
 		} catch (SecurityException | ClassNotFoundException | MalformedURLException e) {
 			System.out.println("[EVOSUITE] Unexpected error while verifying that class " + className + " exists and has a test method: " + e.getMessage());
@@ -359,10 +371,10 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 		}
 		
 		//compiles the generated test
-		final String classpathCompilationTest = this.binPath + File.pathSeparator + this.sushiLibPath + File.pathSeparator + this.evosuitePath;
+		final String classpathCompilationTest = this.classesPath + File.pathSeparator + this.sushiLibPath + File.pathSeparator + this.evosuitePath;
 		final Path javacLogFilePath = Paths.get(this.tmpPath + "/javac-log-test-" +  testCount + ".txt");
-		final String[] javacParametersTestScaff = { "-cp", classpathCompilationTest, "-d", this.binPath, testCaseScaff }; //TODO change destination to temp directory
-		final String[] javacParametersTestCase = { "-cp", classpathCompilationTest, "-d", this.binPath, testCase }; //TODO change destination to temp directory
+		final String[] javacParametersTestScaff = { "-cp", classpathCompilationTest, "-d", this.classesPath, testCaseScaff }; //TODO change destination to temp directory
+		final String[] javacParametersTestCase = { "-cp", classpathCompilationTest, "-d", this.classesPath, testCase }; //TODO change destination to temp directory
 		try (final OutputStream w = new BufferedOutputStream(Files.newOutputStream(javacLogFilePath))) {
 			this.compiler.run(null, w, w, javacParametersTestScaff);
 			this.compiler.run(null, w, w, javacParametersTestCase);

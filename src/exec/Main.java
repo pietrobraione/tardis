@@ -68,10 +68,12 @@ public final class Main {
 	private ArrayList<JBSEResult> seedForEvosuite() {
 		//this is the "no initial test case" situation
 		try {
-			final String[] classpath = new String[3];
-			classpath[0] = this.o.getClassesPath().toString();
+			final String[] classpath = new String[this.o.getClassesPath().size() + 2];
+			classpath[0] = this.o.getJREPath().toString();
 			classpath[1] = this.o.getJBSELibraryPath().toString();
-			classpath[2] = this.o.getJREPath().toString();
+			for (int i = 2; i < classpath.length; ++i) {
+				classpath[i] = this.o.getClassesPath().get(i - 2).toString();
+			}
 			final CalculatorRewriting calc = new CalculatorRewriting();
 			calc.addRewriter(new RewriterOperationOnSimplex());
 			final ArrayList<JBSEResult> retVal = new ArrayList<>();
