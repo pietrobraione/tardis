@@ -114,7 +114,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 			final Path evosuiteLogFilePath = Paths.get(this.tmpPath + "/evosuite-log-" + testCount + ".txt");
 			final Process processEvosuite;
 			try {
-				processEvosuite = launchEvoSuite(testCount, evosuiteCommand, evosuiteLogFilePath);
+				processEvosuite = launchEvoSuite(evosuiteCommand, evosuiteLogFilePath);
 			} catch (IOException e) {
 				System.out.println("[EVOSUITE] Unexpected I/O error while running EvoSuite: " + e.getMessage());
 				return; //TODO throw an exception?
@@ -274,7 +274,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 		return retVal;
 	}
 	
-	private Process launchEvoSuite(int testCountInitial, List<String> evosuiteCommand, Path evosuiteLogFilePath) throws IOException {
+	private Process launchEvoSuite(List<String> evosuiteCommand, Path evosuiteLogFilePath) throws IOException {
 		final ProcessBuilder pb = new ProcessBuilder(evosuiteCommand).redirectErrorStream(true).redirectOutput(evosuiteLogFilePath.toFile());
 		final Process pr = pb.start();
 		return pr;
