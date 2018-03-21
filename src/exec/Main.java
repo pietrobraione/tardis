@@ -1,5 +1,9 @@
 package exec;
 
+import static java.nio.file.Files.createDirectory;
+import static java.nio.file.Files.exists;
+
+import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -32,7 +36,15 @@ public final class Main {
 		this.o = o;
 	}
 	
-	public void start() {
+	public void start() throws IOException {
+		//creates the temporary directories if it does not exist
+		if (!exists(o.getTmpDirectoryPath())) {
+			createDirectory(o.getTmpDirectoryPath());
+		}
+		if (!exists(o.getTmpBinTestsDirectoryPath())) {
+			createDirectory(o.getTmpBinTestsDirectoryPath());
+		}
+		
 		//creates the communication queues between the performers
 		final QueueInputOutputBuffer<JBSEResult> pathConditionBuffer = new QueueInputOutputBuffer<>();
 		final QueueInputOutputBuffer<EvosuiteResult> testCaseBuffer = new QueueInputOutputBuffer<>();
@@ -111,7 +123,7 @@ public final class Main {
 	
 	//Here starts the static part of the class, for managing the command line
 	
-	public static void main(String[] args) {		
+	public static void main(String[] args) throws IOException {		
 		//parses options from the command line and exits if the command line
 		//is ill-formed
 		final Options o = new Options();

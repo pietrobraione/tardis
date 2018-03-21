@@ -6,7 +6,6 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -33,7 +32,8 @@ import sushi.execution.jbse.StateFormatterSushiPathCondition;
 
 public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 	private final String classesPath;
-	private final String tmpPath;
+	private final Path tmpPath;
+	private final Path tmpBinTestsPath;
 	private final String evosuitePath;
 	private final String sushiLibPath;
 	private final String outPath;
@@ -45,7 +45,8 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 	public PerformerEvosuite(Options o, InputBuffer<JBSEResult> in, OutputBuffer<EvosuiteResult> out) {
 		super(in, out, o.getNumOfThreads(), (o.getUseMOSA() ? o.getNumMOSATargets() : 1), o.getTimeoutMOSATaskCreationDuration(), o.getTimeoutMOSATaskCreationUnit());
 		this.classesPath = String.join(File.pathSeparator, stream(o.getClassesPath()).map(Object::toString).toArray(String[]::new)); 
-		this.tmpPath = o.getTmpDirectoryBase().toString();
+		this.tmpPath = o.getTmpDirectoryPath();
+		this.tmpBinTestsPath = o.getTmpBinTestsDirectoryPath();
 		this.evosuitePath = o.getEvosuitePath().toString();
 		this.sushiLibPath = o.getSushiLibPath().toString();
 		this.outPath = o.getOutDirectory().toString();
@@ -111,10 +112,10 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 			final List<String> evosuiteCommand = buildEvoSuiteCommand(testCount, subItems); 
 
 			//launches EvoSuite
-			final Path evosuiteLogFilePath = Paths.get(this.tmpPath + "/evosuite-log-" + testCount + ".txt");
+			final Path evosuiteLogFilePath = this.tmpPath.resolve("evosuite-log-" + testCount + ".txt");
 			final Process processEvosuite;
 			try {
-				processEvosuite = launchEvoSuite(evosuiteCommand, evosuiteLogFilePath);
+				processEvosuite = launchProcess(evosuiteCommand, evosuiteLogFilePath);
 			} catch (IOException e) {
 				System.out.println("[EVOSUITE] Unexpected I/O error while running EvoSuite: " + e.getMessage());
 				return; //TODO throw an exception?
@@ -167,7 +168,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 		fmt.formatState(finalState);
 		fmt.formatEpilogue();
 
-		final Path wrapperFilePath = Paths.get(this.tmpPath + "/EvoSuiteWrapper_" + testCount + ".java");
+		final Path wrapperFilePath = this.tmpPath.resolve("EvoSuiteWrapper_" + testCount + ".java");
 		try (final BufferedWriter w = Files.newBufferedWriter(wrapperFilePath)) {
 			w.write(fmt.emit());
 		} catch (IOException e) {
@@ -194,12 +195,12 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 			final State initialState = item.getInitialState();
 			final State finalState = item.getFinalState();
 			final Path wrapperFilePath = emitEvoSuiteWrapper(i, initialState, finalState);
-			final Path javacLogFilePath = Paths.get(this.tmpPath + "/javac-log-" + i + ".txt");
-			final String[] javacParameters = { "-cp", classpathCompilationWrapper, "-d", this.tmpPath, wrapperFilePath.toString() };
+			final Path javacLogFilePath = this.tmpPath.resolve("javac-log-" + i + ".txt");
+			final String[] javacParameters = { "-cp", classpathCompilationWrapper, "-d", this.tmpPath.toString(), wrapperFilePath.toString() };
 			try (final OutputStream w = new BufferedOutputStream(Files.newOutputStream(javacLogFilePath))) {
 				this.compiler.run(null, w, w, javacParameters);
 			} catch (IOException e) {
-				System.out.println("[EVOSUITE] Unexpected I/O error while creating compilation log file " + javacLogFilePath.toString() + ": " + e.getMessage());
+				System.out.println("[EVOSUITE] Unexpected I/O error while creating wrapper compilation log file " + javacLogFilePath.toString() + ": " + e.getMessage());
 				//TODO throw an exception
 			}
 			++i;
@@ -238,7 +239,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 		retVal.add("-Dglobal_timeout=" + this.timeBudgetSeconds);
 		retVal.add("-Dreport_dir=" + this.tmpPath);
 		retVal.add("-Dsearch_budget=" + this.timeBudgetSeconds);
-		retVal.add("-Dtest_dir=" + outPath);
+		retVal.add("-Dtest_dir=" + this.outPath);
 		retVal.add("-Dvirtual_fs=false");
 		retVal.add("-Dselection_function=ROULETTEWHEEL");
 		retVal.add("-Dcriterion=PATHCONDITION");		
@@ -274,8 +275,18 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 		return retVal;
 	}
 	
-	private Process launchEvoSuite(List<String> evosuiteCommand, Path evosuiteLogFilePath) throws IOException {
-		final ProcessBuilder pb = new ProcessBuilder(evosuiteCommand).redirectErrorStream(true).redirectOutput(evosuiteLogFilePath.toFile());
+	/**
+	 * Creates and launches an external process.
+	 * 
+	 * @param commandLine a {@link List}{@code <}{@link String}{@code >}, the command line
+	 *        to launch the process in the format expected by {@link ProcessBuilder}.
+	 * @param logFilePath a {@link Path} to a log file where stdout and stderr of the
+	 *        process will be redirected.
+	 * @return the created {@link Process}.
+	 * @throws IOException if thrown by {@link ProcessBuilder#start()}.
+	 */
+	private Process launchProcess(List<String> commandLine, Path logFilePath) throws IOException {
+		final ProcessBuilder pb = new ProcessBuilder(commandLine).redirectErrorStream(true).redirectOutput(logFilePath.toFile());
 		final Process pr = pb.start();
 		return pr;
 	}
@@ -290,7 +301,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 	 */
 	private void checkTestExists(String className) throws NoSuchMethodException {
 		try {
-			final URLClassLoader cloader = URLClassLoader.newInstance(new URL[]{Paths.get(this.classesPath).toUri().toURL()}); 
+			final URLClassLoader cloader = URLClassLoader.newInstance(new URL[]{ this.tmpBinTestsPath.toUri().toURL() }); 
 			cloader.loadClass(className.replace('/',  '.')).getDeclaredMethod("test0");
 		} catch (SecurityException | ClassNotFoundException | MalformedURLException e) {
 			System.out.println("[EVOSUITE] Unexpected error while verifying that class " + className + " exists and has a test method: " + e.getMessage());
@@ -371,15 +382,15 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 		}
 		
 		//compiles the generated test
-		final String classpathCompilationTest = this.classesPath + File.pathSeparator + this.sushiLibPath + File.pathSeparator + this.evosuitePath;
-		final Path javacLogFilePath = Paths.get(this.tmpPath + "/javac-log-test-" +  testCount + ".txt");
-		final String[] javacParametersTestScaff = { "-cp", classpathCompilationTest, "-d", this.classesPath, testCaseScaff }; //TODO change destination to temp directory
-		final String[] javacParametersTestCase = { "-cp", classpathCompilationTest, "-d", this.classesPath, testCase }; //TODO change destination to temp directory
+		final String classpathCompilationTest = this.tmpBinTestsPath.toString() + File.pathSeparator + this.classesPath + File.pathSeparator + this.sushiLibPath + File.pathSeparator + this.evosuitePath;
+		final Path javacLogFilePath = this.tmpPath.resolve("javac-log-test-" +  testCount + ".txt");
+		final String[] javacParametersTestScaff = { "-cp", classpathCompilationTest, "-d", this.tmpBinTestsPath.toString(), testCaseScaff };
+		final String[] javacParametersTestCase = { "-cp", classpathCompilationTest, "-d", this.tmpBinTestsPath.toString(), testCase };
 		try (final OutputStream w = new BufferedOutputStream(Files.newOutputStream(javacLogFilePath))) {
 			this.compiler.run(null, w, w, javacParametersTestScaff);
 			this.compiler.run(null, w, w, javacParametersTestCase);
 		} catch (IOException e) {
-			System.out.println("[EVOSUITE] Unexpected I/O error while creating compilation log file " + javacLogFilePath.toString() + ": " + e.getMessage());
+			System.out.println("[EVOSUITE] Unexpected I/O error while creating test case compilation log file " + javacLogFilePath.toString() + ": " + e.getMessage());
 			//TODO throw an exception
 		}
 		

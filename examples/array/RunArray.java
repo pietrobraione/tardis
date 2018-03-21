@@ -1,5 +1,6 @@
 package array;
 
+import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 
 import common.Settings;
@@ -7,21 +8,21 @@ import exec.Main;
 import exec.Options;
 
 public class RunArray {
-	public static void main(String[] s) {
-		final String className = "array/Array";
-		final String parametersSignature = "([IIII)Z";
-		final String methodName  = "getBool";
-		final String testClass = "array/Test";
-		final String testMethodSignature = "()V";
-		final String testMethod = "test0";
+	public static void main(String[] s) throws IOException {
+		final String targetClass = "array/Array";
+		final String targetMethodDescriptor = "([IIII)Z";
+		final String targetMethodName  = "getBool";
+		final String initialTestClass = "array/Test";
+		final String initialTestMethodDescriptor = "()V";
+		final String initialTestMethodName = "test0";
 		final int maxDepth = 50;
 		final int numOfThreads = 5;
 		final long timeBudgetDuration = 10;
 		final TimeUnit timeBudgetTimeUnit = TimeUnit.MINUTES;
 		
 		final Options o = new Options();
-		o.setTargetMethod(className, parametersSignature, methodName);
-		o.setInitialTestCase(testClass, testMethodSignature, testMethod);
+		o.setTargetMethod(targetClass, targetMethodDescriptor, targetMethodName);
+		//o.setInitialTestCase(initialTestClass, initialTestMethodDescriptor, initialTestMethodName);
 		o.setMaxDepth(maxDepth);
 		o.setNumOfThreads(numOfThreads);
 		o.setTmpDirectoryBase(Settings.TMP_BASE_PATH);

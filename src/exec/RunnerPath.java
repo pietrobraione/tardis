@@ -54,12 +54,13 @@ public class RunnerPath {
 	private final RunnerParameters commonParamsGuiding;
 		
 	public RunnerPath(Options o, EvosuiteResult item) {
-		this.classpath = new String[o.getClassesPath().size() + 3];
+		this.classpath = new String[o.getClassesPath().size() + 4];
 		this.classpath[0] = o.getJREPath().toString();
 		this.classpath[1] = o.getJBSELibraryPath().toString();
 		this.classpath[2] = o.getEvosuitePath().toString();
-		for (int i = 3; i < this.classpath.length; ++i) {
-			this.classpath[i] = o.getClassesPath().get(i - 3).toString();
+		this.classpath[3] = o.getTmpBinTestsDirectoryPath().toString();
+		for (int i = 4; i < this.classpath.length; ++i) {
+			this.classpath[i] = o.getClassesPath().get(i - 4).toString();
 		}
 		this.z3Path = o.getZ3Path().toString();
 		this.outPath = o.getOutDirectory().toString();
@@ -273,7 +274,7 @@ public class RunnerPath {
 		//TODO use the whole signature of the target method to avoid ambiguities (that's quite hard)
 		final CountVisitor v = new CountVisitor(methodName);
 		try {
-			final FileInputStream in = new FileInputStream(outPath + "/" + className + ".java");
+			final FileInputStream in = new FileInputStream(this.outPath + "/" + className + ".java");
 			v.visit(JavaParser.parse(in), null);
 		} catch (FileNotFoundException e) {
 			e.printStackTrace();

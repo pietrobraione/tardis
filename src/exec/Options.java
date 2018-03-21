@@ -219,6 +219,18 @@ public class Options implements Cloneable {
 		this.tmpDirName = name;
 	}
 	
+	public Path getTmpDirectoryPath() {
+		if (this.tmpDirName == null) {
+			return this.tmpDirBase;
+		} else {
+			return this.tmpDirBase.resolve(this.tmpDirName);
+		}
+	}
+	
+	public Path getTmpBinTestsDirectoryPath() {
+		return getTmpDirectoryPath().resolve("bin");
+	}
+	
 	public Path getOutDirectory() {
 		return this.outDir;
 	}
