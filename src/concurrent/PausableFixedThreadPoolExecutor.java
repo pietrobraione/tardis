@@ -23,26 +23,31 @@ public class PausableFixedThreadPoolExecutor extends ThreadPoolExecutor {
 	}
 	
 	@Override
-	public void execute(Runnable command) {
+	public void execute(Runnable r) {
 		this.activeThreads.incrementAndGet();
-		super.execute(command);
+		super.execute(r);
 	}
 	
 	@Override
-	protected void afterExecute(Runnable r, Throwable t) {
-		this.lockPause.lock();
+	protected void beforeExecute(Thread t, Runnable r) {
+		final ReentrantLock lock = this.lockPause;
+		lock.lock();
 		try {
 			while (this.paused) {
 				this.conditionNotPaused.await();
 			}
-			this.activeThreads.decrementAndGet();
-			super.afterExecute(r, t);
 		} catch (InterruptedException e) {
 			//this should never happen
 			e.printStackTrace(); //TODO handle
 		} finally {
-			this.lockPause.unlock();
+			lock.unlock();
 		}
+		super.beforeExecute(t, r); //pleonastic
+	}
+	
+	@Override
+	protected void afterExecute(Runnable r, Throwable t) {
+		this.activeThreads.decrementAndGet();
 	}
 
 	/**
@@ -57,44 +62,24 @@ public class PausableFixedThreadPoolExecutor extends ThreadPoolExecutor {
 	 */
 	final void resume() {
 		this.paused = false;
-		this.lockPause.lock();
+		final ReentrantLock lock = this.lockPause;
+		lock.lock();
 		try {
 			this.conditionNotPaused.signalAll();
 		} finally {
-			this.lockPause.unlock();
+			lock.unlock();
 		}
 	}
 	
 	/**
-	 * Checks if this thread pool is idle
-	 * (best effort).
+	 * Checks if this thread pool is idle.
 	 * 
 	 * @return {@code true} iff this thread pool 
 	 *         is idle, i.e., iff the thread pool 
 	 *         is not handling any job and no pending 
-	 *         jobs are in the input queue. Note that, 
-	 *         since observing the state of a thread 
-	 *         pool without introducing races is almost (?)
-	 *         impossible, this method <em>has</em> races.
-	 *         To have a correct result with high probability
-	 *         you should first {@link #pause()} the thread
-	 *         pool, then possibly wait a bit,  
-	 *         and only at this point invoke this method. 
-	 *         
+	 *         jobs are in the input queue.
 	 */
 	final boolean isIdle() {
-		//This method is imperfect in that it may be subject to races. This 
-		//because the assumption that, if the queue is empty and the active
-		//thread count is zero, then the thread pool is idle, is *wrong*. 
-		//For instance it could be the case that the queue is empty, 
-		//the count of the active threads is zero, and then a client thread calls
-		//the execute method: before the execute method puts the job in the queue or 
-		//delivers it to a thread the queue stays empty, the count stays to zero, 
-		//but the thread pool is not idle. It could also be the case that all the 
-		//threads are idle and there is exactly one job in the queue: when a thread  
-		//in the pool extracts the job from the queue, before it invokes beforeExecute,
-		//the queue is empty and the count is zero 
-		//TODO fix if possible the races
-		return getQueue().isEmpty() && this.activeThreads.get() == 0;
+		return this.activeThreads.get() == 0;
 	}
 }

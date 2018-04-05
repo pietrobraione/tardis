@@ -49,7 +49,7 @@ public final class Main {
 		final QueueInputOutputBuffer<JBSEResult> pathConditionBuffer = new QueueInputOutputBuffer<>();
 		final QueueInputOutputBuffer<EvosuiteResult> testCaseBuffer = new QueueInputOutputBuffer<>();
 		
-		//creates and wires the components of the architecture
+		//creates and wires together the components of the architecture
 		final PerformerJBSE performerJBSE = new PerformerJBSE(this.o, testCaseBuffer, pathConditionBuffer);
 		final PerformerEvosuite performerEvosuite = new PerformerEvosuite(this.o, pathConditionBuffer, testCaseBuffer);
 		final TerminationManager terminationManager = new TerminationManager(this.o.getGlobalTimeBudgetDuration(), this.o.getGlobalTimeBudgetUnit(), performerJBSE, performerEvosuite);
@@ -73,6 +73,8 @@ public final class Main {
 		performerJBSE.start();
 		performerEvosuite.start();
 		terminationManager.start();
+		
+		//waits end and prints a final message
 		terminationManager.waitTermination();
 		System.out.println("[MAIN    ] Ending at " + dtf.format(LocalDateTime.now()));
 	}

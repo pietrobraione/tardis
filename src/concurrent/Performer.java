@@ -18,7 +18,8 @@ public abstract class Performer<I,O> {
 	private final Condition conditionNotPaused;
 	private final Condition conditionPaused;
 	private volatile boolean paused;
-	private ArrayList<I> seed;
+	private ArrayList<I> seed;	
+	private ArrayList<I> items;
 
 	public Performer(InputBuffer<I> in, OutputBuffer<O> out, int numOfThreads, int numInputs, long timeoutDuration, TimeUnit timeoutUnit) {
 		this.in = in;
@@ -34,10 +35,13 @@ public abstract class Performer<I,O> {
 					waitIfPaused();
 					waitInputAndSubmitJob();
 				} catch (InterruptedException e) {
-					if (!this.paused) {
-						//it's a quit
+					if (this.paused) {
+						//interrupted by pause(): goes on to waitIfPaused()
+						continue; //pleonastic
+					} else {
+						//interrupted by stop(): exit from the loop 
 						break;
-					} //otherwise goes on to waitIfPaused()
+					} 
 				}
 			}
 			this.threadPool.shutdown();
@@ -47,6 +51,7 @@ public abstract class Performer<I,O> {
 		this.conditionPaused = this.lockPause.newCondition();
 		this.paused = false;
 		this.seed = null;
+		this.items = null;
 	}
 	
 	protected abstract Runnable makeJob(List<I> items);
@@ -75,10 +80,10 @@ public abstract class Performer<I,O> {
 	}
 	
 	/**
-	 * Stops the performer. Should be invoked after {@link #start()}
-	 * and never invoked when the performer is {@link #pause() pause}d.
+	 * Stops the performer. Should be invoked after {@link #start()}.
 	 */
-	protected final void stop() {
+	final void stop() {
+		this.paused = false;
 		this.mainThread.interrupt();
 	}
 	
@@ -108,7 +113,13 @@ public abstract class Performer<I,O> {
 	final void resume() {
 		this.threadPool.resume();
 		this.paused = false;
-		signalResumed();
+		final ReentrantLock lock = this.lockPause;
+		lock.lock();
+		try {
+			this.conditionNotPaused.signalAll();
+		} finally {
+			lock.unlock();
+		}
 	}
 	
 	/**
@@ -132,6 +143,14 @@ public abstract class Performer<I,O> {
 		this.threadPool.execute(job);
 	}
 	
+	/**
+	 * To be invoked by the main thread. Detects whether
+	 * this performer is {@link #pause() paused}, and in 
+	 * the positive case waits until it is {@link #resume() resumed}.
+	 *
+	 * @throws InterruptedException if the main thread is
+	 *         interrupted while waiting to be resumed.
+	 */
 	private void waitIfPaused() throws InterruptedException {
 		final ReentrantLock lock = this.lockPause;
 		lock.lock();
@@ -145,8 +164,16 @@ public abstract class Performer<I,O> {
 		}
 	}
 	
-	private ArrayList<I> items;
-	
+	/**
+	 * To be invoked by the main thread. Waits for an input
+	 * item in the input queue up to a timeout, accumulates 
+	 * the read input items, and when they are enough (or
+	 * upon timeout) creates a job for processing them and 
+	 * submits the job to the thread pool.
+	 * 
+	 * @throws InterruptedException if the main thread is
+	 *         interrupted while waiting for an input.
+	 */
 	private void waitInputAndSubmitJob() throws InterruptedException {
 		if (this.items == null) {
 			this.items = new ArrayList<>();
@@ -159,16 +186,6 @@ public abstract class Performer<I,O> {
 			final Runnable job = makeJob(this.items);
 			this.threadPool.execute(job);
 			this.items = null;
-		}
-	}
-
-	private void signalResumed() {
-		final ReentrantLock lock = this.lockPause;
-		lock.lock();
-		try {
-			this.conditionNotPaused.signalAll();
-		} finally {
-			lock.unlock();
 		}
 	}
 }
