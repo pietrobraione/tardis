@@ -99,7 +99,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 				items.stream().collect(Collectors.groupingBy(r -> r.getTargetClassName() + ":" + r.getTargetMethodDescriptor() + ":" + r.getTargetMethodName()));
 
 		//launches an EvoSuite process for each sublist
-		final ArrayList<Thread> threadsEvosuiteEnd = new ArrayList<>();
+		final ArrayList<Thread> threads = new ArrayList<>();
 		int testCountStart = testCountInitial;
 		for (List<JBSEResult> subItems : splitItems.values()) {
 			final int testCount = testCountStart; //copy into final variable to keep compiler happy
@@ -126,6 +126,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 			final TestDetector tdJBSE = new TestDetector(testCount, subItems, evosuiteLogFilePath);
 			final Thread tJBSE = new Thread(tdJBSE);
 			tJBSE.start();
+			threads.add(tJBSE);
 			
 			//launches another thread that waits for EvoSuite to end
 			//and then alerts the previous thread
@@ -140,14 +141,15 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 				tdJBSE.ended = true;
 			});
 			tEvosuiteEnd.start();
-			threadsEvosuiteEnd.add(tEvosuiteEnd);
+			threads.add(tEvosuiteEnd);
 		}
 		
-		//waits for all the Evosuite processes to end (if it didn't the performer
-		//would consider the job over and would incorrectly detect whether it is idle)
-		for (Thread tEvosuiteEnd : threadsEvosuiteEnd) {
+		//waits for all the threads to end (if it didn't the performer
+		//would consider the job over and would incorrectly detect whether 
+		//it is idle)
+		for (Thread thread : threads) {
 			try {
-				tEvosuiteEnd.join();
+				thread.join();
 			} catch (InterruptedException e) {
 				//nothing to do
 			}
