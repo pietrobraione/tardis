@@ -97,13 +97,13 @@ public final class Main {
 				for (List<String> targetMethod : targetMethods) {
 					final State s = new State(new Classpath(classpath), ClassFileFactoryJavassist.class, new HashMap<>(), calc);
 					s.pushFrameSymbolic(new Signature(targetMethod.get(0), targetMethod.get(1), targetMethod.get(2)));
-					retVal.add(new JBSEResult(targetMethod.get(0), targetMethod.get(1), targetMethod.get(2), s, s, -1));
+					retVal.add(new JBSEResult(targetMethod.get(0), targetMethod.get(1), targetMethod.get(2), s, s, s, -1));
 				}
 			} else {
 				//this.o indicates a single target method
 				final State s = new State(new Classpath(classpath), ClassFileFactoryJavassist.class, new HashMap<>(), calc);
 				s.pushFrameSymbolic(new Signature(this.o.getTargetMethod().get(0), this.o.getTargetMethod().get(1), this.o.getTargetMethod().get(2)));
-				retVal.add(new JBSEResult(this.o.getTargetMethod().get(0), this.o.getTargetMethod().get(1), this.o.getTargetMethod().get(2), s, s, -1));
+				retVal.add(new JBSEResult(this.o.getTargetMethod().get(0), this.o.getTargetMethod().get(1), this.o.getTargetMethod().get(2), s, s, s, -1));
 			}
 			return retVal;
 		} catch (BadClassFileException | ClassNotFoundException | MethodNotFoundException | MethodCodeNotFoundException e) {

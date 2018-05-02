@@ -88,12 +88,13 @@ public class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 		for (int currentDepth = startDepth; currentDepth < Math.min(this.maxDepth, tcFinalDepth - 1); currentDepth++) {
 			final List<State> newStates = rp.runProgram(currentDepth);
 			final State initialState = rp.getInitialState();
+			final State preState = rp.getPreState();
 			for (State newState : newStates) {
 				final Collection<Clause> currentPC = newState.getPathCondition();
 				if (alreadyExplored(currentPC, tcFinalPC)) {
 					continue;
 				}
-				this.getOutputBuffer().add(new JBSEResult(item, initialState, newState, currentDepth));
+				this.getOutputBuffer().add(new JBSEResult(item, initialState, preState, newState, currentDepth));
 				System.out.println("[JBSE    ] From test case " + tc.getClassName() + " generated path condition " + currentPC);
 				noPathConditionGenerated = false;
 			}

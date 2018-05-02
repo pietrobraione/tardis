@@ -417,7 +417,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 			final String testCaseScaff = PerformerEvosuite.this.outPath + "/" + testCaseClassName + "_scaffolding.java";
 			final String testCase = PerformerEvosuite.this.outPath + "/" + testCaseClassName + ".java";
 			if (!new File(testCase).exists() || !new File(testCaseScaff).exists()) {
-				System.out.println("Failed to generate the test case " + testCaseClassName + " for PC: " + finalState.getPathCondition() + ": the generated files do not seem to exist");
+				System.out.println("[EVOSUITE] Failed to generate the test case " + testCaseClassName + " for PC: " + finalState.getPathCondition() + ": the generated files do not seem to exist");
 				return;
 			}
 			

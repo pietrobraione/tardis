@@ -93,10 +93,16 @@ public class RunnerPath {
 		private final DecisionProcedureGuidance guid;
 		private int currentDepth = 0;
 		private final ArrayList<State> stateList = new ArrayList<State>();
+		private boolean savePreState = false;
+		private State preState = null;
 		
 		public ActionsRunner(int testDepth, DecisionProcedureGuidance guid) {
 			this.testDepth = testDepth;
 			this.guid = guid;
+		}
+		
+		public State getPreState() {
+			return this.preState;
 		}
 		
 		public ArrayList<State> getStateList() {
@@ -107,8 +113,17 @@ public class RunnerPath {
 		public boolean atRoot() {
 			if (this.testDepth == 0) {
 				this.guid.endGuidance();
+				this.savePreState = true;
 			}
 			return super.atRoot();
+		}
+		
+		@Override
+		public boolean atStepPre() {
+			if (this.savePreState) {
+				this.preState = getEngine().getCurrentState();
+			}
+			return super.atStepPre();
 		}
 
 		@Override
@@ -116,9 +131,11 @@ public class RunnerPath {
 			this.currentDepth++;				
 			if (this.currentDepth == this.testDepth) {
 				this.guid.endGuidance();
+				this.savePreState = true;
 			} else if (this.currentDepth == this.testDepth + 1) {
-				this.stateList.add(this.getEngine().getCurrentState().clone());
-				this.getEngine().stopCurrentTrace();
+				this.stateList.add(getEngine().getCurrentState().clone());
+				getEngine().stopCurrentTrace();
+				this.savePreState = false;
 			}
 
 			return super.atBranch(bp);
@@ -126,8 +143,8 @@ public class RunnerPath {
 
 		@Override
 		public boolean atBacktrackPost(BranchPoint bp) {
-			this.stateList.add(this.getEngine().getCurrentState().clone());
-			this.getEngine().stopCurrentTrace();
+			this.stateList.add(getEngine().getCurrentState().clone());
+			getEngine().stopCurrentTrace();
 
 			return super.atBacktrackPost(bp);
 		}
@@ -143,6 +160,7 @@ public class RunnerPath {
 	}
 
 	private State initialState = null;
+	private State preState = null;
 	
 	/**
 	 * Performs symbolic execution of the target method guided by a test case,
@@ -250,6 +268,7 @@ public class RunnerPath {
 
 		//outputs
 		this.initialState = rb.getEngine().getInitialState();
+		this.preState = actions.getPreState();
 		return actions.getStateList();
 	}
 	
@@ -281,10 +300,9 @@ public class RunnerPath {
 		}
 		return v.methodCallCounter;
 	}
-
 	
 	/**
-	 * Must be invoked after an invocation of {@link #runProgram(TestCase, int)}.
+	 * Must be invoked after an invocation of {@link #runProgram(TestCase, int) runProgram(tc, depth)}.
 	 * Returns the initial state of symbolic execution.
 	 * 
 	 * @return a {@link State} or {@code null} if this method is invoked
@@ -292,5 +310,16 @@ public class RunnerPath {
 	 */
 	public State getInitialState() {
 		return this.initialState;
+	}
+	
+	/**
+	 * Must be invoked after an invocation of {@link #runProgram(TestCase, int) runProgram(tc, depth)}.
+	 * Returns the state of symbolic execution at depth {@code depth}.
+	 * 
+	 * @return a {@link State} or {@code null} if this method is invoked
+	 *         before an invocation of {@link #runProgram(TestCase, int)}.
+	 */
+	public State getPreState() {
+		return this.preState;
 	}
 }
