@@ -121,7 +121,7 @@ public class RunnerPath {
 		@Override
 		public boolean atStepPre() {
 			if (this.savePreState) {
-				this.preState = getEngine().getCurrentState();
+				this.preState = getEngine().getCurrentState().clone();
 			}
 			return super.atStepPre();
 		}
