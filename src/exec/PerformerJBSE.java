@@ -25,11 +25,13 @@ import jbse.mem.exc.ThreadStackEmptyException;
 public class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 	private final Options o;
 	private final int maxDepth;
+	private final CoverageSet coverageSet;
 
-	public PerformerJBSE(Options o, InputBuffer<EvosuiteResult> in, OutputBuffer<JBSEResult> out) {
+	public PerformerJBSE(Options o, InputBuffer<EvosuiteResult> in, OutputBuffer<JBSEResult> out, CoverageSet coverageSet) {
 		super(in, out, o.getNumOfThreads(), 1, o.getGlobalTimeBudgetDuration(), o.getGlobalTimeBudgetUnit());
 		this.o = o.clone();
 		this.maxDepth = o.getMaxDepth();
+		this.coverageSet = coverageSet;
 	}
 	
 	@Override
@@ -86,18 +88,25 @@ public class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 		final int tcFinalDepth = tcFinalState.getDepth();
 		boolean noPathConditionGenerated = true;
 		for (int currentDepth = startDepth; currentDepth < Math.min(this.maxDepth, tcFinalDepth - 1); currentDepth++) {
+			//runs the program
 			final List<State> newStates = rp.runProgram(currentDepth);
+			
+			//creates all the output jobs
 			final State initialState = rp.getInitialState();
 			final State preState = rp.getPreState();
+			final boolean atJump = rp.getAtJump();
 			for (State newState : newStates) {
 				final Collection<Clause> currentPC = newState.getPathCondition();
 				if (alreadyExplored(currentPC, tcFinalPC)) {
 					continue;
 				}
-				this.getOutputBuffer().add(new JBSEResult(item, initialState, preState, newState, currentDepth));
+				this.getOutputBuffer().add(new JBSEResult(item, initialState, preState, newState, atJump, currentDepth));
 				System.out.println("[JBSE    ] From test case " + tc.getClassName() + " generated path condition " + currentPC);
 				noPathConditionGenerated = false;
 			}
+			
+			//saves the coverage
+			this.coverageSet.addAll(rp.getCoverage());
 		}
 		if (noPathConditionGenerated) {
 			System.out.println("[JBSE    ] From test case " + tc.getClassName() + " no path condition generated");

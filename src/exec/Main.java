@@ -45,12 +45,15 @@ public final class Main {
 			createDirectory(o.getTmpBinTestsDirectoryPath());
 		}
 		
+		//creates the coverage data structure
+		final CoverageSet coverageSet = new CoverageSet();
+		
 		//creates the communication queues between the performers
 		final QueueInputOutputBuffer<JBSEResult> pathConditionBuffer = new QueueInputOutputBuffer<>();
 		final QueueInputOutputBuffer<EvosuiteResult> testCaseBuffer = new QueueInputOutputBuffer<>();
 		
 		//creates and wires together the components of the architecture
-		final PerformerJBSE performerJBSE = new PerformerJBSE(this.o, testCaseBuffer, pathConditionBuffer);
+		final PerformerJBSE performerJBSE = new PerformerJBSE(this.o, testCaseBuffer, pathConditionBuffer, coverageSet);
 		final PerformerEvosuite performerEvosuite = new PerformerEvosuite(this.o, pathConditionBuffer, testCaseBuffer);
 		final TerminationManager terminationManager = new TerminationManager(this.o.getGlobalTimeBudgetDuration(), this.o.getGlobalTimeBudgetUnit(), performerJBSE, performerEvosuite);
 		
@@ -97,13 +100,13 @@ public final class Main {
 				for (List<String> targetMethod : targetMethods) {
 					final State s = new State(new Classpath(classpath), ClassFileFactoryJavassist.class, new HashMap<>(), calc);
 					s.pushFrameSymbolic(new Signature(targetMethod.get(0), targetMethod.get(1), targetMethod.get(2)));
-					retVal.add(new JBSEResult(targetMethod.get(0), targetMethod.get(1), targetMethod.get(2), s, s, s, -1));
+					retVal.add(new JBSEResult(targetMethod.get(0), targetMethod.get(1), targetMethod.get(2), s, s, s, false, -1));
 				}
 			} else {
 				//this.o indicates a single target method
 				final State s = new State(new Classpath(classpath), ClassFileFactoryJavassist.class, new HashMap<>(), calc);
 				s.pushFrameSymbolic(new Signature(this.o.getTargetMethod().get(0), this.o.getTargetMethod().get(1), this.o.getTargetMethod().get(2)));
-				retVal.add(new JBSEResult(this.o.getTargetMethod().get(0), this.o.getTargetMethod().get(1), this.o.getTargetMethod().get(2), s, s, s, -1));
+				retVal.add(new JBSEResult(this.o.getTargetMethod().get(0), this.o.getTargetMethod().get(1), this.o.getTargetMethod().get(2), s, s, s, false, -1));
 			}
 			return retVal;
 		} catch (BadClassFileException | ClassNotFoundException | MethodNotFoundException | MethodCodeNotFoundException e) {

@@ -1,8 +1,11 @@
 package exec;
 
+import static exec.Util.atJump;
+
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 
@@ -95,18 +98,29 @@ public class RunnerPath {
 		private final ArrayList<State> stateList = new ArrayList<State>();
 		private boolean savePreState = false;
 		private State preState = null;
+		private boolean atJump = false;
+		private int jumpPC = 0;
+		private final HashSet<String> coverage = new HashSet<>();
 		
 		public ActionsRunner(int testDepth, DecisionProcedureGuidance guid) {
 			this.testDepth = testDepth;
 			this.guid = guid;
 		}
 		
+		public ArrayList<State> getStateList() {
+			return this.stateList;
+		}
+		
 		public State getPreState() {
 			return this.preState;
 		}
 		
-		public ArrayList<State> getStateList() {
-			return this.stateList;
+		public boolean getAtJump() {
+			return this.atJump;
+		}
+		
+		public HashSet<String> getCoverage() {
+			return this.coverage;
 		}
 		
 		@Override
@@ -120,12 +134,36 @@ public class RunnerPath {
 		
 		@Override
 		public boolean atStepPre() {
+			final State currentState = getEngine().getCurrentState();
+			try {
+				this.atJump = atJump(currentState.getInstruction());
+				if (this.atJump) {
+					this.jumpPC = currentState.getPC();
+				}
+			} catch (ThreadStackEmptyException e) {
+				//this should never happen
+				throw new RuntimeException(e); //TODO better exception!
+			}
 			if (this.savePreState) {
-				this.preState = getEngine().getCurrentState().clone();
+				this.preState = currentState.clone();
 			}
 			return super.atStepPre();
 		}
-
+		
+		@Override
+		public boolean atStepPost() {
+			if (this.atJump) {
+				final State currentState = getEngine().getCurrentState();
+				try {
+					this.coverage.add(currentState.getCurrentMethodSignature().toString() + ":" + this.jumpPC + ":" + currentState.getPC());
+				} catch (ThreadStackEmptyException e) {
+					//this should never happen
+					throw new RuntimeException(e); //TODO better exception!
+				}
+			}
+			return super.atStepPost();
+		}
+		
 		@Override
 		public boolean atBranch(BranchPoint bp) {
 			this.currentDepth++;				
@@ -133,6 +171,8 @@ public class RunnerPath {
 				this.guid.endGuidance();
 				this.savePreState = true;
 			} else if (this.currentDepth == this.testDepth + 1) {
+				//we are at the post-frontier state: here preState
+				//contains the pre-frontier state
 				this.stateList.add(getEngine().getCurrentState().clone());
 				getEngine().stopCurrentTrace();
 				this.savePreState = false;
@@ -143,8 +183,17 @@ public class RunnerPath {
 
 		@Override
 		public boolean atBacktrackPost(BranchPoint bp) {
-			this.stateList.add(getEngine().getCurrentState().clone());
+			final State currentState = getEngine().getCurrentState();
+			this.stateList.add(currentState.clone());
 			getEngine().stopCurrentTrace();
+			if (this.atJump) {
+				try {
+					this.coverage.add(currentState.getCurrentMethodSignature().toString() + ":" + this.jumpPC + ":" + currentState.getPC());
+				} catch (ThreadStackEmptyException e) {
+					//this should never happen
+					throw new RuntimeException(e); //TODO better exception!
+				}
+			}
 
 			return super.atBacktrackPost(bp);
 		}
@@ -159,8 +208,12 @@ public class RunnerPath {
 		}
 	}
 
+	//replicas of info stored in ActionsRunner
+	
 	private State initialState = null;
 	private State preState = null;
+	private boolean atJump = false;
+	private HashSet<String> coverage = null;
 	
 	/**
 	 * Performs symbolic execution of the target method guided by a test case,
@@ -188,7 +241,7 @@ public class RunnerPath {
 			ClasspathException, CannotBacktrackException, CannotManageStateException, 
 			ThreadStackEmptyException, ContradictionException, EngineStuckException, 
 			FailureException {
-		return runProgram(-1).get(0);
+		return runProgram(-1).get(0); //depth -1 == never stop guidance
 	}
 	
 	/**
@@ -269,6 +322,8 @@ public class RunnerPath {
 		//outputs
 		this.initialState = rb.getEngine().getInitialState();
 		this.preState = actions.getPreState();
+		this.atJump = actions.getAtJump();
+		this.coverage = actions.getCoverage();
 		return actions.getStateList();
 	}
 	
@@ -321,5 +376,29 @@ public class RunnerPath {
 	 */
 	public State getPreState() {
 		return this.preState;
+	}
+	
+	/**
+	 * Must be invoked after an invocation of {@link #runProgram(TestCase, int) runProgram(tc, depth)}.
+	 * Returns whether the frontier is at a jump bytecode.
+	 * 
+	 * @return a {@code boolean}. If this method is invoked
+	 *         before an invocation of {@link #runProgram(TestCase, int)}
+	 *         always returns {@code false}.
+	 */
+	public boolean getAtJump() {
+		return this.atJump;
+	}
+	
+	/**
+	 * Must be invoked after an invocation of {@link #runProgram(TestCase, int) runProgram(tc, depth)}.
+	 * Returns the code branches covered by the execution.
+	 * 
+	 * @return a {@link HashSet}{@code <}{@link String}{@code >} where each {@link String} has the form
+	 *         className:methodDescriptor:methodName:bytecodeFrom:bytecodeTo, or {@code null} if this method is invoked
+	 *         before an invocation of {@link #runProgram(TestCase, int)}.
+	 */
+	public HashSet<String> getCoverage() {
+		return this.coverage;
 	}
 }
