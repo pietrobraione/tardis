@@ -14,4 +14,7 @@ final class CoverageSet {
 		return this.coverage.contains(branch);
 	}
 
+	public synchronized int size() {
+		return this.coverage.size();
+	}
 }

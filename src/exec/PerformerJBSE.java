@@ -108,6 +108,7 @@ public class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 			//saves the coverage
 			this.coverageSet.addAll(rp.getCoverage());
 		}
+		System.out.println("[JBSE    ] Current coverage: " + this.coverageSet.size() + " branches");
 		if (noPathConditionGenerated) {
 			System.out.println("[JBSE    ] From test case " + tc.getClassName() + " no path condition generated");
 		}
