@@ -84,7 +84,9 @@ public class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 		final RunnerPath rp = new RunnerPath(this.o, item);
 		final State tcFinalState = rp.runProgram();
 		final Collection<Clause> tcFinalPC = tcFinalState.getPathCondition();
+		this.coverageSet.addAll(rp.getCoverage());
 		System.out.println("[JBSE    ] Run test case " + tc.getClassName() + ", path condition " + tcFinalPC.toString());
+		System.out.println("[JBSE    ] Current coverage: " + this.coverageSet.size() + " branches");
 		final int tcFinalDepth = tcFinalState.getDepth();
 		boolean noPathConditionGenerated = true;
 		for (int currentDepth = startDepth; currentDepth < Math.min(this.maxDepth, tcFinalDepth - 1); currentDepth++) {
@@ -104,11 +106,7 @@ public class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 				System.out.println("[JBSE    ] From test case " + tc.getClassName() + " generated path condition " + currentPC);
 				noPathConditionGenerated = false;
 			}
-			
-			//saves the coverage
-			this.coverageSet.addAll(rp.getCoverage());
 		}
-		System.out.println("[JBSE    ] Current coverage: " + this.coverageSet.size() + " branches");
 		if (noPathConditionGenerated) {
 			System.out.println("[JBSE    ] From test case " + tc.getClassName() + " no path condition generated");
 		}
