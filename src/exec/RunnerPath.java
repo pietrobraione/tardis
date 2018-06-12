@@ -324,6 +324,10 @@ public class RunnerPath {
 		this.preState = actions.getPreState();
 		this.atJump = actions.getAtJump();
 		this.coverage = actions.getCoverage();
+		
+		//finalizes
+		rb.getEngine().close();
+
 		return actions.getStateList();
 	}
 	
