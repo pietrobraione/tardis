@@ -85,6 +85,7 @@ public abstract class Performer<I,O> {
 	final void stop() {
 		this.paused = false;
 		this.mainThread.interrupt();
+		this.threadPool.shutdownNow();
 	}
 	
 	/**

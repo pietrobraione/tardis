@@ -22,7 +22,7 @@ import jbse.mem.State;
 import jbse.mem.exc.ContradictionException;
 import jbse.mem.exc.ThreadStackEmptyException;
 
-public class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
+public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 	private final Options o;
 	private final int maxDepth;
 	private final CoverageSet coverageSet;
@@ -35,7 +35,7 @@ public class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 	}
 	
 	@Override
-	protected Runnable makeJob(List<EvosuiteResult> items) {
+	protected final Runnable makeJob(List<EvosuiteResult> items) {
 		final EvosuiteResult item = items.get(0);
 		final Runnable job = () -> {
 			try {
@@ -50,7 +50,7 @@ public class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 		};
 		return job;
 	}
-
+	
 	/**
 	 * Executes a test case and generates tests for all the alternative branches
 	 * starting from some depth up to some maximum depth.
@@ -93,6 +93,11 @@ public class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 			//runs the program
 			final List<State> newStates = rp.runProgram(currentDepth);
 			
+			//checks shutdown of the performer
+			if (Thread.interrupted()) {
+				return;
+			}
+			
 			//creates all the output jobs
 			final State initialState = rp.getInitialState();
 			final State preState = rp.getPreState();
@@ -120,8 +125,6 @@ public class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 		} else {
 			return false;
 		}
-	}
-
-	
+	}	
 }
 

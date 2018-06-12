@@ -77,7 +77,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 		final Runnable job = () -> generateTestsAndScheduleJBSE(testCountInitial, items);
 		return job;
 	}
-
+	
 	/**
 	 * Invokes EvoSuite to generate a set of {@link TestCase}s that cover a 
 	 * set of path condition, and then explores the generated test cases 
@@ -134,9 +134,8 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 				try {
 					processEvosuite.waitFor();
 				} catch (InterruptedException e) {
-					//this should never happen
-					System.out.println("[EVOSUITE] Unexpected interruption of EvoSuite thread: " + e);
-					//TODO throw an exception?
+					//the performer was shut down: kill the EvoSuite job
+					processEvosuite.destroy();
 				}
 				tdJBSE.ended = true;
 			});
@@ -147,11 +146,17 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 		//waits for all the threads to end (if it didn't the performer
 		//would consider the job over and would incorrectly detect whether 
 		//it is idle)
+		boolean interrupted = false;
 		for (Thread thread : threads) {
 			try {
-				thread.join();
+				if (interrupted) {
+					thread.interrupt();
+				} else {
+					thread.join();
+				}
 			} catch (InterruptedException e) {
-				//nothing to do
+				interrupted = true;
+				thread.interrupt();
 			}
 		}
 	}
@@ -302,7 +307,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 	 * 
 	 * @author Pietro Braione
 	 */
-	private class TestDetector implements Runnable {
+	private final class TestDetector implements Runnable {
 		private final int testCountInitial;
 		private final List<JBSEResult> items;
 		private final Path evosuiteLogFilePath;
@@ -362,8 +367,8 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 					}
 				}
 			} catch (InterruptedException e) {
-				System.out.println("[EVOSUITE] Unexpected interruption of EvoSuite thread: " + e);
-				//TODO throw an exception?
+				//the performer was shut down:
+				//just fall through
 			} catch (IOException e) {
 				System.out.println("[EVOSUITE] Unexpected I/O error while reading EvoSuite log file " + this.evosuiteLogFilePath.toString() + ": " + e);
 				//TODO throw an exception?
