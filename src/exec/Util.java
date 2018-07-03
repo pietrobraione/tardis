@@ -1,8 +1,18 @@
 package exec;
 
+import java.util.Collection;
+import java.util.stream.Collectors;
+
 import jbse.bc.Opcodes;
+import jbse.mem.Clause;
+import jbse.mem.ClauseAssumeClassInitialized;
+import jbse.mem.ClauseAssumeClassNotInitialized;
 
 class Util {
+	static Collection<Clause> shorten(Collection<Clause> pc) {
+		return pc.stream().filter(x -> !(x instanceof ClauseAssumeClassInitialized || x instanceof ClauseAssumeClassNotInitialized)).collect(Collectors.toList());
+	}
+	
 	static boolean bytecodeJump(byte currentBytecode) {
 		return (currentBytecode == Opcodes.OP_IF_ACMPEQ ||
 				currentBytecode == Opcodes.OP_IF_ACMPNE ||	

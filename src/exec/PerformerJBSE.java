@@ -1,5 +1,7 @@
 package exec;
 
+import static exec.Util.shorten;
+
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
@@ -85,7 +87,7 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 		final Collection<Clause> tcFinalPC = tcFinalState.getPathCondition();
 		this.coverageSet.addAll(rp.getCoverage());
 		final TestCase tc = item.getTestCase();
-		System.out.println("[JBSE    ] Run test case " + tc.getClassName() + ", path condition " + tcFinalPC.toString());
+		System.out.println("[JBSE    ] Run test case " + tc.getClassName() + ", path condition " + shorten(tcFinalPC).toString());
 		System.out.println("[JBSE    ] Current coverage: " + this.coverageSet.size() + " branches");
 		final int tcFinalDepth = tcFinalState.getDepth();
 		boolean noPathConditionGenerated = true;
@@ -108,7 +110,7 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 					continue;
 				}
 				this.getOutputBuffer().add(new JBSEResult(item, initialState, preState, newState, atJump, currentDepth));
-				System.out.println("[JBSE    ] From test case " + tc.getClassName() + " generated path condition " + currentPC);
+				System.out.println("[JBSE    ] From test case " + tc.getClassName() + " generated path condition " + shorten(currentPC).toString());
 				noPathConditionGenerated = false;
 			}
 		}

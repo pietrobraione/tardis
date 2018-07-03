@@ -1,5 +1,7 @@
 package exec;
 
+import static exec.Util.shorten;
+
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.MalformedURLException;
@@ -379,7 +381,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 			int testCount = this.testCountInitial;
 			for (JBSEResult item : this.items) {
 				if (!generated.contains(testCount)) {
-					System.out.println("[EVOSUITE] Failed to generate a test case for PC: " + item.getFinalState().getPathCondition() + ", log file: " + this.evosuiteLogFilePath.toString() + ", wrapper: EvoSuiteWrapper_" + testCount);
+					System.out.println("[EVOSUITE] Failed to generate a test case for path condition: " + shorten(item.getFinalState().getPathCondition()).toString() + ", log file: " + this.evosuiteLogFilePath.toString() + ", wrapper: EvoSuiteWrapper_" + testCount);
 				}
 				++testCount;
 			}
@@ -422,7 +424,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 			final String testCaseScaff = PerformerEvosuite.this.outPath + "/" + testCaseClassName + "_scaffolding.java";
 			final String testCase = PerformerEvosuite.this.outPath + "/" + testCaseClassName + ".java";
 			if (!new File(testCase).exists() || !new File(testCaseScaff).exists()) {
-				System.out.println("[EVOSUITE] Failed to generate the test case " + testCaseClassName + " for PC: " + finalState.getPathCondition() + ": the generated files do not seem to exist");
+				System.out.println("[EVOSUITE] Failed to generate the test case " + testCaseClassName + " for path condition: " + shorten(finalState.getPathCondition()).toString() + ": the generated files do not seem to exist");
 				return;
 			}
 			
@@ -442,12 +444,12 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 			//creates the TestCase and schedules it for further exploration
 			try {
 				checkTestExists(testCaseClassName);
-				System.out.println("[EVOSUITE] Generated test case " + testCaseClassName + ", depth: " + depth + ", path condition: " + finalState.getPathCondition());
+				System.out.println("[EVOSUITE] Generated test case " + testCaseClassName + ", depth: " + depth + ", path condition: " + shorten(finalState.getPathCondition()).toString());
 				final TestCase newTC = new TestCase(testCaseClassName, "()V", "test0");
 				PerformerEvosuite.this.getOutputBuffer().add(new EvosuiteResult(item, newTC, depth + 1));
 			} catch (NoSuchMethodException e) { 
 				//EvoSuite failed to generate the test case, thus we just ignore it 
-				System.out.println("[EVOSUITE] Failed to generate the test case " + testCaseClassName + " for PC: " + finalState.getPathCondition() + ": the generated file does not contain a test method");
+				System.out.println("[EVOSUITE] Failed to generate the test case " + testCaseClassName + " for path condition: " + shorten(finalState.getPathCondition()).toString() + ": the generated file does not contain a test method");
 			}
 		}
 	}
