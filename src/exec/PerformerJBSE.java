@@ -80,11 +80,11 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 			return;
 		}
 		//runs the test case up to the final state, and takes the final state's path condition
-		final TestCase tc = item.getTestCase();
 		final RunnerPath rp = new RunnerPath(this.o, item);
 		final State tcFinalState = rp.runProgram();
 		final Collection<Clause> tcFinalPC = tcFinalState.getPathCondition();
 		this.coverageSet.addAll(rp.getCoverage());
+		final TestCase tc = item.getTestCase();
 		System.out.println("[JBSE    ] Run test case " + tc.getClassName() + ", path condition " + tcFinalPC.toString());
 		System.out.println("[JBSE    ] Current coverage: " + this.coverageSet.size() + " branches");
 		final int tcFinalDepth = tcFinalState.getDepth();
