@@ -79,11 +79,6 @@ public class Options implements Cloneable {
 			handler = PathOptionHandler.class)
 	private Path jbsePath = Paths.get(".", "lib", "jbse.jar");
 
-	@Option(name = "-jbse_jre",
-			usage = "Path to JRE library suitable for JBSE analysis",
-			handler = PathOptionHandler.class)
-	private Path jrePath = Paths.get(".", "data", "jre", "rt.jar");
-	
 	@Option(name = "-evosuite",
 			usage = "Path to Evosuite or MOSA",
 			handler = PathOptionHandler.class)
@@ -261,14 +256,6 @@ public class Options implements Cloneable {
 
 	public void setJBSELibraryPath(Path jbsePath) {
 		this.jbsePath = jbsePath;
-	}
-	
-	public Path getJREPath() {
-		return this.jrePath;
-	}
-
-	public void setJREPath(Path jrePath) {
-		this.jrePath = jrePath;
 	}
 	
 	public Path getEvosuitePath() {

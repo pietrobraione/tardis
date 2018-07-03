@@ -3,7 +3,7 @@ package exec;
 import jbse.bc.Opcodes;
 
 class Util {
-	static boolean atJump(byte currentBytecode) {
+	static boolean bytecodeJump(byte currentBytecode) {
 		return (currentBytecode == Opcodes.OP_IF_ACMPEQ ||
 				currentBytecode == Opcodes.OP_IF_ACMPNE ||	
 				currentBytecode == Opcodes.OP_IFNONNULL ||	
@@ -23,5 +23,39 @@ class Util {
 				currentBytecode == Opcodes.OP_LOOKUPSWITCH ||	
 				currentBytecode == Opcodes.OP_TABLESWITCH);
 
+	}
+	
+	static boolean bytecodeBranch(byte currentBytecode) {
+		return (bytecodeJump(currentBytecode) ||
+				currentBytecode == Opcodes.OP_ALOAD ||
+				currentBytecode == Opcodes.OP_ALOAD_0 ||
+				currentBytecode == Opcodes.OP_ALOAD_1 ||
+				currentBytecode == Opcodes.OP_ALOAD_2 ||
+				currentBytecode == Opcodes.OP_ALOAD_3 ||
+				currentBytecode == Opcodes.OP_IALOAD ||
+				currentBytecode == Opcodes.OP_LALOAD ||
+				currentBytecode == Opcodes.OP_FALOAD ||
+				currentBytecode == Opcodes.OP_DALOAD ||
+				currentBytecode == Opcodes.OP_AALOAD ||
+				currentBytecode == Opcodes.OP_BALOAD ||
+				currentBytecode == Opcodes.OP_CALOAD ||
+				currentBytecode == Opcodes.OP_SALOAD ||
+				currentBytecode == Opcodes.OP_IASTORE ||
+				currentBytecode == Opcodes.OP_LASTORE ||
+				currentBytecode == Opcodes.OP_FASTORE ||
+				currentBytecode == Opcodes.OP_DASTORE ||
+				currentBytecode == Opcodes.OP_AASTORE ||
+				currentBytecode == Opcodes.OP_BASTORE ||
+				currentBytecode == Opcodes.OP_CASTORE ||
+				currentBytecode == Opcodes.OP_LCMP ||
+				currentBytecode == Opcodes.OP_FCMPL ||
+				currentBytecode == Opcodes.OP_FCMPG ||
+				currentBytecode == Opcodes.OP_DCMPL ||
+				currentBytecode == Opcodes.OP_DCMPG ||
+				currentBytecode == Opcodes.OP_GETSTATIC ||
+				currentBytecode == Opcodes.OP_GETFIELD ||
+				currentBytecode == Opcodes.OP_NEWARRAY ||
+				currentBytecode == Opcodes.OP_ANEWARRAY ||
+				currentBytecode == Opcodes.OP_MULTIANEWARRAY);
 	}
 }

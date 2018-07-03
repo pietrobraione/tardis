@@ -28,7 +28,6 @@ public class RunArray {
 		o.setTmpDirectoryBase(Settings.TMP_BASE_PATH);
 		o.setZ3Path(Settings.Z3_PATH);
 		o.setJBSELibraryPath(Settings.JBSE_PATH);
-		o.setJREPath(Settings.JRE_PATH);
 		o.setClassesPath(Settings.BIN_PATH);
 		o.setOutDirectory(Settings.OUT_PATH);
 		o.setSushiLibPath(Settings.SUSHI_LIB_PATH);

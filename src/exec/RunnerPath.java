@@ -1,6 +1,7 @@
 package exec;
 
-import static exec.Util.atJump;
+import static exec.Util.bytecodeBranch;
+import static exec.Util.bytecodeJump;
 
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -8,6 +9,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ast.expr.MethodCallExpr;
@@ -15,7 +17,6 @@ import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 
 import jbse.algo.exc.CannotManageStateException;
 import jbse.apps.run.DecisionProcedureGuidance;
-import jbse.apps.run.DecisionProcedureGuidanceJDI;
 import jbse.bc.exc.InvalidClassFileFactoryClassException;
 import jbse.common.exc.ClasspathException;
 import jbse.dec.DecisionProcedureAlgorithms;
@@ -57,14 +58,12 @@ public class RunnerPath {
 	private final RunnerParameters commonParamsGuiding;
 		
 	public RunnerPath(Options o, EvosuiteResult item) {
-		this.classpath = new String[o.getClassesPath().size() + 4];
-		this.classpath[0] = o.getJREPath().toString();
-		this.classpath[1] = o.getJBSELibraryPath().toString();
-		this.classpath[2] = o.getEvosuitePath().toString();
-		this.classpath[3] = o.getTmpBinTestsDirectoryPath().toString();
-		for (int i = 4; i < this.classpath.length; ++i) {
-			this.classpath[i] = o.getClassesPath().get(i - 4).toString();
-		}
+		final ArrayList<String> _classpath = new ArrayList<>();
+		_classpath.add(o.getJBSELibraryPath().toString());
+		_classpath.add(o.getEvosuitePath().toString());
+		_classpath.add(o.getTmpBinTestsDirectoryPath().toString());
+		_classpath.addAll(o.getClassesPath().stream().map(Object::toString).collect(Collectors.toList()));
+		this.classpath = _classpath.toArray(new String[0]);
 		this.z3Path = o.getZ3Path().toString();
 		this.outPath = o.getOutDirectory().toString();
 		this.targetMethodName = item.getTargetMethodName();
@@ -73,8 +72,8 @@ public class RunnerPath {
 		//builds the template parameters object for the guided (symbolic) execution
 		this.commonParamsGuided = new RunnerParameters();
 		this.commonParamsGuided.setMethodSignature(item.getTargetClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName());
-		this.commonParamsGuided.addClasspath(this.classpath);
-		this.commonParamsGuided.setBreadthMode(BreadthMode.ALL_DECISIONS_NONTRIVIAL);
+		this.commonParamsGuided.addUserClasspath(this.classpath);
+		//this.commonParamsGuided.setBreadthMode(BreadthMode.ALL_DECISIONS_NONTRIVIAL);
 		if (o.getHeapScope() != null) {
 			for (Map.Entry<String, Integer> e : o.getHeapScope().entrySet()) {
 				this.commonParamsGuided.setHeapScope(e.getKey(), e.getValue());
@@ -86,9 +85,9 @@ public class RunnerPath {
 		
 		//builds the template parameters object for the guiding (concrete) execution
 		this.commonParamsGuiding = new RunnerParameters();
-		this.commonParamsGuiding.addClasspath(this.classpath);
+		this.commonParamsGuiding.addUserClasspath(this.classpath);
 		this.commonParamsGuiding.setStateIdentificationMode(StateIdentificationMode.COMPACT);
-		this.commonParamsGuiding.setBreadthMode(BreadthMode.ALL_DECISIONS);
+		//this.commonParamsGuiding.setBreadthMode(BreadthMode.ALL_DECISIONS);
 	}
 
 	private static class ActionsRunner extends Actions {
@@ -98,6 +97,7 @@ public class RunnerPath {
 		private final ArrayList<State> stateList = new ArrayList<State>();
 		private boolean savePreState = false;
 		private State preState = null;
+		private boolean postInitial = false;
 		private boolean atJump = false;
 		private int jumpPC = 0;
 		private final HashSet<String> coverage = new HashSet<>();
@@ -124,36 +124,39 @@ public class RunnerPath {
 		}
 		
 		@Override
-		public boolean atRoot() {
+		public boolean atInitial() {
+			this.postInitial = true;
 			if (this.testDepth == 0) {
 				this.guid.endGuidance();
 				this.savePreState = true;
 			}
-			return super.atRoot();
+			return super.atInitial();
 		}
 		
 		@Override
 		public boolean atStepPre() {
-			final State currentState = getEngine().getCurrentState();
-			try {
-				this.atJump = atJump(currentState.getInstruction());
-				if (this.atJump) {
-					this.jumpPC = currentState.getPC();
+				if (this.postInitial) {
+					try {
+						final State currentState = getEngine().getCurrentState();
+						this.atJump = bytecodeJump(currentState.getInstruction());
+						if (this.atJump) {
+							this.jumpPC = currentState.getPC();
+						}
+						if (bytecodeBranch(currentState.getInstruction()) && this.savePreState) {
+							this.preState = currentState.clone();
+						}
+					} catch (ThreadStackEmptyException e) {
+						//this should never happen
+						throw new RuntimeException(e); //TODO better exception!
+					}
 				}
-			} catch (ThreadStackEmptyException e) {
-				//this should never happen
-				throw new RuntimeException(e); //TODO better exception!
-			}
-			if (this.savePreState) {
-				this.preState = currentState.clone();
-			}
-			return super.atStepPre();
+				return super.atStepPre();
 		}
 		
 		@Override
 		public boolean atStepPost() {
-			if (this.atJump) {
-				final State currentState = getEngine().getCurrentState();
+			final State currentState = getEngine().getCurrentState();
+			if (this.postInitial && this.atJump) {
 				try {
 					this.coverage.add(currentState.getCurrentMethodSignature().toString() + ":" + this.jumpPC + ":" + currentState.getPC());
 				} catch (ThreadStackEmptyException e) {
@@ -161,26 +164,19 @@ public class RunnerPath {
 					throw new RuntimeException(e); //TODO better exception!
 				}
 			}
-			return super.atStepPost();
-		}
-		
-		@Override
-		public boolean atBranch(BranchPoint bp) {
-			this.currentDepth++;				
-			if (this.currentDepth == this.testDepth) {
+			if (currentState.getDepth() == this.testDepth) {
 				this.guid.endGuidance();
 				this.savePreState = true;
-			} else if (this.currentDepth == this.testDepth + 1) {
+			} else if (currentState.getDepth() == this.testDepth + 1) {
 				//we are at the post-frontier state: here preState
 				//contains the pre-frontier state
-				this.stateList.add(getEngine().getCurrentState().clone());
+				this.stateList.add(currentState.clone());
 				getEngine().stopCurrentTrace();
 				this.savePreState = false;
 			}
-
-			return super.atBranch(bp);
+			return super.atStepPost();
 		}
-
+		
 		@Override
 		public boolean atBacktrackPost(BranchPoint bp) {
 			final State currentState = getEngine().getCurrentState();
@@ -306,7 +302,7 @@ public class RunnerPath {
 		
 		//creates the guidance decision procedure and sets it
 		final int numberOfHits = countNumberOfInvocations(this.testCase.getClassName(), this.targetMethodName);
-		final DecisionProcedureGuidanceJDI guid = new DecisionProcedureGuidanceJDI(pGuided.getDecisionProcedure(),
+		final DecisionProcedureGuidance guid = new DecisionProcedureGuidance(pGuided.getDecisionProcedure(),
 				pGuided.getCalculator(), pGuiding, pGuided.getMethodSignature(), numberOfHits);
 		pGuided.setDecisionProcedure(guid);
 		

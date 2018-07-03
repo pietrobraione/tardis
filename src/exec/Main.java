@@ -3,28 +3,42 @@ package exec;
 import static java.nio.file.Files.createDirectory;
 import static java.nio.file.Files.exists;
 
+import static jbse.bc.ClassLoaders.CLASSLOADER_APP;
+
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.ParserProperties;
 
 import concurrent.TerminationManager;
+import jbse.bc.ClassFile;
 import jbse.bc.ClassFileFactoryJavassist;
 import jbse.bc.Classpath;
 import jbse.bc.Signature;
-import jbse.bc.exc.BadClassFileException;
+import jbse.bc.exc.BadClassFileVersionException;
+import jbse.bc.exc.ClassFileIllFormedException;
+import jbse.bc.exc.ClassFileNotAccessibleException;
+import jbse.bc.exc.ClassFileNotFoundException;
+import jbse.bc.exc.IncompatibleClassFileException;
 import jbse.bc.exc.InvalidClassFileFactoryClassException;
 import jbse.bc.exc.MethodCodeNotFoundException;
 import jbse.bc.exc.MethodNotFoundException;
+import jbse.bc.exc.PleaseLoadClassException;
+import jbse.bc.exc.WrongClassNameException;
+import jbse.common.exc.InvalidInputException;
 import jbse.mem.State;
+import jbse.mem.exc.CannotAssumeSymbolicObjectException;
+import jbse.mem.exc.HeapMemoryExhaustedException;
 import jbse.rewr.CalculatorRewriting;
 import jbse.rewr.RewriterOperationOnSimplex;
 import sushi.util.ClassReflectionUtils;
@@ -85,12 +99,9 @@ public final class Main {
 	private ArrayList<JBSEResult> seedForEvosuite() {
 		//this is the "no initial test case" situation
 		try {
-			final String[] classpath = new String[this.o.getClassesPath().size() + 2];
-			classpath[0] = this.o.getJREPath().toString();
-			classpath[1] = this.o.getJBSELibraryPath().toString();
-			for (int i = 2; i < classpath.length; ++i) {
-				classpath[i] = this.o.getClassesPath().get(i - 2).toString();
-			}
+			final ArrayList<String> classpath = new ArrayList<>();
+			classpath.add(this.o.getJBSELibraryPath().toString());
+			classpath.addAll(this.o.getClassesPath().stream().map(Object::toString).collect(Collectors.toList()));
 			final CalculatorRewriting calc = new CalculatorRewriting();
 			calc.addRewriter(new RewriterOperationOnSimplex());
 			final ArrayList<JBSEResult> retVal = new ArrayList<>();
@@ -98,20 +109,35 @@ public final class Main {
 				//this.o indicates a target class
 				final List<List<String>> targetMethods = ClassReflectionUtils.getVisibleMethods(this.o.getTargetClass(), true);
 				for (List<String> targetMethod : targetMethods) {
-					final State s = new State(new Classpath(classpath), ClassFileFactoryJavassist.class, new HashMap<>(), calc);
-					s.pushFrameSymbolic(new Signature(targetMethod.get(0), targetMethod.get(1), targetMethod.get(2)));
+					final State s = new State(true, 1_000, 100_000, new Classpath(System.getProperty("java.home"), Collections.emptyList(), classpath), ClassFileFactoryJavassist.class, new HashMap<>(), calc);
+					final ClassFile cf = s.getClassHierarchy().loadCreateClass(CLASSLOADER_APP, targetMethod.get(0), true);
+					s.pushFrameSymbolic(cf, new Signature(targetMethod.get(0), targetMethod.get(1), targetMethod.get(2)));
 					retVal.add(new JBSEResult(targetMethod.get(0), targetMethod.get(1), targetMethod.get(2), s, s, s, false, -1));
 				}
 			} else {
 				//this.o indicates a single target method
-				final State s = new State(new Classpath(classpath), ClassFileFactoryJavassist.class, new HashMap<>(), calc);
-				s.pushFrameSymbolic(new Signature(this.o.getTargetMethod().get(0), this.o.getTargetMethod().get(1), this.o.getTargetMethod().get(2)));
+				final State s = new State(true, 1_000, 100_000, new Classpath(System.getProperty("java.home"), Collections.emptyList(), classpath), ClassFileFactoryJavassist.class, new HashMap<>(), calc);
+				final ClassFile cf = s.getClassHierarchy().loadCreateClass(CLASSLOADER_APP, this.o.getTargetMethod().get(0), true);
+				s.pushFrameSymbolic(cf, new Signature(this.o.getTargetMethod().get(0), this.o.getTargetMethod().get(1), this.o.getTargetMethod().get(2)));
 				retVal.add(new JBSEResult(this.o.getTargetMethod().get(0), this.o.getTargetMethod().get(1), this.o.getTargetMethod().get(2), s, s, s, false, -1));
 			}
 			return retVal;
-		} catch (BadClassFileException | ClassNotFoundException | MethodNotFoundException | MethodCodeNotFoundException e) {
-			System.out.println("[MAIN    ] Error: The target class or target method does not exist, or the target method is abstract");
+		} catch (ClassNotFoundException | WrongClassNameException | BadClassFileVersionException | ClassFileNotFoundException | IncompatibleClassFileException | 
+			     ClassFileNotAccessibleException | ClassFileIllFormedException | MethodNotFoundException | MethodCodeNotFoundException e) {
+			System.out.println("[MAIN    ] Error: The target class or target method has wrong name, or version, or does not exist, or has unaccessible hierarchy, or is ill-formed, or the target method is abstract");
 			System.exit(1);
+		} catch (CannotAssumeSymbolicObjectException e) {
+			System.out.println("[MAIN    ] Error: Cannot execute symbolically a method of class java.lang.Class or java.lang.ClassLoader");
+			System.exit(1);
+		} catch (InvalidInputException e) {
+			System.out.println("[MAIN    ] Unexpected internal error: Invalid parameter");
+			System.exit(2);
+		} catch (PleaseLoadClassException e) {
+			System.out.println("[MAIN    ] Unexpected internal error: Class loading failed");
+			System.exit(2);
+		} catch (HeapMemoryExhaustedException e) {
+			System.out.println("[MAIN    ] Unexpected internal error: Heap memory exhausted");
+			System.exit(2);
 		} catch (InvalidClassFileFactoryClassException e) {
 			System.out.println("[MAIN    ] Unexpected internal error: Wrong class file factory");
 			System.exit(2);

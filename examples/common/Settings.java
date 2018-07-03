@@ -18,5 +18,4 @@ public final class Settings {
 	public static final Path BIN_PATH       = WORKSPACE.resolve("bin");
 	public static final Path OUT_PATH       = WORKSPACE.resolve("testCase");
 	public static final Path TMP_BASE_PATH  = WORKSPACE.resolve("tmp");
-	public static final Path JRE_PATH       = JBSE_PATH.resolve("../../data/jre/rt.jar");
 }
