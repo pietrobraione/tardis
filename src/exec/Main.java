@@ -106,6 +106,7 @@ public final class Main {
 				//this.o indicates a single target method
 				final State s = new State(new Classpath(classpath), ClassFileFactoryJavassist.class, new HashMap<>(), calc);
 				s.pushFrameSymbolic(new Signature(this.o.getTargetMethod().get(0), this.o.getTargetMethod().get(1), this.o.getTargetMethod().get(2)));
+				s.setInitialHistoryPoint(true);
 				retVal.add(new JBSEResult(this.o.getTargetMethod().get(0), this.o.getTargetMethod().get(1), this.o.getTargetMethod().get(2), s, s, s, false, -1));
 			}
 			return retVal;
