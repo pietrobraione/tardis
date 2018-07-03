@@ -129,6 +129,7 @@ public final class Main {
 				final State s = new State(true, 1_000, 100_000, new Classpath(System.getProperty("java.home"), Collections.emptyList(), classpath), ClassFileFactoryJavassist.class, new HashMap<>(), calc);
 				final ClassFile cf = s.getClassHierarchy().loadCreateClass(CLASSLOADER_APP, this.o.getTargetMethod().get(0), true);
 				s.pushFrameSymbolic(cf, new Signature(this.o.getTargetMethod().get(0), this.o.getTargetMethod().get(1), this.o.getTargetMethod().get(2)));
+				s.setPreInitialHistoryPoint(true);
 				retVal.add(new JBSEResult(this.o.getTargetMethod().get(0), this.o.getTargetMethod().get(1), this.o.getTargetMethod().get(2), s, s, s, false, -1));
 			}
 			return retVal;
