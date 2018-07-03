@@ -28,7 +28,6 @@ import jbse.dec.exc.DecisionException;
 import jbse.jvm.Runner;
 import jbse.jvm.RunnerBuilder;
 import jbse.jvm.RunnerParameters;
-import jbse.jvm.EngineParameters.BreadthMode;
 import jbse.jvm.EngineParameters.StateIdentificationMode;
 import jbse.jvm.Runner.Actions;
 import jbse.jvm.exc.CannotBacktrackException;
@@ -73,7 +72,6 @@ public class RunnerPath {
 		this.commonParamsGuided = new RunnerParameters();
 		this.commonParamsGuided.setMethodSignature(item.getTargetClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName());
 		this.commonParamsGuided.addUserClasspath(this.classpath);
-		//this.commonParamsGuided.setBreadthMode(BreadthMode.ALL_DECISIONS_NONTRIVIAL);
 		if (o.getHeapScope() != null) {
 			for (Map.Entry<String, Integer> e : o.getHeapScope().entrySet()) {
 				this.commonParamsGuided.setHeapScope(e.getKey(), e.getValue());
@@ -87,13 +85,11 @@ public class RunnerPath {
 		this.commonParamsGuiding = new RunnerParameters();
 		this.commonParamsGuiding.addUserClasspath(this.classpath);
 		this.commonParamsGuiding.setStateIdentificationMode(StateIdentificationMode.COMPACT);
-		//this.commonParamsGuiding.setBreadthMode(BreadthMode.ALL_DECISIONS);
 	}
 
 	private static class ActionsRunner extends Actions {
 		private final int testDepth;
 		private final DecisionProcedureGuidance guid;
-		private int currentDepth = 0;
 		private final ArrayList<State> stateList = new ArrayList<State>();
 		private boolean savePreState = false;
 		private State preState = null;
@@ -135,22 +131,22 @@ public class RunnerPath {
 		
 		@Override
 		public boolean atStepPre() {
-				if (this.postInitial) {
-					try {
-						final State currentState = getEngine().getCurrentState();
-						this.atJump = bytecodeJump(currentState.getInstruction());
-						if (this.atJump) {
-							this.jumpPC = currentState.getPC();
-						}
-						if (bytecodeBranch(currentState.getInstruction()) && this.savePreState) {
-							this.preState = currentState.clone();
-						}
-					} catch (ThreadStackEmptyException e) {
-						//this should never happen
-						throw new RuntimeException(e); //TODO better exception!
+			if (this.postInitial) {
+				try {
+					final State currentState = getEngine().getCurrentState();
+					this.atJump = bytecodeJump(currentState.getInstruction());
+					if (this.atJump) {
+						this.jumpPC = currentState.getPC();
 					}
+					if (bytecodeBranch(currentState.getInstruction()) && this.savePreState) {
+						this.preState = currentState.clone();
+					}
+				} catch (ThreadStackEmptyException e) {
+					//this should never happen
+					throw new RuntimeException(e); //TODO better exception!
 				}
-				return super.atStepPre();
+			}
+			return super.atStepPre();
 		}
 		
 		@Override
