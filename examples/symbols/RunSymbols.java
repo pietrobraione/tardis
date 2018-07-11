@@ -1,7 +1,6 @@
 package symbols;
 
 import java.io.IOException;
-import java.util.LinkedList;
 import java.util.concurrent.TimeUnit;
 
 import common.Settings;
