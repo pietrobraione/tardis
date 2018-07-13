@@ -74,11 +74,6 @@ public class Options implements Cloneable {
 			handler = PathOptionHandler.class)
 	private Path z3Path;
 	
-	@Option(name = "-java8_home",
-			usage = "Path to Java 8 home (default: none, expect Java executables on the system PATH)",
-			handler = PathOptionHandler.class)
-	private Path java8Path;
-	
 	@Option(name = "-jbse_lib",
 			usage = "Path to JBSE library",
 			handler = PathOptionHandler.class)
@@ -253,14 +248,6 @@ public class Options implements Cloneable {
 	
 	public void setZ3Path(Path z3Path) {
 		this.z3Path = z3Path;
-	}
-	
-	public Path getJava8Path() {
-		return this.java8Path;
-	}
-	
-	public void setJava8Path(Path java8Path) {
-		this.java8Path = java8Path;
 	}
 	
 	public Path getJBSELibraryPath() {
