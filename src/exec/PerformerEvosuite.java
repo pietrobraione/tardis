@@ -195,7 +195,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 			final State initialState = item.getInitialState();
 			final State finalState = item.getFinalState();
 			final Path wrapperFilePath = emitEvoSuiteWrapper(i, initialState, finalState);
-			final Path javacLogFilePath = this.tmpPath.resolve("javac-log-" + i + ".txt");
+			final Path javacLogFilePath = this.tmpPath.resolve("javac-log-wrapper-" + i + ".txt");
 			final String[] javacParameters = { "-cp", classpathCompilationWrapper, "-d", this.tmpPath.toString(), wrapperFilePath.toString() };
 			try (final OutputStream w = new BufferedOutputStream(Files.newOutputStream(javacLogFilePath))) {
 				this.compiler.run(null, w, w, javacParameters);

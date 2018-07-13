@@ -159,7 +159,7 @@ public final class Main {
 	private ArrayList<EvosuiteResult> seedForJBSE() {
 		final TestCase tc = new TestCase(this.o);
 		final String classpathCompilationTest = String.join(File.pathSeparator, stream(this.o.getClassesPath()).map(Object::toString).toArray(String[]::new));
-		final Path javacLogFilePath = this.o.getTmpDirectoryPath().resolve("javac-log-test-initial.txt");
+		final Path javacLogFilePath = this.o.getTmpDirectoryPath().resolve("javac-log-test-0.txt");
 		final String[] javacParametersTestCase = { "-cp", classpathCompilationTest, "-d", this.o.getTmpBinTestsDirectoryPath().toString(), tc.getSourcePath().toString() };
 		final JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
 		if (compiler == null) {
