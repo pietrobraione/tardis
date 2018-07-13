@@ -1,5 +1,7 @@
 package symbols;
 
+import static exec.Options.sig;
+
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 
@@ -32,6 +34,7 @@ public class RunSymbols {
 		o.setNumMOSATargets(5);
 		o.setGlobalTimeBudgetDuration(timeBudgetDuration);
 		o.setGlobalTimeBudgetUnit(timeBudgetTimeUnit);
+		o.setUninterpreted(sig("java/util/AbstractCollection", "()Ljava/lang/String;", "toString"));
 	
 		final Main m = new Main(o);
 		m.start();

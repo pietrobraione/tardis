@@ -3,6 +3,7 @@ package exec;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
@@ -18,7 +19,7 @@ import org.kohsuke.args4j.spi.PathOptionHandler;
 
 import sushi.configure.SignatureHandler;
 
-public class Options implements Cloneable {
+public final class Options implements Cloneable {
 	@Option(name = "-help",
 			usage = "Prints usage and exits")
 	private boolean help = false;
@@ -130,6 +131,11 @@ public class Options implements Cloneable {
 			usage = "JBSE count scope, 0 means unlimited")
 	private int countScope = 0;
 
+	@Option(name = "-uninterpreted",
+			usage = "List of signatures of uninterpreted methods",
+			handler = MultiSignatureOptionHandler.class)
+	private List<List<String>> uninterpreted = new ArrayList<>();
+	
 	public boolean getHelp() {
 		return this.help;
 	}
@@ -369,6 +375,19 @@ public class Options implements Cloneable {
 	
 	public int getCountScope() {
 		return this.countScope;
+	}
+	
+	public List<List<String>> getUninterpreted() {
+		return this.uninterpreted;
+	}
+	
+	public static List<String> sig(String className, String descriptor, String name) {
+		return Arrays.asList(className, descriptor, name);
+	}
+	
+	@SafeVarargs
+	public final void setUninterpreted(List<String>... signatures) {
+		this.uninterpreted = Arrays.asList(signatures);
 	}
 	
 	@Override
