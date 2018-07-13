@@ -5,6 +5,7 @@ import static exec.Util.bytecodeJump;
 
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -51,7 +52,6 @@ public class RunnerPath {
 
 	private final String[] classpath;
 	private final String z3Path;
-	private final String outPath;
 	private final String targetMethodName;
 	private final TestCase testCase;
 	private final RunnerParameters commonParamsGuided;
@@ -65,7 +65,6 @@ public class RunnerPath {
 		_classpath.addAll(o.getClassesPath().stream().map(Object::toString).collect(Collectors.toList()));
 		this.classpath = _classpath.toArray(new String[0]);
 		this.z3Path = o.getZ3Path().toString();
-		this.outPath = o.getOutDirectory().toString();
 		this.targetMethodName = item.getTargetMethodName();
 		this.testCase = item.getTestCase();
 		
@@ -298,7 +297,7 @@ public class RunnerPath {
 		pGuiding.setMethodSignature(this.testCase.getClassName(), this.testCase.getMethodDescriptor(), this.testCase.getMethodName());
 		
 		//creates the guidance decision procedure and sets it
-		final int numberOfHits = countNumberOfInvocations(this.testCase.getClassName(), this.targetMethodName);
+		final int numberOfHits = countNumberOfInvocations(this.testCase.getSourcePath(), this.targetMethodName);
 		final DecisionProcedureGuidanceJDI guid = new DecisionProcedureGuidanceJDI(pGuided.getDecisionProcedure(),
 				pGuided.getCalculator(), pGuiding, pGuided.getMethodSignature(), numberOfHits);
 		pGuided.setDecisionProcedure(guid);
@@ -341,11 +340,11 @@ public class RunnerPath {
 		}
 	}
 
-	private int countNumberOfInvocations(String className, String methodName){
+	private int countNumberOfInvocations(Path sourcePath, String methodName){
 		//TODO use the whole signature of the target method to avoid ambiguities (that's quite hard)
 		final CountVisitor v = new CountVisitor(methodName);
 		try {
-			final FileInputStream in = new FileInputStream(this.outPath + "/" + className + ".java");
+			final FileInputStream in = new FileInputStream(sourcePath.toFile());
 			v.visit(JavaParser.parse(in), null);
 		} catch (FileNotFoundException e) {
 			e.printStackTrace();

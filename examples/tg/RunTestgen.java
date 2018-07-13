@@ -23,6 +23,7 @@ public class RunTestgen {
 		final Options o = new Options();
 		o.setTargetMethod(targetClass, targetMethodDescriptor, targetMethodName);
 		o.setInitialTestCase(initialTestClass, initialTestMethodDescriptor, initialTestMethodName);
+		o.setInitialTestCasePath(Settings.EXAMPLES_PATH);
 		o.setMaxDepth(maxDepth);
 		o.setNumOfThreads(numOfThreads);
 		o.setTmpDirectoryBase(Settings.TMP_BASE_PATH);

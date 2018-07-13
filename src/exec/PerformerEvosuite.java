@@ -1,6 +1,7 @@
 package exec;
 
 import static exec.Util.shorten;
+import static exec.Util.stream;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -15,8 +16,6 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
-import java.util.stream.StreamSupport;
 import java.nio.file.Files;
 import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
@@ -38,7 +37,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 	private final Path tmpBinTestsPath;
 	private final String evosuitePath;
 	private final String sushiLibPath;
-	private final String outPath;
+	private final Path outPath;
 	private final long timeBudgetSeconds;
 	private final boolean useMOSA;
 	private final TestIdentifier testIdentifier;
@@ -51,7 +50,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 		this.tmpBinTestsPath = o.getTmpBinTestsDirectoryPath();
 		this.evosuitePath = o.getEvosuitePath().toString();
 		this.sushiLibPath = o.getSushiLibPath().toString();
-		this.outPath = o.getOutDirectory().toString();
+		this.outPath = o.getOutDirectory();
 		this.timeBudgetSeconds = o.getEvosuiteTimeBudgetUnit().toSeconds(o.getEvosuiteTimeBudgetDuration());
 		this.useMOSA = o.getUseMOSA();
 		this.testIdentifier = new TestIdentifier(o.getInitialTestCase() == null ? 0 : 1);
@@ -61,16 +60,6 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 			//TODO throw an exception
 		}
 	}
-	
-    /**
-     * Converts an iterable to a stream.
-     * See <a href="https://stackoverflow.com/a/23177907/450589">https://stackoverflow.com/a/23177907/450589</a>.
-     * @param it an {@link Iterable}{@code <T>}.
-     * @return a {@link Stream}{@code <T>} for {@code it}.
-     */
-    private static <T> Stream<T> stream(Iterable<T> it) {
-        return StreamSupport.stream(it.spliterator(), false);
-    }
 
 	@Override
 	protected Runnable makeJob(List<JBSEResult> items) {
@@ -250,7 +239,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 		retVal.add("-Dglobal_timeout=" + this.timeBudgetSeconds);
 		retVal.add("-Dreport_dir=" + this.tmpPath);
 		retVal.add("-Dsearch_budget=" + this.timeBudgetSeconds);
-		retVal.add("-Dtest_dir=" + this.outPath);
+		retVal.add("-Dtest_dir=" + this.outPath.toString());
 		retVal.add("-Dvirtual_fs=false");
 		retVal.add("-Dselection_function=ROULETTEWHEEL");
 		retVal.add("-Dcriterion=PATHCONDITION");		
@@ -421,9 +410,9 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 			
 			//checks if EvoSuite generated the files
 			final String testCaseClassName = item.getTargetClassName() + "_" + testCount + "_Test";
-			final String testCaseScaff = PerformerEvosuite.this.outPath + "/" + testCaseClassName + "_scaffolding.java";
-			final String testCase = PerformerEvosuite.this.outPath + "/" + testCaseClassName + ".java";
-			if (!new File(testCase).exists() || !new File(testCaseScaff).exists()) {
+			final Path testCaseScaff = PerformerEvosuite.this.outPath.resolve(testCaseClassName + "_scaffolding.java");
+			final Path testCase = PerformerEvosuite.this.outPath.resolve(testCaseClassName + ".java");
+			if (!testCase.toFile().exists() || !testCaseScaff.toFile().exists()) {
 				System.out.println("[EVOSUITE] Failed to generate the test case " + testCaseClassName + " for path condition: " + shorten(finalState.getPathCondition()).toString() + ": the generated files do not seem to exist");
 				return;
 			}
@@ -431,8 +420,8 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 			//compiles the generated test
 			final String classpathCompilationTest = PerformerEvosuite.this.tmpBinTestsPath.toString() + File.pathSeparator + PerformerEvosuite.this.classesPath + File.pathSeparator + PerformerEvosuite.this.sushiLibPath + File.pathSeparator + PerformerEvosuite.this.evosuitePath;
 			final Path javacLogFilePath = PerformerEvosuite.this.tmpPath.resolve("javac-log-test-" +  testCount + ".txt");
-			final String[] javacParametersTestScaff = { "-cp", classpathCompilationTest, "-d", PerformerEvosuite.this.tmpBinTestsPath.toString(), testCaseScaff };
-			final String[] javacParametersTestCase = { "-cp", classpathCompilationTest, "-d", PerformerEvosuite.this.tmpBinTestsPath.toString(), testCase };
+			final String[] javacParametersTestScaff = { "-cp", classpathCompilationTest, "-d", PerformerEvosuite.this.tmpBinTestsPath.toString(), testCaseScaff.toString() };
+			final String[] javacParametersTestCase = { "-cp", classpathCompilationTest, "-d", PerformerEvosuite.this.tmpBinTestsPath.toString(), testCase.toString() };
 			try (final OutputStream w = new BufferedOutputStream(Files.newOutputStream(javacLogFilePath))) {
 				PerformerEvosuite.this.compiler.run(null, w, w, javacParametersTestScaff);
 				PerformerEvosuite.this.compiler.run(null, w, w, javacParametersTestCase);
@@ -445,7 +434,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 			try {
 				checkTestExists(testCaseClassName);
 				System.out.println("[EVOSUITE] Generated test case " + testCaseClassName + ", depth: " + depth + ", path condition: " + shorten(finalState.getPathCondition()).toString());
-				final TestCase newTC = new TestCase(testCaseClassName, "()V", "test0");
+				final TestCase newTC = new TestCase(testCaseClassName, "()V", "test0", PerformerEvosuite.this.outPath);
 				PerformerEvosuite.this.getOutputBuffer().add(new EvosuiteResult(item, newTC, depth + 1));
 			} catch (NoSuchMethodException e) { 
 				//EvoSuite failed to generate the test case, thus we just ignore it 

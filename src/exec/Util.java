@@ -2,6 +2,8 @@ package exec;
 
 import java.util.Collection;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
 import jbse.bc.Opcodes;
 import jbse.mem.Clause;
@@ -9,6 +11,16 @@ import jbse.mem.ClauseAssumeClassInitialized;
 import jbse.mem.ClauseAssumeClassNotInitialized;
 
 class Util {
+    /**
+     * Converts an iterable to a stream.
+     * See <a href="https://stackoverflow.com/a/23177907/450589">https://stackoverflow.com/a/23177907/450589</a>.
+     * @param it an {@link Iterable}{@code <T>}.
+     * @return a {@link Stream}{@code <T>} for {@code it}.
+     */
+    static <T> Stream<T> stream(Iterable<T> it) {
+        return StreamSupport.stream(it.spliterator(), false);
+    }
+    
 	static Collection<Clause> shorten(Collection<Clause> pc) {
 		return pc.stream().filter(x -> !(x instanceof ClauseAssumeClassInitialized || x instanceof ClauseAssumeClassNotInitialized)).collect(Collectors.toList());
 	}

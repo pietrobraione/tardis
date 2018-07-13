@@ -5,7 +5,14 @@ import static java.nio.file.Files.exists;
 
 import static jbse.bc.ClassLoaders.CLASSLOADER_APP;
 
+import static exec.Util.stream;
+
+import java.io.BufferedOutputStream;
+import java.io.File;
 import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -15,6 +22,9 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+
+import javax.tools.JavaCompiler;
+import javax.tools.ToolProvider;
 
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
@@ -147,6 +157,20 @@ public final class Main {
 	
 	private ArrayList<EvosuiteResult> seedForJBSE() {
 		final TestCase tc = new TestCase(this.o);
+		final String classpathCompilationTest = String.join(File.pathSeparator, stream(this.o.getClassesPath()).map(Object::toString).toArray(String[]::new));
+		final Path javacLogFilePath = this.o.getTmpDirectoryPath().resolve("javac-log-test-initial.txt");
+		final String[] javacParametersTestCase = { "-cp", classpathCompilationTest, "-d", this.o.getTmpBinTestsDirectoryPath().toString(), tc.getSourcePath().toString() };
+		final JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+		if (compiler == null) {
+			System.out.println("[MAIN    ] Failed to find a system Java compiler. Did you install a JDK?");
+			System.exit(1);
+		}
+		try (final OutputStream w = new BufferedOutputStream(Files.newOutputStream(javacLogFilePath))) {
+			compiler.run(null, w, w, javacParametersTestCase);
+		} catch (IOException e) {
+			System.out.println("[MAIN    ] Unexpected I/O error while creating test case compilation log file " + javacLogFilePath.toString() + ": " + e);
+			System.exit(2);
+		}
 		final ArrayList<EvosuiteResult> retVal = new ArrayList<>();
 		retVal.add(new EvosuiteResult(this.o.getTargetMethod().get(0), this.o.getTargetMethod().get(1), this.o.getTargetMethod().get(2), tc, 0));
 		return retVal;

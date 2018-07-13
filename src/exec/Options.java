@@ -28,6 +28,11 @@ public class Options implements Cloneable {
 			handler = SignatureHandler.class)
 	private List<String> initialTestCaseSignature;
 	
+	@Option(name = "-initial_test_path",
+			usage = "Path where the source file of the initial test is found",
+			handler = PathOptionHandler.class)
+	private Path initialTestCasePath = Paths.get(".", "out");
+	
 	@Option(name = "-target_class",
 			usage = "Name of the target method (containing the methods to test)")
 	private String targetClassName;
@@ -151,6 +156,14 @@ public class Options implements Cloneable {
 	
 	public void setInitialTestCaseNone() {
 		this.initialTestCaseSignature = null;
+	}
+	
+	public Path getInitialTestCasePath() {
+		return this.initialTestCasePath;
+	}
+	
+	public void setInitialTestCasePath(Path initialTestCasePath) {
+		this.initialTestCasePath = initialTestCasePath;
 	}
 	
 	public String getTargetClass() {
