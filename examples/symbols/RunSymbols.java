@@ -34,7 +34,10 @@ public class RunSymbols {
 		o.setNumMOSATargets(5);
 		o.setGlobalTimeBudgetDuration(timeBudgetDuration);
 		o.setGlobalTimeBudgetUnit(timeBudgetTimeUnit);
-		o.setUninterpreted(sig("java/util/AbstractCollection", "()Ljava/lang/String;", "toString"));
+		o.setUninterpreted(
+			sig("java/util/AbstractCollection", "()Ljava/lang/String;", "toString"),
+			sig("java/util/AbstractList", "(Ljava/lang/Object;)Z", "equals")
+		);
 	
 		final Main m = new Main(o);
 		m.start();

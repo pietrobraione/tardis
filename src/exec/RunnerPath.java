@@ -40,6 +40,7 @@ import jbse.jvm.exc.InitializationException;
 import jbse.jvm.exc.NonexistingObservedVariablesException;
 import jbse.mem.State;
 import jbse.mem.exc.ContradictionException;
+import jbse.mem.exc.FrozenStateException;
 import jbse.mem.exc.ThreadStackEmptyException;
 import jbse.rewr.CalculatorRewriting;
 import jbse.rewr.RewriterOperationOnSimplex;
@@ -141,7 +142,7 @@ public class RunnerPath {
 					if (bytecodeBranch(currentState.getInstruction()) && this.savePreState) {
 						this.preState = currentState.clone();
 					}
-				} catch (ThreadStackEmptyException e) {
+				} catch (ThreadStackEmptyException | FrozenStateException e) {
 					//this should never happen
 					throw new RuntimeException(e); //TODO better exception!
 				}
@@ -155,7 +156,7 @@ public class RunnerPath {
 			if (this.postInitial && this.atJump) {
 				try {
 					this.coverage.add(currentState.getCurrentMethodSignature().toString() + ":" + this.jumpPC + ":" + currentState.getPC());
-				} catch (ThreadStackEmptyException e) {
+				} catch (ThreadStackEmptyException | FrozenStateException e) {
 					//this should never happen
 					throw new RuntimeException(e); //TODO better exception!
 				}
@@ -181,7 +182,7 @@ public class RunnerPath {
 			if (this.atJump) {
 				try {
 					this.coverage.add(currentState.getCurrentMethodSignature().toString() + ":" + this.jumpPC + ":" + currentState.getPC());
-				} catch (ThreadStackEmptyException e) {
+				} catch (ThreadStackEmptyException | FrozenStateException e) {
 					//this should never happen
 					throw new RuntimeException(e); //TODO better exception!
 				}
