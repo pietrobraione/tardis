@@ -81,6 +81,9 @@ public class RunnerPath {
 		if (o.getCountScope() > 0) {
 			this.commonParamsGuided.setCountScope(o.getCountScope());
 		}
+		for (List<String> unint : o.getUninterpreted()) {
+			this.commonParamsGuided.addUninterpreted(unint.get(0), unint.get(1), unint.get(2));
+		}
 		
 		//builds the template parameters object for the guiding (concrete) execution
 		this.commonParamsGuiding = new RunnerParameters();
