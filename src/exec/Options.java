@@ -11,12 +11,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import org.kohsuke.args4j.Option;
 import org.kohsuke.args4j.spi.MapOptionHandler;
 import org.kohsuke.args4j.spi.MultiPathOptionHandler;
 import org.kohsuke.args4j.spi.PathOptionHandler;
 
+import jbse.bc.Classpath;
 import sushi.configure.SignatureHandler;
 
 public final class Options implements Cloneable {
@@ -278,6 +280,14 @@ public final class Options implements Cloneable {
 	
 	public void setSushiLibPath(Path sushiPath) {
 		this.sushiPath = sushiPath;
+	}
+	
+	public Classpath getClasspath() {
+		final ArrayList<String> userClasspath = new ArrayList<>();
+		userClasspath.add(getJBSELibraryPath().toString());
+		userClasspath.addAll(getClassesPath().stream().map(Object::toString).collect(Collectors.toList()));
+		return new Classpath(System.getProperty("java.home"), Collections.emptyList(), userClasspath);
+
 	}
 	
 	public int getEvosuiteTimeBudgetDuration() {

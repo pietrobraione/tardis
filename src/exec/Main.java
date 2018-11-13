@@ -6,22 +6,22 @@ import static java.nio.file.Files.exists;
 import static jbse.bc.ClassLoaders.CLASSLOADER_APP;
 
 import static exec.Util.stream;
+import static exec.Util.getVisibleTargetMethods;
 
 import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.MalformedURLException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 import javax.tools.JavaCompiler;
 import javax.tools.ToolProvider;
@@ -33,7 +33,6 @@ import org.kohsuke.args4j.ParserProperties;
 import concurrent.TerminationManager;
 import jbse.bc.ClassFile;
 import jbse.bc.ClassFileFactoryJavassist;
-import jbse.bc.Classpath;
 import jbse.bc.Signature;
 import jbse.bc.exc.BadClassFileVersionException;
 import jbse.bc.exc.ClassFileIllFormedException;
@@ -51,7 +50,6 @@ import jbse.mem.exc.CannotAssumeSymbolicObjectException;
 import jbse.mem.exc.HeapMemoryExhaustedException;
 import jbse.rewr.CalculatorRewriting;
 import jbse.rewr.RewriterOperationOnSimplex;
-import sushi.util.ClassReflectionUtils;
 
 public final class Main {
 	private final Options o;
@@ -109,24 +107,21 @@ public final class Main {
 	private ArrayList<JBSEResult> seedForEvosuite() {
 		//this is the "no initial test case" situation
 		try {
-			final ArrayList<String> classpath = new ArrayList<>();
-			classpath.add(this.o.getJBSELibraryPath().toString());
-			classpath.addAll(this.o.getClassesPath().stream().map(Object::toString).collect(Collectors.toList()));
 			final CalculatorRewriting calc = new CalculatorRewriting();
 			calc.addRewriter(new RewriterOperationOnSimplex());
 			final ArrayList<JBSEResult> retVal = new ArrayList<>();
 			if (this.o.getTargetMethod() == null) {
 				//this.o indicates a target class
-				final List<List<String>> targetMethods = ClassReflectionUtils.getVisibleMethods(this.o.getTargetClass(), true);
+				final List<List<String>> targetMethods = getVisibleTargetMethods(this.o, true);
 				for (List<String> targetMethod : targetMethods) {
-					final State s = new State(true, 1_000, 100_000, new Classpath(System.getProperty("java.home"), Collections.emptyList(), classpath), ClassFileFactoryJavassist.class, new HashMap<>(), calc);
+					final State s = new State(true, 1_000, 100_000, this.o.getClasspath(), ClassFileFactoryJavassist.class, new HashMap<>(), calc);
 					final ClassFile cf = s.getClassHierarchy().loadCreateClass(CLASSLOADER_APP, targetMethod.get(0), true);
 					s.pushFrameSymbolic(cf, new Signature(targetMethod.get(0), targetMethod.get(1), targetMethod.get(2)));
 					retVal.add(new JBSEResult(targetMethod.get(0), targetMethod.get(1), targetMethod.get(2), s, s, s, false, -1));
 				}
 			} else {
 				//this.o indicates a single target method
-				final State s = new State(true, 1_000, 100_000, new Classpath(System.getProperty("java.home"), Collections.emptyList(), classpath), ClassFileFactoryJavassist.class, new HashMap<>(), calc);
+				final State s = new State(true, 1_000, 100_000, this.o.getClasspath(), ClassFileFactoryJavassist.class, new HashMap<>(), calc);
 				final ClassFile cf = s.getClassHierarchy().loadCreateClass(CLASSLOADER_APP, this.o.getTargetMethod().get(0), true);
 				s.pushFrameSymbolic(cf, new Signature(this.o.getTargetMethod().get(0), this.o.getTargetMethod().get(1), this.o.getTargetMethod().get(2)));
 				s.setPreInitialHistoryPoint(true);
@@ -136,6 +131,12 @@ public final class Main {
 		} catch (ClassNotFoundException | WrongClassNameException | BadClassFileVersionException | ClassFileNotFoundException | IncompatibleClassFileException | 
 			     ClassFileNotAccessibleException | ClassFileIllFormedException | MethodNotFoundException | MethodCodeNotFoundException e) {
 			System.out.println("[MAIN    ] Error: The target class or target method has wrong name, or version, or does not exist, or has unaccessible hierarchy, or is ill-formed, or the target method is abstract");
+			System.exit(1);
+		} catch (MalformedURLException e) {
+			System.out.println("[MAIN    ] Error: A path in the specified classpath does not exist or is ill-formed");
+			System.exit(1);
+		} catch (SecurityException e) {
+			System.out.println("[MAIN    ] Error: The security manager did not allow to get the system class loader");
 			System.exit(1);
 		} catch (CannotAssumeSymbolicObjectException e) {
 			System.out.println("[MAIN    ] Error: Cannot execute symbolically a method of class java.lang.Class or java.lang.ClassLoader");
