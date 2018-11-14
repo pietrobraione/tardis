@@ -3,7 +3,10 @@ package exec;
 import static java.nio.file.Files.createDirectory;
 import static java.nio.file.Files.exists;
 
+import static exec.Util.getVisibleTargetMethods;
+
 import java.io.IOException;
+import java.net.MalformedURLException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -18,7 +21,6 @@ import org.kohsuke.args4j.ParserProperties;
 
 import concurrent.TerminationManager;
 import jbse.bc.ClassFileFactoryJavassist;
-import jbse.bc.Classpath;
 import jbse.bc.Signature;
 import jbse.bc.exc.BadClassFileException;
 import jbse.bc.exc.InvalidClassFileFactoryClassException;
@@ -27,7 +29,6 @@ import jbse.bc.exc.MethodNotFoundException;
 import jbse.mem.State;
 import jbse.rewr.CalculatorRewriting;
 import jbse.rewr.RewriterOperationOnSimplex;
-import sushi.util.ClassReflectionUtils;
 
 public final class Main {
 	private final Options o;
@@ -85,32 +86,32 @@ public final class Main {
 	private ArrayList<JBSEResult> seedForEvosuite() {
 		//this is the "no initial test case" situation
 		try {
-			final String[] classpath = new String[this.o.getClassesPath().size() + 2];
-			classpath[0] = this.o.getJREPath().toString();
-			classpath[1] = this.o.getJBSELibraryPath().toString();
-			for (int i = 2; i < classpath.length; ++i) {
-				classpath[i] = this.o.getClassesPath().get(i - 2).toString();
-			}
 			final CalculatorRewriting calc = new CalculatorRewriting();
 			calc.addRewriter(new RewriterOperationOnSimplex());
 			final ArrayList<JBSEResult> retVal = new ArrayList<>();
 			if (this.o.getTargetMethod() == null) {
 				//this.o indicates a target class
-				final List<List<String>> targetMethods = ClassReflectionUtils.getVisibleMethods(this.o.getTargetClass(), true);
+				final List<List<String>> targetMethods = getVisibleTargetMethods(this.o, true);
 				for (List<String> targetMethod : targetMethods) {
-					final State s = new State(new Classpath(classpath), ClassFileFactoryJavassist.class, new HashMap<>(), calc);
+					final State s = new State(this.o.getClasspath(), ClassFileFactoryJavassist.class, new HashMap<>(), calc);
 					s.pushFrameSymbolic(new Signature(targetMethod.get(0), targetMethod.get(1), targetMethod.get(2)));
 					retVal.add(new JBSEResult(targetMethod.get(0), targetMethod.get(1), targetMethod.get(2), s, s, s, false, -1));
 				}
 			} else {
 				//this.o indicates a single target method
-				final State s = new State(new Classpath(classpath), ClassFileFactoryJavassist.class, new HashMap<>(), calc);
+				final State s = new State(this.o.getClasspath(), ClassFileFactoryJavassist.class, new HashMap<>(), calc);
 				s.pushFrameSymbolic(new Signature(this.o.getTargetMethod().get(0), this.o.getTargetMethod().get(1), this.o.getTargetMethod().get(2)));
 				retVal.add(new JBSEResult(this.o.getTargetMethod().get(0), this.o.getTargetMethod().get(1), this.o.getTargetMethod().get(2), s, s, s, false, -1));
 			}
 			return retVal;
 		} catch (BadClassFileException | ClassNotFoundException | MethodNotFoundException | MethodCodeNotFoundException e) {
 			System.out.println("[MAIN    ] Error: The target class or target method does not exist, or the target method is abstract");
+			System.exit(1);
+		} catch (MalformedURLException e) {
+			System.out.println("[MAIN    ] Error: A path in the specified classpath does not exist or is ill-formed");
+			System.exit(1);
+		} catch (SecurityException e) {
+			System.out.println("[MAIN    ] Error: The security manager did not allow to get the system class loader");
 			System.exit(1);
 		} catch (InvalidClassFileFactoryClassException e) {
 			System.out.println("[MAIN    ] Unexpected internal error: Wrong class file factory");

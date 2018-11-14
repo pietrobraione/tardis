@@ -16,6 +16,7 @@ import org.kohsuke.args4j.spi.MapOptionHandler;
 import org.kohsuke.args4j.spi.MultiPathOptionHandler;
 import org.kohsuke.args4j.spi.PathOptionHandler;
 
+import jbse.bc.Classpath;
 import sushi.configure.SignatureHandler;
 
 public class Options implements Cloneable {
@@ -285,6 +286,16 @@ public class Options implements Cloneable {
 	
 	public void setSushiLibPath(Path sushiPath) {
 		this.sushiPath = sushiPath;
+	}
+	
+	public Classpath getClasspath() {
+		final String[] classpath = new String[getClassesPath().size() + 2];
+		classpath[0] = getJREPath().toString();
+		classpath[1] = getJBSELibraryPath().toString();
+		for (int i = 2; i < classpath.length; ++i) {
+			classpath[i] = getClassesPath().get(i - 2).toString();
+		}
+		return new Classpath(classpath);
 	}
 	
 	public int getEvosuiteTimeBudgetDuration() {

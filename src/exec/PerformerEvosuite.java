@@ -28,7 +28,7 @@ import concurrent.InputBuffer;
 import concurrent.OutputBuffer;
 import concurrent.Performer;
 import jbse.mem.State;
-import sushi.execution.jbse.StateFormatterSushiPathCondition;
+import sushi.formatters.StateFormatterSushiPathCondition;
 
 public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 	private final String classesPath;
