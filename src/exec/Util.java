@@ -149,7 +149,26 @@ class Util {
 			}
 		}
 		return methods;
-	}	
+	}
+	
+	/**
+	 * Returns the target method of the target class.
+	 * 
+	 * @param o an {@link Options} object. It must be {@code o.}{@link Options#getTargetMethod() getTargeMethod()}{@code  != null}.
+	 * @return a {@link List}{@code <}{@link List}{@code <}{@link String}{@code >>} containing exactly one element,
+	 *         derived from {@code o.}{@link Options#getTargeMethod() getTargeMethod()}. The element (a {@link List}{@code <}{@link String}{@code >})
+	 *         has three elements and is a method signature.
+     * @throws NullPointerException if {@code o.}{@link Options#getTargetMethod() getTargeMethod()}{@code  == null}.
+	 */
+	static List<List<String>> getUniqueTargetMethod(Options o) {
+		final ArrayList<String> targetMethod = new ArrayList<>();
+		targetMethod.add(o.getTargetMethod().get(0));
+		targetMethod.add(o.getTargetMethod().get(1));
+		targetMethod.add(o.getTargetMethod().get(2));
+		final List<List<String>> methods = new ArrayList<>();
+		methods.add(targetMethod);
+		return methods;
+	}
 	
 	public static ClassLoader getInternalClassloader(List<Path> classpath) throws MalformedURLException, SecurityException {
 		final ClassLoader systemClassLoader = ClassLoader.getSystemClassLoader();

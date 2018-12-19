@@ -6,6 +6,7 @@ import static java.nio.file.Files.exists;
 import static jbse.bc.ClassLoaders.CLASSLOADER_APP;
 
 import static exec.Util.stream;
+import static exec.Util.getUniqueTargetMethod;
 import static exec.Util.getVisibleTargetMethods;
 
 import java.io.BufferedOutputStream;
@@ -50,6 +51,8 @@ import jbse.mem.exc.CannotAssumeSymbolicObjectException;
 import jbse.mem.exc.HeapMemoryExhaustedException;
 import jbse.rewr.CalculatorRewriting;
 import jbse.rewr.RewriterOperationOnSimplex;
+import jbse.val.HistoryPoint;
+import jbse.val.SymbolFactory;
 
 public final class Main {
 	private final Options o;
@@ -110,22 +113,19 @@ public final class Main {
 			final CalculatorRewriting calc = new CalculatorRewriting();
 			calc.addRewriter(new RewriterOperationOnSimplex());
 			final ArrayList<JBSEResult> retVal = new ArrayList<>();
+			final List<List<String>> targetMethods;
 			if (this.o.getTargetMethod() == null) {
 				//this.o indicates a target class
-				final List<List<String>> targetMethods = getVisibleTargetMethods(this.o, true);
-				for (List<String> targetMethod : targetMethods) {
-					final State s = new State(true, 1_000, 100_000, this.o.getClasspath(), ClassFileFactoryJavassist.class, new HashMap<>(), calc);
-					final ClassFile cf = s.getClassHierarchy().loadCreateClass(CLASSLOADER_APP, targetMethod.get(0), true);
-					s.pushFrameSymbolic(cf, new Signature(targetMethod.get(0), targetMethod.get(1), targetMethod.get(2)));
-					retVal.add(new JBSEResult(targetMethod.get(0), targetMethod.get(1), targetMethod.get(2), s, s, s, false, -1));
-				}
+				targetMethods = getVisibleTargetMethods(this.o, true);
 			} else {
 				//this.o indicates a single target method
-				final State s = new State(true, 1_000, 100_000, this.o.getClasspath(), ClassFileFactoryJavassist.class, new HashMap<>(), calc);
-				final ClassFile cf = s.getClassHierarchy().loadCreateClass(CLASSLOADER_APP, this.o.getTargetMethod().get(0), true);
-				s.pushFrameSymbolic(cf, new Signature(this.o.getTargetMethod().get(0), this.o.getTargetMethod().get(1), this.o.getTargetMethod().get(2)));
-				s.setPreInitialHistoryPoint(true);
-				retVal.add(new JBSEResult(this.o.getTargetMethod().get(0), this.o.getTargetMethod().get(1), this.o.getTargetMethod().get(2), s, s, s, false, -1));
+				targetMethods = getUniqueTargetMethod(this.o);
+			}
+			for (List<String> targetMethod : targetMethods) {
+				final State s = new State(true, HistoryPoint.startingPreInitial(true), 1_000, 100_000, this.o.getClasspath(), ClassFileFactoryJavassist.class, new HashMap<>(), calc, new SymbolFactory(calc));
+				final ClassFile cf = s.getClassHierarchy().loadCreateClass(CLASSLOADER_APP, targetMethod.get(0), true);
+				s.pushFrameSymbolic(cf, new Signature(targetMethod.get(0), targetMethod.get(1), targetMethod.get(2)));
+				retVal.add(new JBSEResult(targetMethod.get(0), targetMethod.get(1), targetMethod.get(2), s, s, s, false, -1));
 			}
 			return retVal;
 		} catch (ClassNotFoundException | WrongClassNameException | BadClassFileVersionException | ClassFileNotFoundException | IncompatibleClassFileException | 
