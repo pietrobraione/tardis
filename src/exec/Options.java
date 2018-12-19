@@ -20,6 +20,7 @@ import org.kohsuke.args4j.spi.PathOptionHandler;
 
 import jbse.bc.Classpath;
 import sushi.configure.SignatureHandler;
+import sushi.configure.Visibility;
 
 public final class Options implements Cloneable {
 	@Option(name = "-help",
@@ -37,8 +38,12 @@ public final class Options implements Cloneable {
 	private Path initialTestCasePath = Paths.get(".", "out");
 	
 	@Option(name = "-target_class",
-			usage = "Name of the target method (containing the methods to test)")
+			usage = "Name of the target class (containing the methods to test)")
 	private String targetClassName;
+	
+	@Option(name = "-visibility",
+			usage = "For which methods defined in the target class should generate tests: PUBLIC (methods with public visibility), PACKAGE (methods with public, protected and package visibility)")
+	private Visibility visibility = Visibility.PUBLIC;
 	
 	@Option(name = "-target_method",
 			usage = "Java signature of the target method (the method to test)",
@@ -177,7 +182,15 @@ public final class Options implements Cloneable {
 		this.targetClassName = targetClassName;
 		this.targetMethodSignature = null;
 	}
+
+	public Visibility getVisibility() {
+		return this.visibility;
+	}
 	
+	public void setVisibility(Visibility visibility) {
+		this.visibility = visibility;
+	}	
+
 	public List<String> getTargetMethod() {
 		return (this.targetMethodSignature == null ? null : Collections.unmodifiableList(this.targetMethodSignature));
 	}

@@ -116,7 +116,7 @@ public final class Main {
 			final List<List<String>> targetMethods;
 			if (this.o.getTargetMethod() == null) {
 				//this.o indicates a target class
-				targetMethods = getVisibleTargetMethods(this.o, true);
+				targetMethods = getVisibleTargetMethods(this.o);
 			} else {
 				//this.o indicates a single target method
 				targetMethods = getUniqueTargetMethod(this.o);

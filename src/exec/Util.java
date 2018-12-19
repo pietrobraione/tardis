@@ -21,6 +21,7 @@ import jbse.bc.Opcodes;
 import jbse.mem.Clause;
 import jbse.mem.ClauseAssumeClassInitialized;
 import jbse.mem.ClauseAssumeClassNotInitialized;
+import sushi.configure.Visibility;
 
 class Util {
     /**
@@ -114,7 +115,6 @@ class Util {
 	 * Returns the externally callable methods of the target class.
 	 * 
 	 * @param o an {@link Options} object.
-	 * @param onlyPublic {@code true} to restrict the list to the public methods of the class.
 	 * @return a {@link List}{@code <}{@link List}{@code <}{@link String}{@code >>} of the methods
 	 *         of the class {@code o.}{@link Options#getTargetClass() getTargetClass()} that are not private, nor synthetic, nor one of the 
 	 *         {@code equals}, {@code hashCode}, {@code toString}, {@code clone}, {@code immutableEnumSet}.
@@ -124,9 +124,10 @@ class Util {
 	 * @throws SecurityException 
 	 * @throws MalformedURLException if some path in {@code o.}{@link Options#getClassesPath() getClassesPath()} does not exist.
 	 */
-	static List<List<String>> getVisibleTargetMethods(Options o, boolean onlyPublic) 
+	static List<List<String>> getVisibleTargetMethods(Options o) 
 	throws ClassNotFoundException, MalformedURLException, SecurityException {
 		final String className = o.getTargetClass();
+		final boolean onlyPublic = (o.getVisibility() == Visibility.PUBLIC);
 		final ClassLoader ic = getInternalClassloader(o.getClassesPath());
 		final Class<?> clazz = ic.loadClass(className.replace('/', '.'));
 		final List<List<String>> methods = new ArrayList<>();
