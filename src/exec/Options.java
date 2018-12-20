@@ -1,5 +1,6 @@
 package exec;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
@@ -11,7 +12,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 import org.kohsuke.args4j.Option;
 import org.kohsuke.args4j.spi.MapOptionHandler;
@@ -295,12 +295,11 @@ public final class Options implements Cloneable {
 		this.sushiPath = sushiPath;
 	}
 	
-	public Classpath getClasspath() {
-		final ArrayList<String> userClasspath = new ArrayList<>();
-		userClasspath.add(getJBSELibraryPath().toString());
-		userClasspath.addAll(getClassesPath().stream().map(Object::toString).collect(Collectors.toList()));
-		return new Classpath(System.getProperty("java.home"), Collections.emptyList(), userClasspath);
-
+	public Classpath getClasspath() throws IOException {
+		final ArrayList<Path> userClasspath = new ArrayList<>();
+		userClasspath.add(getJBSELibraryPath());
+		userClasspath.addAll(getClassesPath());
+		return new Classpath(Paths.get(System.getProperty("java.home")), Collections.emptyList(), userClasspath);
 	}
 	
 	public int getEvosuiteTimeBudgetDuration() {

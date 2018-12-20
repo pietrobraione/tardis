@@ -135,6 +135,9 @@ public final class Main {
 		} catch (MalformedURLException e) {
 			System.out.println("[MAIN    ] Error: A path in the specified classpath does not exist or is ill-formed");
 			System.exit(1);
+		} catch (IOException e) {
+			System.out.println("[MAIN    ] Error: I/O exception while accessing the classpath");
+			System.exit(1);
 		} catch (SecurityException e) {
 			System.out.println("[MAIN    ] Error: The security manager did not allow to get the system class loader");
 			System.exit(1);

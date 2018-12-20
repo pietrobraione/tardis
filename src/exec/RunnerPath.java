@@ -49,7 +49,7 @@ import jbse.rules.LICSRulesRepo;
 import jbse.tree.StateTree.BranchPoint;
 
 public class RunnerPath {
-	private static final String COMMANDLINE_LAUNCH_Z3 = System.getProperty("os.name").toLowerCase().contains("windows") ? " /smt2 /in /t:10" : " -smt2 -in -t:10";
+	private static final String SWITCH_CHAR = System.getProperty("os.name").toLowerCase().contains("windows") ? "/" : "-";
 
 	private final String[] classpath;
 	private final String z3Path;
@@ -282,12 +282,17 @@ public class RunnerPath {
 		pGuiding.setCalculator(calc);
 		
 		//sets the decision procedures
+		final ArrayList<String> z3CommandLine = new ArrayList<>();
+		z3CommandLine.add(this.z3Path);
+		z3CommandLine.add(SWITCH_CHAR + "smt2");
+		z3CommandLine.add(SWITCH_CHAR + "in");
+		z3CommandLine.add(SWITCH_CHAR + "t:10");
 		pGuided.setDecisionProcedure(new DecisionProcedureAlgorithms(
 				new DecisionProcedureClassInit( //useless?
 						new DecisionProcedureLICS( //useless?
 								new DecisionProcedureSMTLIB2_AUFNIRA(
 										new DecisionProcedureAlwSat(), 
-										calc, this.z3Path + COMMANDLINE_LAUNCH_Z3), 
+										calc, z3CommandLine), 
 								calc, new LICSRulesRepo()), 
 						calc, new ClassInitRulesRepo()), calc));
 		pGuiding.setDecisionProcedure(
