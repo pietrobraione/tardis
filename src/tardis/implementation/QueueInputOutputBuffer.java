@@ -1,10 +1,10 @@
-package exec;
+package tardis.implementation;
 
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
-import concurrent.InputBuffer;
-import concurrent.OutputBuffer;
+import tardis.framework.InputBuffer;
+import tardis.framework.OutputBuffer;
 
 public class QueueInputOutputBuffer<E> implements InputBuffer<E>, OutputBuffer<E> {
 	private final LinkedBlockingQueue<E> queue = new LinkedBlockingQueue<>();

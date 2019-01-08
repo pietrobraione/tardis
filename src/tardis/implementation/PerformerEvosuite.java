@@ -1,7 +1,4 @@
-package exec;
-
-import static exec.Util.shorten;
-import static exec.Util.stream;
+package tardis.implementation;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -17,6 +14,10 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.nio.file.Files;
+
+import static tardis.implementation.Util.shorten;
+import static tardis.implementation.Util.stream;
+
 import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -25,13 +26,12 @@ import java.io.File;
 import javax.tools.JavaCompiler;
 import javax.tools.ToolProvider;
 
-import concurrent.InputBuffer;
-import concurrent.OutputBuffer;
-import concurrent.Performer;
-
 import jbse.mem.State;
 
 import sushi.formatters.StateFormatterSushiPathCondition;
+import tardis.framework.InputBuffer;
+import tardis.framework.OutputBuffer;
+import tardis.framework.Performer;
 
 public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 	private final String classesPath;

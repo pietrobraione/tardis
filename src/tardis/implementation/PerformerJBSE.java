@@ -1,14 +1,11 @@
-package exec;
+package tardis.implementation;
 
-import static exec.Util.shorten;
+import static tardis.implementation.Util.shorten;
 
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 
-import concurrent.InputBuffer;
-import concurrent.OutputBuffer;
-import concurrent.Performer;
 import jbse.algo.exc.CannotManageStateException;
 import jbse.bc.exc.InvalidClassFileFactoryClassException;
 import jbse.common.exc.ClasspathException;
@@ -23,6 +20,9 @@ import jbse.mem.Clause;
 import jbse.mem.State;
 import jbse.mem.exc.ContradictionException;
 import jbse.mem.exc.ThreadStackEmptyException;
+import tardis.framework.InputBuffer;
+import tardis.framework.OutputBuffer;
+import tardis.framework.Performer;
 
 public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 	private final Options o;

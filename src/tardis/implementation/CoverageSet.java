@@ -1,9 +1,9 @@
-package exec;
+package tardis.implementation;
 
 import java.util.Collection;
 import java.util.HashSet;
 
-final class CoverageSet {
+public final class CoverageSet {
 	private final HashSet<String> coverage = new HashSet<>();
 	
 	public synchronized void addAll(Collection<? extends String> coverageInfo) {

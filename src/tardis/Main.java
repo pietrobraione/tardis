@@ -1,13 +1,12 @@
-package exec;
+package tardis;
 
 import static java.nio.file.Files.createDirectory;
 import static java.nio.file.Files.exists;
 
 import static jbse.bc.ClassLoaders.CLASSLOADER_APP;
-
-import static exec.Util.stream;
-import static exec.Util.getUniqueTargetMethod;
-import static exec.Util.getVisibleTargetMethods;
+import static tardis.implementation.Util.getUniqueTargetMethod;
+import static tardis.implementation.Util.getVisibleTargetMethods;
+import static tardis.implementation.Util.stream;
 
 import java.io.BufferedOutputStream;
 import java.io.File;
@@ -31,7 +30,6 @@ import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.ParserProperties;
 
-import concurrent.TerminationManager;
 import jbse.bc.ClassFile;
 import jbse.bc.ClassFileFactoryJavassist;
 import jbse.bc.Signature;
@@ -53,6 +51,15 @@ import jbse.rewr.CalculatorRewriting;
 import jbse.rewr.RewriterOperationOnSimplex;
 import jbse.val.HistoryPoint;
 import jbse.val.SymbolFactory;
+import tardis.framework.TerminationManager;
+import tardis.implementation.CoverageSet;
+import tardis.implementation.EvosuiteResult;
+import tardis.implementation.JBSEResult;
+import tardis.implementation.Options;
+import tardis.implementation.PerformerEvosuite;
+import tardis.implementation.PerformerJBSE;
+import tardis.implementation.QueueInputOutputBuffer;
+import tardis.implementation.TestCase;
 
 public final class Main {
 	private final Options o;

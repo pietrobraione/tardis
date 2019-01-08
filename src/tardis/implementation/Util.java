@@ -1,4 +1,4 @@
-package exec;
+package tardis.implementation;
 
 import java.io.File;
 import java.lang.reflect.Method;
@@ -23,14 +23,14 @@ import jbse.mem.ClauseAssumeClassInitialized;
 import jbse.mem.ClauseAssumeClassNotInitialized;
 import sushi.configure.Visibility;
 
-class Util {
+public class Util {
     /**
      * Converts an iterable to a stream.
      * See <a href="https://stackoverflow.com/a/23177907/450589">https://stackoverflow.com/a/23177907/450589</a>.
      * @param it an {@link Iterable}{@code <T>}.
      * @return a {@link Stream}{@code <T>} for {@code it}.
      */
-    static <T> Stream<T> stream(Iterable<T> it) {
+    public static <T> Stream<T> stream(Iterable<T> it) {
         return StreamSupport.stream(it.spliterator(), false);
     }
     
@@ -124,7 +124,7 @@ class Util {
 	 * @throws SecurityException 
 	 * @throws MalformedURLException if some path in {@code o.}{@link Options#getClassesPath() getClassesPath()} does not exist.
 	 */
-	static List<List<String>> getVisibleTargetMethods(Options o) 
+	public static List<List<String>> getVisibleTargetMethods(Options o) 
 	throws ClassNotFoundException, MalformedURLException, SecurityException {
 		final String className = o.getTargetClass();
 		final boolean onlyPublic = (o.getVisibility() == Visibility.PUBLIC);
@@ -161,7 +161,7 @@ class Util {
 	 *         has three elements and is a method signature.
      * @throws NullPointerException if {@code o.}{@link Options#getTargetMethod() getTargeMethod()}{@code  == null}.
 	 */
-	static List<List<String>> getUniqueTargetMethod(Options o) {
+	public static List<List<String>> getUniqueTargetMethod(Options o) {
 		final ArrayList<String> targetMethod = new ArrayList<>();
 		targetMethod.add(o.getTargetMethod().get(0));
 		targetMethod.add(o.getTargetMethod().get(1));
