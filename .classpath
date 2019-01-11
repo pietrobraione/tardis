@@ -6,5 +6,7 @@
 	<classpathentry kind="lib" path="lib/args4j-2.32.jar"/>
 	<classpathentry kind="lib" path="lib/javaparser-core-3.4.0.jar"/>
 	<classpathentry kind="lib" path="lib/evosuite-shaded-1.0.6-SNAPSHOT.jar"/>
+	<classpathentry combineaccessrules="false" kind="src" path="/jbse"/>
+	<classpathentry combineaccessrules="false" kind="src" path="/runtime"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>
