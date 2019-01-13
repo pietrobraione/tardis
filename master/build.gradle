@@ -6,6 +6,7 @@ plugins {
 dependencies {
     implementation 'args4j:args4j:2.32'
     implementation 'com.github.javaparser:javaparser-core:3.4.0'
+    implementation files("${System.getProperty('java.home')}/../lib/tools.jar")
     implementation project(':sushi-lib')
     implementation project(':jbse')
 }
