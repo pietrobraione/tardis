@@ -55,7 +55,7 @@ In the end, your Eclipse workspace should contain these projects:
 * tardis-master: the bulk of the TARDIS tool; on the filesystem it is in the `master` subdirectory;
 * sushi-lib: the [sushi-lib](https://github.com/pietrobraione/sushi-lib) submodule for the run-time library component of TARDIS; on the filesystem it is in the `runtime` subdirectory.
 
-## Deploying SUSHI
+## Deploying TARDIS
 
 Deploying TARDIS to be used outside Eclipse is tricky but feasible with some effort. The `gradlew build` command will produce a SUSHI-Lib jar `runtime/build/libs/sushi-lib-<VERSION>.jar`, the JBSE jars in `jbse/build/libs` (refer to the JBSE project's README file for more information on them), and a jar for the main TARDIS application `master/build/libs/tardis-master-<VERSION>.jar`. You may deploy them and all the missing dependencies, if you feel adventurous. However, `gradlew build` will also produce an uber-jar `master/build/libs/tardis-<VERSION>-shaded.jar`, containing all the runtime dependencies excluded Z3, EvoSuite, and `tools.jar`. Deploying based on the uber-jar currently is the easiest way for deploying TARDIS. Moreover, although JBSE and SUSHI-Lib are already included in the TARDIS uber-jar, you will need to deploy the JBSE and SUSHI-Lib jars. The instruction for deploying based on the uber-jar plus these six dependencies are the following ones:
 
