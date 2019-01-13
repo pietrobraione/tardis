@@ -13,15 +13,23 @@ dependencies {
 shadowJar {
     classifier = 'shaded'
     exclude 'tools.jar'
-    relocate 'javassist', 'sushi.javassist'
-    relocate 'jbse', 'sushi.jbse'
-    relocate 'org.jacoco', 'sushi.org.jacoco'
-    relocate 'org.objectweb', 'sushi.org.objectweb'
-    relocate 'org.kohsuke', 'sushi.org.kohsuke'
+    relocate 'javassist', 'tardis.javassist'
+    relocate 'jbse', 'tardis.jbse'
+    relocate 'org.jacoco', 'tardis.org.jacoco'
+    relocate 'org.objectweb', 'tardis.org.objectweb'
+    relocate 'org.kohsuke', 'tardis.org.kohsuke'
+    relocate 'com.github', 'tardis.com.github'
+    relocate 'sushi', 'tardis'
 }
 
 build.dependsOn 'shadowJar'
 
 application {
     mainClassName = 'tardis.Main'
+}
+
+jar {
+    manifest {
+        attributes 'Main-Class': 'tardis.Main'
+    }
 }
