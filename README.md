@@ -35,7 +35,7 @@ Another runtime dependency that is included in the git project is:
 
 There is one additional runtime dependencies that is not handled by Gradle so you will need to fix it manually. 
 
-* JBSE needs to interact with an external numeric solver for pruning infeasible program paths. At the purpose SUSHI requires to use [Z3](https://github.com/Z3Prover/z3), that is a standalone binary and can be installed almost everywhere.
+* JBSE needs to interact with an external numeric solver for pruning infeasible program paths. At the purpose TARDIS requires to use [Z3](https://github.com/Z3Prover/z3), that is a standalone binary and can be installed almost everywhere.
 
 ## Working under Eclipse
 
@@ -45,15 +45,15 @@ If you want to work (as us) under Eclipse 2018-12 for Java Developers, you are l
 * Be sure that the default Eclipse JRE is the JRE subdirectory of a full JDK 8 setup, *not* a standalone (i.e., not part of a JDK) JRE.
 * JBSE uses the reserved `sun.misc.Unsafe` class, a thing that Eclipse forbids by default. To avoid Eclipse complaining about that you must modify the workspace preferences as follows: From the main menu choose Eclipse > Preferences... under macOS, or Window > Preferences... under Windows and Linux. On the left panel select Java > Compiler > Errors/Warnings, then on the right panel open the option group "Deprecated and restricted API", and for the option "Forbidden reference (access rules)" select the value "Warning" or "Info" or "Ignore".
 * Switch to the Git perspective. If you cloned the Github TARDIS repository and the submodules from the command line, you can import the clone under Eclipse by clicking under the Git Repositories view the button for adding an existing repository. Otherwise you can clone the  repository by clicking the clone button, again available under the Git Repositories view (remember to tick the box "Clone submodules"). Eclipse does *not* want you to clone the repository under your Eclipse workspace, and instead wants you to follow the standard git convention of putting the git repositories in a `git` subdirectory of your home directory. If you clone the repository from a console, please follow this standard (if you clone the repository from the Git perspective Eclipse will do this for you).
-* Switch back to the Java perspective and from the main menu select File > Import... In the Select the Import Wizard window that pops up choose the Gradle > Existing Gradle Project wizard and press the Next button twice. In the Import Gradle Project window that is displayed, enter in the Project root directory field the path to the TARDIS cloned git repository, and then press the Finish button to confirm. Now your workspace should have four Java project named `jbse`, `tardis`, `sushi-lib`, and `tardis-master`.
+* Switch back to the Java perspective and from the main menu select File > Import... In the Select the Import Wizard window that pops up choose the Gradle > Existing Gradle Project wizard and press the Next button twice. In the Import Gradle Project window that is displayed, enter in the Project root directory field the path to the TARDIS cloned git repository, and then press the Finish button to confirm. Now your workspace should have four Java project named `jbse`, `sushi-lib`, `tardis`, and `tardis-master`.
 * Unfortunately the Buildship Gradle plugin is not able to fully configure the imported projects: As a consequence, after the import you will see some compilation errors due to the fact that the JBSE project did not generate some source files yet. Fix the situation by following this procedure: In the Gradle Tasks view double-click on the tardis > build > build task to build all the projects. Then, right-click the jbse project in the Package Explorer, and in the contextual menu that pops up select Gradle > Refresh Gradle Project. After that, you should see no more errors.
 
 In the end, your Eclipse workspace should contain these projects:
 
 * tardis: the container project from which Gradle must be run;
-* jbse: JBSE as a submodule; on the filesystem it is in the `jbse` subdirectory;
 * tardis-master: the bulk of the TARDIS tool; on the filesystem it is in the `master` subdirectory;
-* sushi-lib: the [sushi-lib](https://github.com/pietrobraione/sushi-lib) submodule for the run-time library component of TARDIS; on the filesystem it is in the `runtime` subdirectory.
+* sushi-lib: the [sushi-lib](https://github.com/pietrobraione/sushi-lib) submodule for the run-time library component of TARDIS; on the filesystem it is in the `runtime` subdirectory;
+* jbse: JBSE as a submodule; on the filesystem it is in the `jbse` subdirectory.
 
 ## Deploying TARDIS
 
@@ -65,3 +65,65 @@ Deploying TARDIS to be used outside Eclipse is tricky but feasible with some eff
 * TARDIS will not run if you deploy it on a machine that has a JRE, instead of a JDK, installed. This because SUSHI needs to invoke the platform's `javac` to compile some intermediate files. Therefore, you need to install a full JDK 8 on the target machine, providing both `tools.jar` and `javac` to SUSHI. Add `tools.jar` to the classpath, if it is not already in it by default.
 * Finally, the JBSE and SUSHI-Lib jars need not to be on the classpath (they are included in the SUSHI uber-jar, that is already in the classpath), but the path to them must be passed to SUSHI through the `-jbse_lib` and `-sushi_lib` options. 
 
+## Usage
+
+You can launch TARDIS either from the command line, or from another program, e.g., from the `main` of an application. From the command line you need to invoke it as follows:
+
+    $ java -cp <classpath> tardis.Main <options>
+
+or:
+
+    $ java -cp <classpath> -jar <tardisJarPath> <options>
+ 
+where `<classpath>` must be set according to the indications of the previous section. If you launch TARDIS without options it will print a help screen that lists all the available options. If you prefer to launch TARDIS from code, this is a possible template:
+
+```Java
+import tardis.Main;
+import tardis.Options;
+
+public class Launcher {
+  public static void main(String[] args) {
+    final Options o = new Options();
+    o.set...
+    final Main m = new Main(o);
+    m.start();
+  }
+}
+```
+
+In both cases you need to set a number of options. The indispensable ones, that you *must* set in order for TARDIS to work, are:
+
+* `-classes` (command line) or `setClassesPath` (code): a colon- or semicolon-separated (depending on the OS) list of paths; It is the classpath of the software under test.
+* `-target_class` (command line) or `setTargetClass` (code): the name in [internal classfile format](https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-4.html#jvms-4.2.1) of the class to test: TARDIS will generate tests for all the methods in the class. Or alternatively:
+* `-target_method` (command line) or `setTargetMethod` (code): the signature of a method to test. The signature is a colon-separated list of: the name of the container class in internal classfile format; the [descriptor](https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-4.html#jvms-4.3.3) of the method; the name of the method. You can use the `javap` command, included with every JDK setup, to obtain the internal format signatures of methods: `javap -s my.Class` prints the list of all the methods in `my.Class` with their signatures in internal format.
+* `-evosuite` (command line) or `setEvosuitePath` (code): the path to one of the two EvoSuite jar files contained in the `lib/` folder. Use `evosuite-shaded-1.0.6-SNAPSHOT.jar` if you activate the MOSA option, otherwise use `evosuite-shaded-1.0.3.jar`.
+* `-use_mosa` (command line) or `setUseMOSA` (code): configures EvoSuite to use a multi-objective search algorithm (MOSA). You usually want this option to be active, since it makes TARDIS faster in most cases.
+* `-jbse_lib` (command line) or `setJBSELibraryPath` (code): this must be set to the path of the JBSE jar file. You will find one in the `jbse/build/libs` directory.
+* `-sushi_lib` (command line) or `setSushiLibPath` (code): this must be set to the path of the SUSHI-Lib jar file. You will find one in the `runtime/build/libs` directory.
+* `-z3` (command line) or `setZ3Path` (code):  the path to the Z3 binary (you can omit it if Z3 is on the system PATH).
+* `-tmp_base` (command line) or `setTmpDirectoryBase` (code): a path to a temporary directory; TARDIS needs to create many intermediate files, and will put them in a subdirectory of the one that you specify with this option. The subdirectory will have as name the date and time when TARDIS was launched.
+* `-out` (command line) or `setOutDirectory`: a path to a directory where TARDIS will put the generated tests.
+
+You will find examples of the code-based way of configuring TARDIS in the [tardis-experiments](https://github.com/pietrobraione/tardis-experiments) project.
+
+## Generated tests
+
+The tests are generated in EvoSuite format, where a test suite is composed by two classes: a scaffolding class, and the class containing all the test cases (the actual suite). TARDIS will produce many suites each containing exactly one test case: If, e.g., a run of TARDIS generates 10 test cases, then in the directory indicated with the `-out` command line parameter you will find 10 scaffolding classes, and 10 actual test suite classes each containing exactly 1 test case. Note that you do *not* need the scaffolding classes to compile and run the tests in the test suite classes, but these depend on junit and on the EvoSuite jar. You can safely remove the latter dependency by manually editing the generated files, otherwise you need to put the EvoSuite jar used to generate the tests in the classpath, when compiling and running the generated test suites.
+
+The generated files have names structured as follows:
+    
+    <class name>_<number>_Test_scaffolding.java //the scaffolding class
+    <class name>_<number>_Test.java             //the actual suite class
+
+where `<class name>` is the name of the class under test, and `<number>` is a sequential number that distinguishes the different generated classes, and that roughly reflects in which order the tests were generated.
+
+The generated scaffolding/actual suite classes are declared in the same package as the class under test, so they can access its package-level members. This means, for example, that the generated .java file for an `avl_tree.AvlTree` class under test, if you have specified the option `-out /your/out/dir`, will be put in `/your/out/dir/avl_tree/AvlTree_1_Test.java`. If you want to compile and execute the test suites add the output directory to the classpath and qualify the class name of the test suite with the package name, e.g.:
+
+    $ javac -cp junit.jar:evosuite-shaded-1.0.3.jar:avltree.jar
+        /your/out/dir/avl_tree/AvlTree_1_Test.java
+    $ java -cp junit.jar:evosuite-shaded-1.0.3.jar:avltree.jar:/your/out/dir
+        org.junit.runner.JUnitCore avl_tree.AvlTree_1_Test
+
+## Disclaimer
+
+TARDIS is a research prototype. As such, it is more focused on functionality than on usability. We are committed to progressively improving the situation.

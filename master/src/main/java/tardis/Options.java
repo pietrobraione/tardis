@@ -1,4 +1,4 @@
-package tardis.implementation;
+package tardis;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -21,6 +21,7 @@ import org.kohsuke.args4j.spi.PathOptionHandler;
 import jbse.bc.Classpath;
 import sushi.configure.SignatureHandler;
 import sushi.configure.Visibility;
+import tardis.implementation.MultiSignatureOptionHandler;
 
 public final class Options implements Cloneable {
 	@Option(name = "-help",

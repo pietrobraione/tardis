@@ -20,6 +20,7 @@ import jbse.mem.Clause;
 import jbse.mem.State;
 import jbse.mem.exc.ContradictionException;
 import jbse.mem.exc.ThreadStackEmptyException;
+import tardis.Options;
 import tardis.framework.InputBuffer;
 import tardis.framework.OutputBuffer;
 import tardis.framework.Performer;

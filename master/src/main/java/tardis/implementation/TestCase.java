@@ -2,6 +2,8 @@ package tardis.implementation;
 
 import java.nio.file.Path;
 
+import tardis.Options;
+
 public class TestCase {
 	private final String className;
 	private final String methodDescriptor;

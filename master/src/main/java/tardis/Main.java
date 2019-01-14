@@ -55,7 +55,6 @@ import tardis.framework.TerminationManager;
 import tardis.implementation.CoverageSet;
 import tardis.implementation.EvosuiteResult;
 import tardis.implementation.JBSEResult;
-import tardis.implementation.Options;
 import tardis.implementation.PerformerEvosuite;
 import tardis.implementation.PerformerJBSE;
 import tardis.implementation.QueueInputOutputBuffer;

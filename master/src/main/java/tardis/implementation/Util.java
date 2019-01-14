@@ -22,6 +22,7 @@ import jbse.mem.Clause;
 import jbse.mem.ClauseAssumeClassInitialized;
 import jbse.mem.ClauseAssumeClassNotInitialized;
 import sushi.configure.Visibility;
+import tardis.Options;
 
 public class Util {
     /**
