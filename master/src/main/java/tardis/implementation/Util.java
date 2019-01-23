@@ -182,7 +182,7 @@ public class Util {
 			for (Path path : classpath) {
 				final File newPath = path.toFile();
 				if (!newPath.exists()) {
-					throw new MalformedURLException("The new path " + newPath + " does not exist");
+					//WORKAROUND: just skip it, this works around a bug in args4j where default values given to MultiPathOption fields are not expunged if the option is specified
 				} else {
 					paths.add(newPath);
 				}

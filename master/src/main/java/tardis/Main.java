@@ -69,11 +69,17 @@ public final class Main {
 	
 	public void start() throws IOException {
 		//creates the temporary directories if it does not exist
-		if (!exists(o.getTmpDirectoryPath())) {
-			createDirectory(o.getTmpDirectoryPath());
-		}
-		if (!exists(o.getTmpBinTestsDirectoryPath())) {
-			createDirectory(o.getTmpBinTestsDirectoryPath());
+		try {
+			if (!exists(o.getTmpDirectoryPath())) {
+				createDirectory(o.getTmpDirectoryPath());
+			}
+			if (!exists(o.getTmpBinTestsDirectoryPath())) {
+				createDirectory(o.getTmpBinTestsDirectoryPath());
+			}
+		} catch (IOException e) {
+			System.out.println("[MAIN    ] Error: unable to create temporary directories, does the base directory exist?");
+			System.out.println("[MAIN    ] Message: " + e);
+			System.exit(1);
 		}
 		
 		//creates the coverage data structure
@@ -137,30 +143,39 @@ public final class Main {
 		} catch (ClassNotFoundException | WrongClassNameException | BadClassFileVersionException | ClassFileNotFoundException | IncompatibleClassFileException | 
 			     ClassFileNotAccessibleException | ClassFileIllFormedException | MethodNotFoundException | MethodCodeNotFoundException e) {
 			System.out.println("[MAIN    ] Error: The target class or target method has wrong name, or version, or does not exist, or has unaccessible hierarchy, or is ill-formed, or the target method is abstract");
+			System.out.println("[MAIN    ] Message: " + e);
 			System.exit(1);
 		} catch (MalformedURLException e) {
 			System.out.println("[MAIN    ] Error: A path in the specified classpath does not exist or is ill-formed");
+			System.out.println("[MAIN    ] Message: " + e);
 			System.exit(1);
 		} catch (IOException e) {
 			System.out.println("[MAIN    ] Error: I/O exception while accessing the classpath");
+			System.out.println("[MAIN    ] Message: " + e);
 			System.exit(1);
 		} catch (SecurityException e) {
 			System.out.println("[MAIN    ] Error: The security manager did not allow to get the system class loader");
+			System.out.println("[MAIN    ] Message: " + e);
 			System.exit(1);
 		} catch (CannotAssumeSymbolicObjectException e) {
 			System.out.println("[MAIN    ] Error: Cannot execute symbolically a method of class java.lang.Class or java.lang.ClassLoader");
+			System.out.println("[MAIN    ] Message: " + e);
 			System.exit(1);
 		} catch (InvalidInputException e) {
 			System.out.println("[MAIN    ] Unexpected internal error: Invalid parameter");
+			System.out.println("[MAIN    ] Message: " + e);
 			System.exit(2);
 		} catch (PleaseLoadClassException e) {
 			System.out.println("[MAIN    ] Unexpected internal error: Class loading failed");
+			System.out.println("[MAIN    ] Message: " + e);
 			System.exit(2);
 		} catch (HeapMemoryExhaustedException e) {
 			System.out.println("[MAIN    ] Unexpected internal error: Heap memory exhausted");
+			System.out.println("[MAIN    ] Message: " + e);
 			System.exit(2);
 		} catch (InvalidClassFileFactoryClassException e) {
 			System.out.println("[MAIN    ] Unexpected internal error: Wrong class file factory");
+			System.out.println("[MAIN    ] Message: " + e);
 			System.exit(2);
 		}
 		return null; //to keep the compiler happy
@@ -179,7 +194,8 @@ public final class Main {
 		try (final OutputStream w = new BufferedOutputStream(Files.newOutputStream(javacLogFilePath))) {
 			compiler.run(null, w, w, javacParametersTestCase);
 		} catch (IOException e) {
-			System.out.println("[MAIN    ] Unexpected I/O error while creating test case compilation log file " + javacLogFilePath.toString() + ": " + e);
+			System.out.println("[MAIN    ] Unexpected I/O error while creating test case compilation log file " + javacLogFilePath.toString());
+			System.out.println("[MAIN    ] Message: " + e);
 			System.exit(2);
 		}
 		final ArrayList<EvosuiteResult> retVal = new ArrayList<>();
