@@ -62,7 +62,7 @@ public final class Options implements Cloneable {
 	@Option(name = "-classes",
 			usage = "The classpath of the project to analyze",
 			handler = MultiPathOptionHandler.class)
-	private List<Path> classesPath = new ArrayList<>(Collections.singletonList(Paths.get(".", "bin")));
+	private List<Path> classesPath;
 	
 	@Option(name = "-tmp_base",
 			usage = "Base directory where the temporary subdirectory is found or created",
