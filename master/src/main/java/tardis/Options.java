@@ -53,7 +53,7 @@ public final class Options implements Cloneable {
 	
 	@Option(name = "-max_depth",
 			usage = "The maximum depth at which generation of tests is performed")
-	private int maxDepth;
+	private int maxDepth = 50;
 	
 	@Option(name = "-num_threads",
 			usage = "The number of threads in the thread pool")

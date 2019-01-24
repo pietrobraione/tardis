@@ -20,7 +20,6 @@ shadowJar {
     relocate 'org.objectweb', 'tardis.org.objectweb'
     relocate 'org.kohsuke', 'tardis.org.kohsuke'
     relocate 'com.github', 'tardis.com.github'
-    relocate 'sushi', 'tardis'
 }
 
 build.dependsOn 'shadowJar'
