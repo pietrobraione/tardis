@@ -15,12 +15,12 @@ import java.util.concurrent.TimeUnit;
 
 import org.kohsuke.args4j.Option;
 import org.kohsuke.args4j.spi.MapOptionHandler;
-import org.kohsuke.args4j.spi.MultiPathOptionHandler;
 import org.kohsuke.args4j.spi.PathOptionHandler;
 
 import jbse.bc.Classpath;
 import sushi.configure.SignatureHandler;
 import sushi.configure.Visibility;
+import tardis.implementation.MultiPathOptionHandlerPatched;
 import tardis.implementation.MultiSignatureOptionHandler;
 
 public final class Options implements Cloneable {
@@ -61,7 +61,7 @@ public final class Options implements Cloneable {
 	
 	@Option(name = "-classes",
 			usage = "The classpath of the project to analyze",
-			handler = MultiPathOptionHandler.class)
+			handler = MultiPathOptionHandlerPatched.class)
 	private List<Path> classesPath;
 	
 	@Option(name = "-tmp_base",

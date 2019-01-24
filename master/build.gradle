@@ -28,9 +28,3 @@ build.dependsOn 'shadowJar'
 application {
     mainClassName = 'tardis.Main'
 }
-
-jar {
-    manifest {
-        attributes 'Main-Class': 'tardis.Main'
-    }
-}

@@ -25,9 +25,8 @@ The runtime dependencies that are automatically resolved by Gradle and included 
 
 * The `tools.jar` library, that is part of every JDK 8 setup (note, *not* of the JRE).
 * [Javassist](http://jboss-javassist.github.io/javassist/), that is used by JBSE for all the bytecode manipulation tasks.
-* [JaCoCo](http://www.eclemma.org/jacoco/), that is used by the coverage calculator included in SUSHI-Lib.
-* [ASM](http://asm.ow2.org/), that is a transitive dependency used by JaCoCo.
 * [args4j](http://args4j.kohsuke.org/), that is used by TARDIS to process command line arguments.
+* [JavaParser] (https://javaparser.org/), that is used by TARDIS to mangle Java source files.
 
 Another runtime dependency that is included in the git project is:
 
@@ -36,6 +35,13 @@ Another runtime dependency that is included in the git project is:
 There is one additional runtime dependencies that is not handled by Gradle so you will need to fix it manually. 
 
 * JBSE needs to interact with an external numeric solver for pruning infeasible program paths. At the purpose TARDIS requires to use [Z3](https://github.com/Z3Prover/z3), that is a standalone binary and can be installed almost everywhere.
+
+Finally, two runtime dependencies that are not currently used by TARDIS at runtime, but might be in future, are:
+
+* [JaCoCo](http://www.eclemma.org/jacoco/), that is used by the coverage calculator included in SUSHI-Lib.
+* [ASM](http://asm.ow2.org/), that is a transitive dependency used by JaCoCo.
+
+Gradle will download them to compile SUSHI-Lib, but you can avoid to deploy them.
 
 ## Working under Eclipse
 
@@ -57,25 +63,27 @@ In the end, your Eclipse workspace should contain these projects:
 
 ## Deploying TARDIS
 
-Deploying TARDIS to be used outside Eclipse is tricky but feasible with some effort. The `gradlew build` command will produce a SUSHI-Lib jar `runtime/build/libs/sushi-lib-<VERSION>.jar`, the JBSE jars in `jbse/build/libs` (refer to the JBSE project's README file for more information on them), and a jar for the main TARDIS application `master/build/libs/tardis-master-<VERSION>.jar`. You may deploy them and all the missing dependencies, if you feel adventurous. However, `gradlew build` will also produce an uber-jar `master/build/libs/tardis-<VERSION>-shaded.jar`, containing all the runtime dependencies excluded Z3, EvoSuite, and `tools.jar`. Deploying based on the uber-jar currently is the easiest way for deploying TARDIS. Moreover, although JBSE and SUSHI-Lib are already included in the TARDIS uber-jar, you will need to deploy the JBSE and SUSHI-Lib jars. The instruction for deploying based on the uber-jar plus these six dependencies are the following ones:
+Deploying TARDIS to be used outside Eclipse is tricky. The `gradlew build` command will produce a SUSHI-Lib jar `runtime/build/libs/sushi-lib-<VERSION>.jar`, the JBSE jars in `jbse/build/libs` (refer to the JBSE project's README file for more information on them), and a jar for the main TARDIS application `master/build/libs/tardis-master-<VERSION>.jar`. You need to deploy them and all their dependencies. Moreover, `gradlew build` will produce an uber-jar `master/build/libs/tardis-master-<VERSION>-shaded.jar` containing all the runtime dependencies excluded EvoSuite, and `tools.jar` (and, of course, Z3). Deploying based on the uber-jar is the easier, but our experience is that the uber-jar setup is more crash-prone. 
 
-* You can put the TARDIS uber-jar anywhere: Just set the Java classpath to point at it.
-* Deploying Z3 is very easy: Just put the Z3 binary directory somewhere, and add the Z3 binary to the system PATH, or use the `-z3` option when invoking TARDIS to point at it. 
-* Deploying EvoSuite is similarly easy: Put the right EvoSuite jar somewhere, and then use the `-evosuite` option when invoking TARDIS to point at it. Since TARDIS executes EvoSuite in a separate process, you do not need to put the EvoSuite jar in the classpath. 
-* TARDIS will not run if you deploy it on a machine that has a JRE, instead of a JDK, installed. This because TARDIS needs to invoke the platform's `javac` to compile some intermediate files. Therefore, you need to install a full JDK 8 on the target machine, providing both `tools.jar` and `javac` to TARDIS. Add `tools.jar` to the classpath, if it is not already in it by default.
-* Finally, the JBSE and SUSHI-Lib jars need not to be on the classpath (they are included in the TARDIS uber-jar, that is already in the classpath), but the path to them must be passed to TARDIS through the `-jbse_lib` and `-sushi_lib` options. 
+Here follows more detailed instructions for deploying TARDIS based on the plain jars:
+
+* Deploy Z3, possibly adding the Z3 binary to the system PATH.
+* Deploy the `tardis-master-<VERSION>.jar` and set the Java classpath to point at it.
+* Deploy either the `jbse-<version>.jar` or the `jbse-<version>-shaded.jar` and set the Java classpath to point at it.
+* Deploy the `sushi-lib-<VERSION>.jar` and set the Java classpath to point at it.
+* Deploying the two EvoSuite jars contained `lib`. Although TARDIS executes EvoSuite in a separate process, TARDIS will nevertheless try to load some of its classes, therefore you need to put one of the two EvoSuite jars in the classpath (read later to learn which of the two). 
+* TARDIS will not run if you deploy it on a machine that has a JRE, instead of a JDK, installed. This because TARDIS needs to invoke the platform's `javac` to compile some intermediate files. Therefore, you need to install a full JDK 8 on the target machine, providing both `tools.jar` and `javac` to TARDIS. Add `tools.jar` to the classpath.
+* Deploy the args4j, JavaParser and (if you do not use the `jbse-<version>-shaded.jar` uber-jar) Javassist jars that you find in the Gradle's cache. All these jars must be on the classpath.
+
+If you deploy the ``tardis-master-<VERSION>-shaded.jar` uber-jar you do not need to deploy the JBSE, SUSHI-Lib, args4j, JavaParser and Javassist jars.
 
 ## Usage
 
-You can launch TARDIS either from the command line, or from another program, e.g., from the `main` of an application. From the command line you need to invoke it as follows:
+Compile the target program with the debug symbols, then launch TARDIS either from the command line, or from another program, e.g., from the `main` of an application. From the command line you need to invoke it as follows:
 
-    $ java -cp <classpath> tardis.Main <options>
+    $ java -Xmx16G -cp <classpath> tardis.Main <options>
 
-or:
-
-    $ java -cp <classpath> -jar <tardisJarPath> <options>
- 
-where `<classpath>` must be set according to the indications of the previous section. If you launch TARDIS without options it will print a help screen that lists all the available options. If you prefer to launch TARDIS from code, this is a possible template:
+where `<classpath>` must be set according to the indications of the previous section. (Note that TARDIS is resource-consuming, thus we increased to 16 GB the memory allocated to the JVM). If you launch TARDIS without options it will print a help screen that lists all the available options with a brief explanation. If you prefer to launch TARDIS from code, this is a possible template:
 
 ```Java
 import tardis.Main;
@@ -93,18 +101,24 @@ public class Launcher {
 
 In both cases you need to set a number of options. The indispensable ones, that you *must* set in order for TARDIS to work, are:
 
+* `-evosuite` (command line) or `setEvosuitePath` (code): the path to one of the two EvoSuite jar files contained in the `lib/` folder. Use `evosuite-shaded-1.0.6-SNAPSHOT.jar` if you activate the MOSA option (see next point), otherwise use `evosuite-shaded-1.0.3.jar`. The same jar file must be put on the classpath (see previous section).
+* `-use_mosa` (command line) or `setUseMOSA` (code): configures EvoSuite to use a multi-objective search algorithm (MOSA). You usually want this option to be active, since it makes TARDIS faster in most cases.
+* `-jbse_lib` (command line) or `setJBSELibraryPath` (code): this must be set to the path of the JBSE jar file from the `jbse/build/libs` directory. It must be the same you put in the classpath. If you chose to deploy the `tardis-master-<VERSION>-shaded.jar` uber-jar, set this option to point to it.
+* `-sushi_lib` (command line) or `setSushiLibPath` (code): this must be set to the path of the SUSHI-Lib jar file from the `runtime/build/libs` directory.  If you chose to deploy the `tardis-master-<VERSION>-shaded.jar` uber-jar, set this option to point to it.
+* `-z3` (command line) or `setZ3Path` (code): the path to the Z3 binary (you can omit it if Z3 is on the system PATH).
 * `-classes` (command line) or `setClassesPath` (code): a colon- or semicolon-separated (depending on the OS) list of paths; It is the classpath of the software under test.
 * `-target_class` (command line) or `setTargetClass` (code): the name in [internal classfile format](https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-4.html#jvms-4.2.1) of the class to test: TARDIS will generate tests for all the methods in the class. Or alternatively:
 * `-target_method` (command line) or `setTargetMethod` (code): the signature of a method to test. The signature is a colon-separated list of: the name of the container class in internal classfile format; the [descriptor](https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-4.html#jvms-4.3.3) of the method; the name of the method. You can use the `javap` command, included with every JDK setup, to obtain the internal format signatures of methods: `javap -s my.Class` prints the list of all the methods in `my.Class` with their signatures in internal format.
-* `-evosuite` (command line) or `setEvosuitePath` (code): the path to one of the two EvoSuite jar files contained in the `lib/` folder. Use `evosuite-shaded-1.0.6-SNAPSHOT.jar` if you activate the MOSA option, otherwise use `evosuite-shaded-1.0.3.jar`.
-* `-use_mosa` (command line) or `setUseMOSA` (code): configures EvoSuite to use a multi-objective search algorithm (MOSA). You usually want this option to be active, since it makes TARDIS faster in most cases.
-* `-jbse_lib` (command line) or `setJBSELibraryPath` (code): this must be set to the path of the JBSE jar file. You will find one in the `jbse/build/libs` directory.
-* `-sushi_lib` (command line) or `setSushiLibPath` (code): this must be set to the path of the SUSHI-Lib jar file. You will find one in the `runtime/build/libs` directory.
-* `-z3` (command line) or `setZ3Path` (code):  the path to the Z3 binary (you can omit it if Z3 is on the system PATH).
 * `-tmp_base` (command line) or `setTmpDirectoryBase` (code): a path to a temporary directory; TARDIS needs to create many intermediate files, and will put them in a subdirectory of the one that you specify with this option. The subdirectory will have as name the date and time when TARDIS was launched.
 * `-out` (command line) or `setOutDirectory`: a path to a directory where TARDIS will put the generated tests.
 
-You will find examples of the code-based way of configuring TARDIS in the [tardis-experiments](https://github.com/pietrobraione/tardis-experiments) project.
+You will find examples of the code-based way of configuring TARDIS in the [tardis-experiments](https://github.com/pietrobraione/tardis-experiments) project. A possible example of command line is the following:
+
+    java -Xmx16G -cp tardis-master-0.1.0-SNAPSHOT.jar:sushi-lib-0.2.0-SNAPSHOT.jar:jbse-0.9.0-SNAPSHOT-shaded.jar:evosuite-shaded-1.0.6-SNAPSHOT.jar:args4j-2.32.jar:javaparser-core-3.4.0.jar:/usr/lib/jvm/java-8-openjdk-amd64/lib/tools.jar tardis.Main -jbse_lib jbse-0.9.0-SNAPSHOT-shaded.jar -sushi_lib sushi-lib-0.2.0-SNAPSHOT.jar -evosuite evosuite-shaded-1.0.6-SNAPSHOT.jar -use_mosa -z3 /opt/local/bin/z3 -classes ./my-application/bin -target_class my/Class -tmp_base ./tmp -out ./tests
+    
+In the case you prefer (at your own risk) to use the TARDIS uber-jar the command line becomes:
+
+    java -Xmx16G -cp tardis-master-0.1.0-SNAPSHOT-shaded.jar:evosuite-shaded-1.0.6-SNAPSHOT.jar:/usr/lib/jvm/java-8-openjdk-amd64/lib/tools.jar tardis.Main -jbse_lib tardis-master-0.1.0-SNAPSHOT-shaded.jar -sushi_lib tardis-master-0.1.0-SNAPSHOT-shaded.jar -evosuite evosuite-shaded-1.0.6-SNAPSHOT.jar -use_mosa -z3 /opt/local/bin/z3 -classes ./my-application/bin -target_class my/Class -tmp_base ./tmp -out ./tests
 
 ## Generated tests
 
