@@ -4,6 +4,7 @@ import static exec.Util.atJump;
 
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -12,12 +13,28 @@ import java.util.Map;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
+import com.sun.jdi.StackFrame;
+import com.sun.jdi.VMDisconnectedException;
+import com.sun.jdi.VirtualMachine;
+import com.sun.jdi.event.Event;
+import com.sun.jdi.event.EventIterator;
+import com.sun.jdi.event.EventQueue;
+import com.sun.jdi.event.EventSet;
+import com.sun.jdi.event.StepEvent;
+import com.sun.jdi.request.EventRequest;
+import com.sun.jdi.request.StepRequest;
 
 import jbse.algo.exc.CannotManageStateException;
 import jbse.apps.run.DecisionProcedureGuidance;
 import jbse.apps.run.DecisionProcedureGuidanceJDI;
+import jbse.apps.run.GuidanceException;
+import jbse.apps.run.Run;
+import jbse.apps.settings.ParseException;
+import jbse.apps.settings.SettingsReader;
+import jbse.bc.Signature;
 import jbse.bc.exc.InvalidClassFileFactoryClassException;
 import jbse.common.exc.ClasspathException;
+import jbse.common.exc.UnexpectedInternalException;
 import jbse.dec.DecisionProcedureAlgorithms;
 import jbse.dec.DecisionProcedureAlwSat;
 import jbse.dec.DecisionProcedureClassInit;
@@ -36,6 +53,7 @@ import jbse.jvm.exc.EngineStuckException;
 import jbse.jvm.exc.FailureException;
 import jbse.jvm.exc.InitializationException;
 import jbse.jvm.exc.NonexistingObservedVariablesException;
+import jbse.mem.Clause;
 import jbse.mem.State;
 import jbse.mem.exc.ContradictionException;
 import jbse.mem.exc.ThreadStackEmptyException;
@@ -47,7 +65,7 @@ import jbse.tree.StateTree.BranchPoint;
 
 public class RunnerPath {
 	private static final String COMMANDLINE_LAUNCH_Z3 = System.getProperty("os.name").toLowerCase().contains("windows") ? " /smt2 /in /t:10" : " -smt2 -in -t:10";
-
+	
 	private final String[] classpath;
 	private final String z3Path;
 	private final String outPath;
@@ -55,6 +73,9 @@ public class RunnerPath {
 	private final TestCase testCase;
 	private final RunnerParameters commonParamsGuided;
 	private final RunnerParameters commonParamsGuiding;
+	
+	/* MAME */
+	private String jbsefilesPath = "";
 		
 	public RunnerPath(Options o, EvosuiteResult item) {
 		this.classpath = new String[o.getClassesPath().size() + 4];
@@ -69,12 +90,19 @@ public class RunnerPath {
 		this.outPath = o.getOutDirectory().toString();
 		this.targetMethodName = item.getTargetMethodName();
 		this.testCase = item.getTestCase();
-		
 		//builds the template parameters object for the guided (symbolic) execution
 		this.commonParamsGuided = new RunnerParameters();
 		this.commonParamsGuided.setMethodSignature(item.getTargetClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName());
 		this.commonParamsGuided.addClasspath(this.classpath);
 		this.commonParamsGuided.setBreadthMode(BreadthMode.ALL_DECISIONS_NONTRIVIAL);
+		
+		/* MAME */
+		if (o.getJBSEFilesPath() != null) {
+			this.jbsefilesPath = o.getJBSEFilesPath().toString();
+		}
+
+		/* CODICE ORIGINALE */
+		
 		if (o.getHeapScope() != null) {
 			for (Map.Entry<String, Integer> e : o.getHeapScope().entrySet()) {
 				this.commonParamsGuided.setHeapScope(e.getKey(), e.getValue());
@@ -84,11 +112,25 @@ public class RunnerPath {
 			this.commonParamsGuided.setCountScope(o.getCountScope());
 		}
 		
+		/* MAME */
+		if (o.getDepthScope() > 0) {
+			this.commonParamsGuided.setDepthScope(o.getDepthScope());
+		}
+		
+		if(o.getUninterpreted() != null) {
+			for (Map.Entry<Signature, String> e : o.getUninterpreted().entrySet()) {
+				this.commonParamsGuided.addUninterpreted(e.getKey().getClassName(), e.getKey().getDescriptor(), e.getKey().getName(), e.getValue());
+			}
+		}
+		/* MAME */
+		
+		
 		//builds the template parameters object for the guiding (concrete) execution
 		this.commonParamsGuiding = new RunnerParameters();
 		this.commonParamsGuiding.addClasspath(this.classpath);
 		this.commonParamsGuiding.setStateIdentificationMode(StateIdentificationMode.COMPACT);
 		this.commonParamsGuiding.setBreadthMode(BreadthMode.ALL_DECISIONS);
+		
 	}
 
 	private static class ActionsRunner extends Actions {
@@ -101,10 +143,13 @@ public class RunnerPath {
 		private boolean atJump = false;
 		private int jumpPC = 0;
 		private final HashSet<String> coverage = new HashSet<>();
+		private final Signature targetMethodSignature;
+		private boolean atInitial = false;
 		
-		public ActionsRunner(int testDepth, DecisionProcedureGuidance guid) {
+		public ActionsRunner(int testDepth, DecisionProcedureGuidance guid, Signature targetMethodSignature) {
 			this.testDepth = testDepth;
 			this.guid = guid;
+			this.targetMethodSignature = targetMethodSignature;
 		}
 		
 		public ArrayList<State> getStateList() {
@@ -135,6 +180,14 @@ public class RunnerPath {
 		@Override
 		public boolean atStepPre() {
 			final State currentState = getEngine().getCurrentState();
+
+			try {
+				if (currentState.getCurrentMethodSignature().equals(targetMethodSignature)) {
+					atInitial = true;
+				}
+			} catch (ThreadStackEmptyException e1) { }
+			
+			
 			try {
 				this.atJump = atJump(currentState.getInstruction());
 				if (this.atJump) {
@@ -152,9 +205,29 @@ public class RunnerPath {
 		
 		@Override
 		public boolean atStepPost() {
-			if (this.atJump) {
+            if (atInitial && this.guid != null) {  
+            	try {
+                      /* if (Run.this.engine.getCurrentState().getCurrentMethodSignature().equals( 
+                                Run.this.guidance.getCurrentMethodSignature())) { 
+                           Run.this.guidance.step();
+                        }*/
+            		this.guid.step();  
+                    	
+            	} catch (GuidanceException e) {
+    				throw new RuntimeException(e); //TODO better exception!
+    				//Run.this.err(ERROR_GUIDANCE_FAILED);
+            		//Run.this.err(e);
+            		//return true;
+            	} catch (CannotManageStateException | ThreadStackEmptyException e) {
+            		throw new UnexpectedInternalException(e);
+            	}
+            }
+
+            if (this.atJump) {
 				final State currentState = getEngine().getCurrentState();
 				try {
+				
+					
 					this.coverage.add(currentState.getCurrentMethodSignature().toString() + ":" + this.jumpPC + ":" + currentState.getPC());
 				} catch (ThreadStackEmptyException e) {
 					//this should never happen
@@ -166,13 +239,14 @@ public class RunnerPath {
 		
 		@Override
 		public boolean atBranch(BranchPoint bp) {
+			
 			this.currentDepth++;				
-			if (this.currentDepth == this.testDepth) {
+			if (this.currentDepth == this.testDepth) {				
+	
 				this.guid.endGuidance();
 				this.savePreState = true;
+				
 			} else if (this.currentDepth == this.testDepth + 1) {
-				//we are at the post-frontier state: here preState
-				//contains the pre-frontier state
 				this.stateList.add(getEngine().getCurrentState().clone());
 				getEngine().stopCurrentTrace();
 				this.savePreState = false;
@@ -234,13 +308,16 @@ public class RunnerPath {
 	 * @throws ContradictionException
 	 * @throws EngineStuckException
 	 * @throws FailureException
+	 * @throws ParseException 
+	 * @throws IOException 
+	 * @throws FileNotFoundException 
 	 */
 	public State runProgram()
 			throws DecisionException, CannotBuildEngineException, InitializationException, 
 			InvalidClassFileFactoryClassException, NonexistingObservedVariablesException, 
 			ClasspathException, CannotBacktrackException, CannotManageStateException, 
 			ThreadStackEmptyException, ContradictionException, EngineStuckException, 
-			FailureException {
+			FailureException, FileNotFoundException, IOException, ParseException {
 		return runProgram(-1).get(0); //depth -1 == never stop guidance
 	}
 	
@@ -267,51 +344,71 @@ public class RunnerPath {
 	 * @throws ContradictionException
 	 * @throws EngineStuckException
 	 * @throws FailureException
+	 * @throws ParseException 
+	 * @throws IOException 
+	 * @throws FileNotFoundException 
 	 */
 	public List<State> runProgram(int testDepth)
 			throws DecisionException, CannotBuildEngineException, InitializationException, 
 			InvalidClassFileFactoryClassException, NonexistingObservedVariablesException, 
 			ClasspathException, CannotBacktrackException, CannotManageStateException, 
 			ThreadStackEmptyException, ContradictionException, EngineStuckException, 
-			FailureException {
+			FailureException, FileNotFoundException, IOException, ParseException {
 
 		//builds the parameters
 		final RunnerParameters pGuided = this.commonParamsGuided.clone();
 		final RunnerParameters pGuiding = this.commonParamsGuiding.clone();
-
+		
 		//sets the calculator
 		final CalculatorRewriting calc = new CalculatorRewriting();
 		calc.addRewriter(new RewriterOperationOnSimplex());
 		pGuided.setCalculator(calc);
 		pGuiding.setCalculator(calc);
 		
-		//sets the decision procedures
-		pGuided.setDecisionProcedure(new DecisionProcedureAlgorithms(
-				new DecisionProcedureClassInit( //useless?
-						new DecisionProcedureLICS( //useless?
-								new DecisionProcedureSMTLIB2_AUFNIRA(
-										new DecisionProcedureAlwSat(), 
-										calc, this.z3Path + COMMANDLINE_LAUNCH_Z3), 
-								calc, new LICSRulesRepo()), 
-						calc, new ClassInitRulesRepo()), calc));
+		/* MAME */
+		LICSRulesRepo licsRulesRepo = new LICSRulesRepo();
+		ClassInitRulesRepo classInitRulesRepo = new ClassInitRulesRepo();
+		
+		
+		if(jbsefilesPath != "") {
+			System.out.println("invariante");
+			SettingsReader settingsReader = new SettingsReader(jbsefilesPath);
+			settingsReader.fillRulesLICS(licsRulesRepo);
+			settingsReader.fillRulesClassInit(classInitRulesRepo);
+		}
+		
+		pGuided.setDecisionProcedure(
+				new DecisionProcedureAlgorithms(
+						new DecisionProcedureClassInit( //useless?
+								new DecisionProcedureLICS( //useless?
+										new DecisionProcedureSMTLIB2_AUFNIRA(
+												new DecisionProcedureAlwSat(), 
+												calc, this.z3Path + COMMANDLINE_LAUNCH_Z3
+											), 
+												calc, licsRulesRepo), 
+												calc, classInitRulesRepo), calc));
 		pGuiding.setDecisionProcedure(
 				new DecisionProcedureAlgorithms(
-						new DecisionProcedureClassInit(
-								new DecisionProcedureAlwSat(), 
-								calc, new ClassInitRulesRepo()), 
-						calc)); //for concrete execution
-
+				new DecisionProcedureClassInit(
+				new DecisionProcedureAlwSat(), 
+				calc, classInitRulesRepo), 
+				calc)); 
+		
+		/* CODICE ORIGINALE */
+	
 		//sets the guiding method (to be executed concretely)
+		
 		pGuiding.setMethodSignature(this.testCase.getClassName(), this.testCase.getMethodDescriptor(), this.testCase.getMethodName());
 		
 		//creates the guidance decision procedure and sets it
 		final int numberOfHits = countNumberOfInvocations(this.testCase.getClassName(), this.targetMethodName);
+	
 		final DecisionProcedureGuidanceJDI guid = new DecisionProcedureGuidanceJDI(pGuided.getDecisionProcedure(),
 				pGuided.getCalculator(), pGuiding, pGuided.getMethodSignature(), numberOfHits);
 		pGuided.setDecisionProcedure(guid);
 		
 		//sets the actions
-		final ActionsRunner actions = new ActionsRunner(testDepth, guid);
+		final ActionsRunner actions = new ActionsRunner(testDepth, guid, pGuided.getMethodSignature());
 		pGuided.setActions(actions);
 
 		//builds the runner and runs it

@@ -1,0 +1,6 @@
+[MAIN    ] Starting at 2019/01/11 15:26:47
+[JBSE    ] Run test case tg/Test1, path condition [{R0} == Object[0] (fresh), pre_init(tg/Testgen), {V1} >= 0, {V1} <= 10, pre_init(tg/Testgen$Node)]
+[JBSE    ] Current coverage: 2 branches
+[JBSE    ] From test case tg/Test1 generated path condition [{R0} == Object[0] (fresh), pre_init(tg/Testgen), {V1} < 0]
+[JBSE    ] From test case tg/Test1 generated path condition [{R0} == Object[0] (fresh), pre_init(tg/Testgen), {V1} >= 0, {V1} > 10]
+[JBSE    ] From test case tg/Test1 no path condition generated

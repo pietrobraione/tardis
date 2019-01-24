@@ -1,0 +1,13 @@
+resolve begin
+
+-- root/left/right entries expand
+{R_ANY}/root(/left|/right)* instanceof avl_tree/AvlNode aliases nothing,
+
+-- wellConnected
+{R_ANY}/root/parent instanceof avl_tree/AvlNode expands to nothing,
+{R_ANY}/root/parent instanceof avl_tree/AvlNode aliases nothing,
+{R_ANY}/root(/left|/right)+/parent instanceof avl_tree/AvlNode not null,
+{R_ANY}/root(/left|/right)+/parent instanceof avl_tree/AvlNode expands to nothing,
+{R_ANY}/root(/left|/right)+/parent instanceof avl_tree/AvlNode aliases {$REF}/{UP}/{UP}
+
+end

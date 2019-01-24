@@ -1,0 +1,18 @@
+resolve begin
+
+-- righe
+{R_ANY}/(first/|next/)*str instanceof java/lang/String expands to instanceof java/lang/String triggers com/google/javascript/rhino/Node:(Lcom/google/javascript/rhino/Node;)V:_gotStrExpand:{$REF}/{UP}, 
+{R_ANY}/compiler instanceof com/google/javascript/jscomp/AbstractCompiler expands to instanceof com/google/javascript/jscomp/StubCompiler,
+
+-- righe
+{R_ANY}/codingConvention instanceof com/google/javascript/jscomp/CodingConvention expands to instanceof com/google/javascript/jscomp/ClosureCodingConvention,
+{R_ANY}/nextConvention instanceof com/google/javascript/jscomp/CodingConvention expands to instanceof com/google/javascript/jscomp/CodingConventions$DefaultCodingConvention,
+{R_ANY} instanceof com/google/common/collect/Multimap expands to instanceof com/google/common/collect/ArrayListMultimap,
+-- righe
+
+-- Node types: righe
+{R_ANY} instanceof com/google/javascript/rhino/Node expands to instanceof com/google/javascript/rhino/Node,
+{R_ANY} instanceof com/google/javascript/rhino/Node expands to instanceof com/google/javascript/rhino/Node$StringNode,
+-- righe
+
+end

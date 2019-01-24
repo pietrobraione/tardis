@@ -12,9 +12,11 @@ public class AvlRun {
 		final String targetClass = "avlTest/AvlTree";
 		final String targetMethodDescriptor = "(I)I";
 		final String targetMethodName  = "find";
+		
 		final String initialTestClass = "avlTest/AvlTest";
 		final String initialTestMethodDescriptor = "()V";
 		final String initialTestMethodName = "testFind";
+		
 		final int maxDepth = 50;
 		final int numOfThreads = 5;
 		final long globalTimeBudgetDuration = 30;
@@ -22,7 +24,7 @@ public class AvlRun {
 		
 		final Options o = new Options();
 		o.setTargetClass(targetClass);
-		//o.setTargetMethod(targetClass, targetMethodDescriptor, targetMethodName);
+		o.setTargetMethod(targetClass, targetMethodDescriptor, targetMethodName);
 		o.setInitialTestCase(initialTestClass, initialTestMethodDescriptor, initialTestMethodName);
 		o.setMaxDepth(maxDepth);
 		o.setNumOfThreads(numOfThreads);

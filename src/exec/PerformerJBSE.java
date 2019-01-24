@@ -1,5 +1,6 @@
 package exec;
 
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
@@ -8,6 +9,7 @@ import concurrent.InputBuffer;
 import concurrent.OutputBuffer;
 import concurrent.Performer;
 import jbse.algo.exc.CannotManageStateException;
+import jbse.apps.settings.ParseException;
 import jbse.bc.exc.InvalidClassFileFactoryClassException;
 import jbse.common.exc.ClasspathException;
 import jbse.dec.exc.DecisionException;
@@ -26,12 +28,13 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 	private final Options o;
 	private final int maxDepth;
 	private final CoverageSet coverageSet;
-
+	
 	public PerformerJBSE(Options o, InputBuffer<EvosuiteResult> in, OutputBuffer<JBSEResult> out, CoverageSet coverageSet) {
 		super(in, out, o.getNumOfThreads(), 1, o.getGlobalTimeBudgetDuration(), o.getGlobalTimeBudgetUnit());
 		this.o = o.clone();
 		this.maxDepth = o.getMaxDepth();
 		this.coverageSet = coverageSet;
+		
 	}
 	
 	@Override
@@ -45,7 +48,13 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 					ClasspathException | CannotBacktrackException | CannotManageStateException |
 					ThreadStackEmptyException | ContradictionException | EngineStuckException |
 					FailureException e ) {
-				System.out.println("[JBSE    ] Unexpected exception raised while exploring test case " + item.getTestCase().getClassName() + ": " + e.getMessage());
+				System.out.println("[JBSE    ] Unexpected exception raised while exploring test case " + item.getTestCase().getClassName() + ": " + e.getMessage() + ": " + e);
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (ParseException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
 			}
 		};
 		return job;
@@ -69,13 +78,15 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 	 * @throws ContradictionException
 	 * @throws EngineStuckException
 	 * @throws FailureException
+	 * @throws IOException 
+	 * @throws ParseException 
 	 */
 	private void explore(EvosuiteResult item, int startDepth) 
 			throws DecisionException, CannotBuildEngineException, InitializationException, 
 			InvalidClassFileFactoryClassException, NonexistingObservedVariablesException, 
 			ClasspathException, CannotBacktrackException, CannotManageStateException, 
 			ThreadStackEmptyException, ContradictionException, EngineStuckException, 
-			FailureException {
+			FailureException, IOException, ParseException {
 		if (this.maxDepth <= 0) {
 			return;
 		}
@@ -85,14 +96,18 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 		final State tcFinalState = rp.runProgram();
 		final Collection<Clause> tcFinalPC = tcFinalState.getPathCondition();
 		this.coverageSet.addAll(rp.getCoverage());
-		System.out.println("[JBSE    ] Run test case " + tc.getClassName() + ", path condition " + tcFinalPC.toString());
-		System.out.println("[JBSE    ] Current coverage: " + this.coverageSet.size() + " branches");
+		
+		/* MAME */
+		Main.printConsole("[JBSE    ] Run test case " + tc.getClassName() + ", path condition " + tcFinalPC.toString());
+		Main.printConsole("[JBSE    ] Current coverage: " + this.coverageSet.size() + " branches");
+
 		final int tcFinalDepth = tcFinalState.getDepth();
 		boolean noPathConditionGenerated = true;
 		for (int currentDepth = startDepth; currentDepth < Math.min(this.maxDepth, tcFinalDepth - 1); currentDepth++) {
 			//runs the program
-			final List<State> newStates = rp.runProgram(currentDepth);
 			
+			final List<State> newStates = rp.runProgram(currentDepth);
+		
 			//checks shutdown of the performer
 			if (Thread.interrupted()) {
 				return;
@@ -108,12 +123,14 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 					continue;
 				}
 				this.getOutputBuffer().add(new JBSEResult(item, initialState, preState, newState, atJump, currentDepth));
-				System.out.println("[JBSE    ] From test case " + tc.getClassName() + " generated path condition " + currentPC);
-				noPathConditionGenerated = false;
+				
+				/* MAME */
+				Main.printConsole("[JBSE    ] From test case " + tc.getClassName() + " generated path condition " + currentPC);
+				/* MAME */			
 			}
 		}
 		if (noPathConditionGenerated) {
-			System.out.println("[JBSE    ] From test case " + tc.getClassName() + " no path condition generated");
+			Main.printConsole("[JBSE    ] From test case " + tc.getClassName() + " no path condition generated");
 		}
 	}
 

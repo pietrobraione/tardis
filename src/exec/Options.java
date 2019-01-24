@@ -3,13 +3,17 @@ package exec;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+
+import jbse.bc.Signature;
 
 import org.kohsuke.args4j.Option;
 import org.kohsuke.args4j.spi.MapOptionHandler;
@@ -54,6 +58,13 @@ public class Options implements Cloneable {
 			usage = "Base directory where the temporary subdirectory is found or created",
 			handler = PathOptionHandler.class)
 	private Path tmpDirBase = Paths.get(".", "tmp");
+
+	/* MAME */
+	@Option(name = "-logs-path-conditions_base",
+			usage = "Logs path conditions directory where log of path conditions is created",
+			handler = PathOptionHandler.class)
+	private Path dirLogsPathConditions = Paths.get(".", "logs-path-conditions");
+	/* MAME */
 	
 	@Option(name = "-tmp_name",
 			usage = "Name of the temporary subdirectory to use or create")
@@ -78,6 +89,10 @@ public class Options implements Cloneable {
 			usage = "Path to JBSE library",
 			handler = PathOptionHandler.class)
 	private Path jbsePath = Paths.get(".", "lib", "jbse.jar");
+	
+	/* MAME */
+	private Path jbsefilesPath;
+	/* MAME */
 
 	@Option(name = "-jbse_jre",
 			usage = "Path to JRE library suitable for JBSE analysis",
@@ -96,7 +111,7 @@ public class Options implements Cloneable {
 	
 	@Option(name = "-evosuite_time_budget_duration",
 			usage = "Duration of the time budget for EvoSuite")
-	private int evosuiteTimeBudgetDuration = 180;
+	private int evosuiteTimeBudgetDuration = 900;
 	
 	@Option(name = "-evosuite_time_budget_unit",
 			usage = "Unit of the time budget for EvoSuite: NANOSECONDS, MICROSECONDS, MILLISECONDS, SECONDS, MINUTES, HOURS, DAYS")
@@ -126,10 +141,23 @@ public class Options implements Cloneable {
 			usage = "Set to true if you want to use MOSA, false for ordinary EvoSuite")
 	private boolean useMOSA = false;
 	
+	/* MAME */
+	@Option(name = "-depth_scope",
+			usage = "JBSE depth scope, 0 means unlimited")
+	private int depthScope = 0;
+	/* MAME */
+	
 	@Option(name = "-heap_scope",
 			usage = "JBSE heap scope in the form <className1>=<maxNumInstances1>; multiple heap scopes can be specified",
 			handler = MapOptionHandler.class)
 	private Map<String, Integer> heapScope;
+	
+	/* MAME */
+	@Option(name = "-uninterpreted",
+			usage = "JBSE uninterpreted method in the form <signature>=<uninterpreted_method>; multiple uninterpreted methods can be specified",
+			handler = MapOptionHandler.class)
+	private Map<Signature, String> uninterpreted;
+	/* MAME */
 	
 	@Option(name = "-count_scope",
 			usage = "JBSE count scope, 0 means unlimited")
@@ -203,12 +231,22 @@ public class Options implements Cloneable {
 		this.classesPath = Arrays.asList(paths);
 	}
 	
+	public void setClassesPath(String... strings) {
+		for(int i = 0; i < strings.length; i++) {
+			this.classesPath = Arrays.asList(Paths.get(strings[i]));
+		}
+	}
+	
 	public Path getTmpDirectoryBase() {
 		return this.tmpDirBase;
 	}
 	
 	public void setTmpDirectoryBase(Path base) {
 		this.tmpDirBase = base;
+	}
+	
+	public void setTmpDirectoryBase(String base) {
+		this.tmpDirBase = Paths.get(base);
 	}
 	
 	public String getTmpDirectoryName() {
@@ -227,6 +265,24 @@ public class Options implements Cloneable {
 		}
 	}
 	
+	/* MAME */
+	public Path getLogsPathConditionsDirectoryPath() {
+		if (this.tmpDirName == null) {
+			return this.dirLogsPathConditions;
+		} else {
+			return this.dirLogsPathConditions.resolve(this.tmpDirName);
+		}
+	}
+	
+	public void setLogsPathConditionsDirectoryPath(Path dirLogsPathConditions) {
+		this.dirLogsPathConditions = dirLogsPathConditions;
+	}
+	
+	public void setLogsPathConditionsDirectoryPath(String dirLogsPathConditions) {
+		this.dirLogsPathConditions = Paths.get(dirLogsPathConditions);
+	}
+	/* MAME */
+	
 	public Path getTmpBinTestsDirectoryPath() {
 		return getTmpDirectoryPath().resolve("bin");
 	}
@@ -239,12 +295,20 @@ public class Options implements Cloneable {
 		this.outDir = dir;
 	}
 	
+	public void setOutDirectory(String dir) {
+		this.outDir = Paths.get(dir);
+	}
+	
 	public Path getZ3Path() {
 		return this.z3Path;
 	}
 	
 	public void setZ3Path(Path z3Path) {
 		this.z3Path = z3Path;
+	}
+	
+	public void setZ3Path(String z3Path) {
+		this.z3Path = Paths.get(z3Path);
 	}
 	
 	public Path getJava8Path() {
@@ -263,12 +327,20 @@ public class Options implements Cloneable {
 		this.jbsePath = jbsePath;
 	}
 	
+	public void setJBSELibraryPath(String jbsePath) {
+		this.jbsePath = Paths.get(jbsePath);
+	}
+	
 	public Path getJREPath() {
 		return this.jrePath;
 	}
 
 	public void setJREPath(Path jrePath) {
 		this.jrePath = jrePath;
+	}
+	
+	public void setJREPath(String jrePath) {
+		this.jrePath = Paths.get(jrePath);
 	}
 	
 	public Path getEvosuitePath() {
@@ -279,12 +351,20 @@ public class Options implements Cloneable {
 		this.evosuitePath = evosuitePath;
 	}
 	
+	public void setEvosuitePath(String evosuitePath) {
+		this.evosuitePath = Paths.get(evosuitePath);
+	}
+	
 	public Path getSushiLibPath() {
 		return this.sushiPath;
 	}
 	
 	public void setSushiLibPath(Path sushiPath) {
 		this.sushiPath = sushiPath;
+	}
+	
+	public void setSushiLibPath(String sushiPath) {
+		this.sushiPath = Paths.get(sushiPath);
 	}
 	
 	public int getEvosuiteTimeBudgetDuration() {
@@ -351,6 +431,16 @@ public class Options implements Cloneable {
 		this.useMOSA = useMOSA;
 	}
 	
+	/* MAME */
+	public Path getJBSEFilesPath() {
+		return this.jbsefilesPath;
+	}
+	
+	public void setJBSEFilesPath(Path jbsefilesPath) {
+		this.jbsefilesPath = jbsefilesPath;
+	}
+	/* MAME */
+	
 	public void setHeapScope(String className, int scope) {
 		if (className == null) {
 			return;
@@ -360,6 +450,18 @@ public class Options implements Cloneable {
 		}
 		this.heapScope.put(className, Integer.valueOf(scope));
 	}
+	
+	/* MAME */
+	public void setUninterpreted(Signature signature, String method) {
+		if (signature == null) {
+			return;
+		}
+		if (this.uninterpreted == null) {
+			this.uninterpreted = new HashMap<Signature, String>();
+		}
+		this.uninterpreted.put(signature, method);
+	}
+	/* MAME */
 	
 	public void setHeapScopeUnlimited(String className) {
 		if (this.heapScope == null) {
@@ -376,6 +478,12 @@ public class Options implements Cloneable {
 		return (this.heapScope == null ? null : Collections.unmodifiableMap(this.heapScope));
 	}
 	
+	/* MAME */
+	public Map<Signature, String> getUninterpreted() {
+		return (this.uninterpreted == null ? null : Collections.unmodifiableMap(this.uninterpreted));
+	}
+	/* MAME */
+	
 	public void setCountScope(int countScope) {
 		this.countScope = countScope;
 	}
@@ -383,6 +491,16 @@ public class Options implements Cloneable {
 	public int getCountScope() {
 		return this.countScope;
 	}
+	
+	/* MAME */
+	public int getDepthScope() {
+		return this.depthScope;
+	}
+	
+	public void setDepthScope(int depthScope) {
+		this.depthScope = depthScope;
+	}
+	/* MAME */
 	
 	@Override
 	public Options clone() {

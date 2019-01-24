@@ -3,7 +3,12 @@ package exec;
 import static java.nio.file.Files.createDirectory;
 import static java.nio.file.Files.exists;
 
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
+import java.io.PrintWriter;
+import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -32,9 +37,31 @@ import sushi.util.ClassReflectionUtils;
 public final class Main {
 	private final Options o;
 	
+	/* MAME */
+	private static Path dirLogsPathConditions;
+	/* MAME */
+	
 	public Main(Options o) {
 		this.o = o;
+		
+		/* MAME */
+		Main.dirLogsPathConditions = o.getLogsPathConditionsDirectoryPath();
+		/* MAME */
 	}
+	
+	/* MAME */
+	public static void printConsole(String text) throws IOException {
+		System.out.println(text);
+		File log = new File(dirLogsPathConditions + "/console.txt");
+		if (!log.exists()) {
+			log.createNewFile();
+		}
+		PrintWriter out = new PrintWriter(new FileWriter(log, true));
+		BufferedWriter bw = new BufferedWriter(out);
+		bw.write(text + "\n");
+		bw.close();			
+	}
+	/* MAME */
 	
 	public void start() throws IOException {
 		//creates the temporary directories if it does not exist
@@ -44,6 +71,12 @@ public final class Main {
 		if (!exists(o.getTmpBinTestsDirectoryPath())) {
 			createDirectory(o.getTmpBinTestsDirectoryPath());
 		}
+		
+		/* MAME */
+		if (!exists(o.getLogsPathConditionsDirectoryPath())) {
+			createDirectory(o.getLogsPathConditionsDirectoryPath());
+		}
+		/* MAME */
 		
 		//creates the coverage data structure
 		final CoverageSet coverageSet = new CoverageSet();
@@ -71,15 +104,24 @@ public final class Main {
 		}
 		
 		//starts everything
+		
 		final DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss");
-		System.out.println("[MAIN    ] Starting at " + dtf.format(LocalDateTime.now()));
+		
+		/* MAME */
+		printConsole("[MAIN    ] Starting at " + dtf.format(LocalDateTime.now()));
+		/* MAME */		
+		
 		performerJBSE.start();
 		performerEvosuite.start();
 		terminationManager.start();
 		
 		//waits end and prints a final message
 		terminationManager.waitTermination();
-		System.out.println("[MAIN    ] Ending at " + dtf.format(LocalDateTime.now()));
+		
+		/* MAME */
+		printConsole("[MAIN    ] Ending at " + dtf.format(LocalDateTime.now()));
+		/* MAME */
+	
 	}
 	
 	private ArrayList<JBSEResult> seedForEvosuite() {
@@ -106,7 +148,6 @@ public final class Main {
 				//this.o indicates a single target method
 				final State s = new State(new Classpath(classpath), ClassFileFactoryJavassist.class, new HashMap<>(), calc);
 				s.pushFrameSymbolic(new Signature(this.o.getTargetMethod().get(0), this.o.getTargetMethod().get(1), this.o.getTargetMethod().get(2)));
-				s.setInitialHistoryPoint(true);
 				retVal.add(new JBSEResult(this.o.getTargetMethod().get(0), this.o.getTargetMethod().get(1), this.o.getTargetMethod().get(2), s, s, s, false, -1));
 			}
 			return retVal;

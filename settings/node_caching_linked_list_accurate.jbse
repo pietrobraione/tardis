@@ -1,0 +1,82 @@
+resolve begin
+
+
+-- parameter value and field Node.value are both distinct objects or null, or alias of each other 
+{ROOT}:value instanceof java/lang/Object aliases {R_ANY}/header(/next|/previous)+/value,
+{R_ANY}/header(/next|/previous)+/value instanceof java/lang/Object aliases {ROOT}:value,
+
+------------------------------------------------- 
+-- representation invariants for this.l
+
+-- defines the NodeCachingLinkedList._owner instrumentation field necessary to triggers
+{R_ANY}/header(/next|/previous)*/_owner instanceof node_caching_linked_list/NodeCachingLinkedList not null,
+{R_ANY}/header(/next|/previous)*/_owner instanceof node_caching_linked_list/NodeCachingLinkedList expands to nothing,
+{R_ANY}/header(/next|/previous)*/_owner instanceof node_caching_linked_list/NodeCachingLinkedList aliases {$R_ANY},
+{R_ANY}/firstCachedNode(/next)*/_owner instanceof node_caching_linked_list/NodeCachingLinkedList not null,
+{R_ANY}/firstCachedNode(/next)*/_owner instanceof node_caching_linked_list/NodeCachingLinkedList expands to nothing,
+{R_ANY}/firstCachedNode(/next)*/_owner instanceof node_caching_linked_list/NodeCachingLinkedList aliases {$R_ANY},
+
+-- list header must exist and be distinct from other nodes
+{R_ANY}/header instanceof node_caching_linked_list/NodeCachingLinkedList$LinkedListNode not null,
+{R_ANY}/header instanceof node_caching_linked_list/NodeCachingLinkedList$LinkedListNode aliases nothing,
+
+-- list header stores no data
+{R_ANY}/header/value instanceof java/lang/Object expands to nothing,
+{R_ANY}/header/value instanceof java/lang/Object aliases nothing,
+
+-- all the noncached nodes must have a next and a previous
+{R_ANY}/header(/next|/previous)* instanceof node_caching_linked_list/NodeCachingLinkedList$LinkedListNode not null,
+
+-- the size of a list must be greater than the number of noncached nodes (by trigger)
+{R_ANY}/header(/next)+ instanceof node_caching_linked_list/NodeCachingLinkedList$LinkedListNode expands to instanceof node_caching_linked_list/NodeCachingLinkedList$LinkedListNode triggers node_caching_linked_list/NodeCachingLinkedList$LinkedListNode:(Lnode_caching_linked_list/NodeCachingLinkedList$LinkedListNode;)V:_got_LinkedListNode_nonroot:{$REF},
+{R_ANY}/header(/previous)+ instanceof node_caching_linked_list/NodeCachingLinkedList$LinkedListNode expands to instanceof node_caching_linked_list/NodeCachingLinkedList$LinkedListNode triggers node_caching_linked_list/NodeCachingLinkedList$LinkedListNode:(Lnode_caching_linked_list/NodeCachingLinkedList$LinkedListNode;)V:_got_LinkedListNode_nonroot:{$REF},
+
+-- the rightmost noncached node can be resolved by alias to the leftmost one and vice versa;
+-- in this case the size of the list is exactly the number of noncached nodes (by trigger)
+-- (note that these rules include the degenerate empty list case header.next == header.prev == header);
+{R_ANY}/header(/next)* instanceof node_caching_linked_list/NodeCachingLinkedList$LinkedListNode aliases max {$R_ANY}/header(/previous)* triggers node_caching_linked_list/NodeCachingLinkedList$LinkedListNode:(Lnode_caching_linked_list/NodeCachingLinkedList$LinkedListNode;)V:_handleListClosure:{$REF}/{UP},
+{R_ANY}/header(/previous)* instanceof node_caching_linked_list/NodeCachingLinkedList$LinkedListNode aliases max {$R_ANY}/header(/next)* triggers node_caching_linked_list/NodeCachingLinkedList$LinkedListNode:(Lnode_caching_linked_list/NodeCachingLinkedList$LinkedListNode;)V:_handleListClosure:{$REF}/{UP},
+
+-- for all the noncached nodes e it must be e.next.previous == e and e.previous.next == e
+{R_ANY}/header(/next)+/previous instanceof node_caching_linked_list/NodeCachingLinkedList$LinkedListNode expands to nothing,
+{R_ANY}/header(/next)+/previous instanceof node_caching_linked_list/NodeCachingLinkedList$LinkedListNode aliases {$REF}/{UP}/{UP},
+{R_ANY}/header(/previous)+/next instanceof node_caching_linked_list/NodeCachingLinkedList$LinkedListNode expands to nothing,
+{R_ANY}/header(/previous)+/next instanceof node_caching_linked_list/NodeCachingLinkedList$LinkedListNode aliases {$REF}/{UP}/{UP},
+
+-- the cached nodes do not store data
+{R_ANY}/firstCachedNode(/next)*/value instanceof java/lang/Object aliases nothing,
+{R_ANY}/firstCachedNode(/next)*/value instanceof java/lang/Object expands to nothing,
+
+-- all the cached nodes must have previous == null
+{R_ANY}/firstCachedNode(/next)*/previous instanceof node_caching_linked_list/NodeCachingLinkedList$LinkedListNode expands to nothing,
+{R_ANY}/firstCachedNode(/next)*/previous instanceof node_caching_linked_list/NodeCachingLinkedList$LinkedListNode aliases nothing,
+
+-- all the cached nodes must be distinct.
+{R_ANY}/firstCachedNode(/next)* instanceof node_caching_linked_list/NodeCachingLinkedList$LinkedListNode aliases nothing,
+
+-- the size of the cache must be greater than the number of assumed cached nodes (by trigger)
+{R_ANY}/firstCachedNode(/next)* instanceof node_caching_linked_list/NodeCachingLinkedList$LinkedListNode expands to instanceof node_caching_linked_list/NodeCachingLinkedList$LinkedListNode triggers node_caching_linked_list/NodeCachingLinkedList$LinkedListNode:(Lnode_caching_linked_list/NodeCachingLinkedList$LinkedListNode;)V:_got_CachedListNode:{$REF},
+
+-- if the rightmost cache node n has n.next == null, then the size of the cache is exactly the number of assumed cached nodes (by trigger) 
+{R_ANY}/firstCachedNode instanceof node_caching_linked_list/NodeCachingLinkedList$LinkedListNode null triggers node_caching_linked_list/NodeCachingLinkedList$LinkedListNode:(Lnode_caching_linked_list/NodeCachingLinkedList;)V:_handleCacheClosureEmpty:{$REF}/{UP},
+{R_ANY}/firstCachedNode(/next)+ instanceof node_caching_linked_list/NodeCachingLinkedList$LinkedListNode null triggers node_caching_linked_list/NodeCachingLinkedList$LinkedListNode:(Lnode_caching_linked_list/NodeCachingLinkedList$LinkedListNode;)V:_handleCacheClosure:{$REF}/{UP}
+
+------------------------------------------------- 
+-- other possible constraints for reducing the state space, not enforced
+-- to keep the analysis consistent across different techniques:
+-- 1: {ROOT}:this.v_NodeCachingLinkedList must exist;
+-- 2: there is a {ROOT}:this.o object that must exist
+--    (by expansion, no alias),
+-- 3: and all the elements in {ROOT}:this.v_NodeCachingLinkedList 
+--    may only alias {ROOT}:this.o (this does not exclude
+--    expansion and null cases, but reduces the many uninteresting
+--    aliases cases).
+-- Alternatively:
+-- 2'/3': all the elements in {ROOT}:this.v_NodeCachingLinkedList
+--        cannot alias a list, or a list node.
+end
+
+trigger begin
+-- list initialization trigger
+instanceof node_caching_linked_list/NodeCachingLinkedList expands to instanceof node_caching_linked_list/NodeCachingLinkedList triggers node_caching_linked_list/NodeCachingLinkedList$HEXTriggers:(Lnode_caching_linked_list/NodeCachingLinkedList;)V:_got_NodeCachingLinkedList:{$REF}
+end

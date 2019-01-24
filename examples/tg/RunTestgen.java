@@ -12,7 +12,7 @@ public class RunTestgen {
 		final String targetClass = "tg/Testgen";
 		final String targetMethodDescriptor = "(Ltg/Testgen$Node;I)Ltg/Testgen$Node;";
 		final String targetMethodName  = "getNode";
-		final String initialTestClass = "tg/Test";
+		final String initialTestClass = "tg/Test1";
 		final String initialTestMethodDescriptor = "()V";
 		final String initialTestMethodName = "test0";
 		final int maxDepth = 50;

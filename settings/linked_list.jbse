@@ -1,0 +1,45 @@
+resolve begin
+
+-- abstract lists are expanded to concrete ones (plus list initialization trigger)
+instanceof java/util/List expands to instanceof common/LinkedList triggers common/LinkedList:(Lcommon/LinkedList;)V:_got_LinkedList:{$REF},
+
+-----------------------------------------------
+-- representation invariant for LinkedList
+
+-- defines the Entry._owner instrumentation field necessary to triggers
+{R_ANY}/header(/next|/previous)*/_owner instanceof common/LinkedList not null,
+{R_ANY}/header(/next|/previous)*/_owner instanceof common/LinkedList expands to nothing,
+{R_ANY}/header(/next|/previous)*/_owner instanceof common/LinkedList aliases {$R_ANY},
+
+-- list header must exist and be distinct from other nodes
+{R_ANY}/header instanceof common/LinkedList$Entry not null,
+{R_ANY}/header instanceof common/LinkedList$Entry aliases nothing,
+
+-- list header stores no data
+{R_ANY}/header/element instanceof java/lang/Object expands to nothing,
+{R_ANY}/header/element instanceof java/lang/Object aliases nothing,
+
+-- all list entries must have a next and a previous
+{R_ANY}/header(/next|/previous)* instanceof common/LinkedList$Entry not null,
+
+-- the size of a list must be greater than the number of list entries (by trigger)
+{R_ANY}/header(/next)+ instanceof common/LinkedList$Entry expands to instanceof common/LinkedList$Entry triggers common/LinkedList$Entry:(Lcommon/LinkedList$Entry;)V:_got_LinkedList_Entry_nonroot:{$REF},
+{R_ANY}/header(/previous)+ instanceof common/LinkedList$Entry expands to instanceof common/LinkedList$Entry triggers common/LinkedList$Entry:(Lcommon/LinkedList$Entry;)V:_got_LinkedList_Entry_nonroot:{$REF},
+
+-- the rightmost entry can be resolved by alias to the leftmost one and vice versa;
+-- in this case the size of the list is exactly the number of list entries (by trigger)
+-- (note that these rules include the degenerate empty list case header.next == header.prev == header);
+{R_ANY}/header(/next)* instanceof common/LinkedList$Entry aliases max {$R_ANY}/header(/previous)* triggers common/LinkedList$Entry:(Lcommon/LinkedList$Entry;)V:_handleListClosure:{$REF}/{UP},
+{R_ANY}/header(/previous)* instanceof common/LinkedList$Entry aliases max {$R_ANY}/header(/next)* triggers common/LinkedList$Entry:(Lcommon/LinkedList$Entry;)V:_handleListClosure:{$REF}/{UP},
+
+-- for all the entries e it must be e.next.previous == e and e.previous.next == e
+{R_ANY}/header(/next)+/previous instanceof common/LinkedList$Entry expands to nothing,
+{R_ANY}/header(/next)+/previous instanceof common/LinkedList$Entry aliases {$REF}/{UP}/{UP},
+{R_ANY}/header(/previous)+/next instanceof common/LinkedList$Entry expands to nothing,
+{R_ANY}/header(/previous)+/next instanceof common/LinkedList$Entry aliases {$REF}/{UP}/{UP}
+end
+
+trigger begin
+-- list initialization trigger
+instanceof common/LinkedList expands to instanceof common/LinkedList triggers common/LinkedList:(Lcommon/LinkedList;)V:_got_LinkedList:{$REF}
+end

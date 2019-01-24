@@ -1,0 +1,31 @@
+resolve begin
+
+-- parameter value and field Entry.value are both distinct objects or null, or alias of each other 
+{ROOT}:value instanceof java/lang/Object aliases {ROOT}:this/root(/left|/right)*/value,
+{ROOT}:this/root(/left|/right)*/value instanceof java/lang/Object aliases {ROOT}:value,
+
+------------------------------------------------- 
+{ROOT}:this/root(/left|/right)* instanceof treemap/TreeMap$Entry aliases nothing,
+{ROOT}:this/root(/left|/right)*/right instanceof treemap/TreeMap$Entry expands to instanceof treemap/TreeMap$Entry triggers treemap/TreeMap$Entry$HEXTriggers:(Ltreemap/TreeMap$Entry;)V:_got_TreeMap_RightEntry:{$REF},
+{ROOT}:this/root(/left|/right)*/left instanceof treemap/TreeMap$Entry expands to instanceof treemap/TreeMap$Entry triggers treemap/TreeMap$Entry$HEXTriggers:(Ltreemap/TreeMap$Entry;)V:_got_TreeMap_LeftEntry:{$REF},
+{ROOT}:this/root instanceof treemap/TreeMap$Entry expands to instanceof treemap/TreeMap$Entry triggers treemap/TreeMap$Entry$HEXTriggers:(Ltreemap/TreeMap$Entry;)V:_got_TreeMap_RootEntry:{$REF},
+{ROOT}:this/root(/left|/right)+ instanceof treemap/TreeMap$Entry null triggers treemap/TreeMap$Entry$HEXTriggers:(Ltreemap/TreeMap$Entry;)V:_handlePathClosure:{$REF}/{UP},
+
+{ROOT}:this/root instanceof treemap/TreeMap$Entry null triggers treemap/TreeMap$HEXTriggers:(Ltreemap/TreeMap;)V:_handleNullRoot:{$REF}/{UP},
+
+-- TreeMap.Entry.wellConnected
+{ROOT}:this/root/parent instanceof treemap/TreeMap$Entry expands to nothing,
+{ROOT}:this/root/parent instanceof treemap/TreeMap$Entry aliases nothing,
+{ROOT}:this/root(/left|/right)+/parent instanceof treemap/TreeMap$Entry not null,
+{ROOT}:this/root(/left|/right)+/parent instanceof treemap/TreeMap$Entry expands to nothing,
+{ROOT}:this/root(/left|/right)+/parent instanceof treemap/TreeMap$Entry aliases {$REF}/{UP}/{UP},
+
+-- all the entries in a TreeMap refer their owner (ghost field)
+{ROOT}:this/root(/left|/right)*/_owner instanceof treemap/TreeMap not null,
+{ROOT}:this/root(/left|/right)*/_owner instanceof treemap/TreeMap expands to nothing,
+{ROOT}:this/root(/left|/right)*/_owner instanceof treemap/TreeMap aliases {ROOT}:this
+end
+
+trigger begin
+instanceof treemap/TreeMap expands to instanceof treemap/TreeMap triggers treemap/TreeMap$HEXTriggers:(Ltreemap/TreeMap;)V:_got_TreeMap:{$REF}
+end

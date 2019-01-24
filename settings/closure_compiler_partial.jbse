@@ -1,0 +1,33 @@
+resolve begin
+
+-- righe
+{R_ANY}/(first/|next/)*str instanceof java/lang/String expands to instanceof java/lang/String triggers com/google/javascript/rhino/Node:(Lcom/google/javascript/rhino/Node;)V:_gotStrExpand:{$REF}/{UP}, 
+{R_ANY}/compiler instanceof com/google/javascript/jscomp/AbstractCompiler expands to instanceof com/google/javascript/jscomp/StubCompiler,
+-- righe
+
+-- righe
+{R_ANY}/codingConvention instanceof com/google/javascript/jscomp/CodingConvention expands to instanceof com/google/javascript/jscomp/ClosureCodingConvention,
+{R_ANY}/nextConvention instanceof com/google/javascript/jscomp/CodingConvention expands to instanceof com/google/javascript/jscomp/CodingConventions$DefaultCodingConvention,
+{R_ANY} instanceof com/google/common/collect/Multimap expands to instanceof com/google/common/collect/ArrayListMultimap,
+
+-- Node types
+{R_ANY} instanceof com/google/javascript/rhino/Node expands to instanceof com/google/javascript/rhino/Node,
+{R_ANY} instanceof com/google/javascript/rhino/Node expands to instanceof com/google/javascript/rhino/Node$StringNode,
+{R_ANY} instanceof com/google/javascript/rhino/Node expands to instanceof com/google/javascript/rhino/Node$NumberNode,
+
+-- Node cannot alias anything but the previously expanded last
+{R_ANY}/first(/next)* instanceof com/google/javascript/rhino/Node aliases {$R_ANY}/last,
+
+-- last may expand or alias max(first.next*): assume(last.next==null)
+{R_ANY}/last instanceof com/google/javascript/rhino/Node aliases max {$R_ANY}/first(/next)*,
+{R_ANY}/last/next instanceof com/google/javascript/rhino/Node expands to nothing,
+{R_ANY}/last/next instanceof com/google/javascript/rhino/Node aliases nothing,
+
+-- Node.parent
+{R_ANY}/first(/next)*/parent instanceof com/google/javascript/rhino/Node not null,
+{R_ANY}/first(/next)*/parent instanceof com/google/javascript/rhino/Node expands to nothing,
+{R_ANY}/first(/next)*/parent instanceof com/google/javascript/rhino/Node aliases {$R_ANY},
+{R_ANY}/last/parent instanceof com/google/javascript/rhino/Node not null,
+{R_ANY}/last/parent instanceof com/google/javascript/rhino/Node expands to nothing,
+{R_ANY}/last/parent instanceof com/google/javascript/rhino/Node aliases {$R_ANY}
+end

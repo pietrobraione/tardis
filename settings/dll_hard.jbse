@@ -1,0 +1,6 @@
+resolve begin
+
+-- for all the entries e, e.element is not an entry
+{R_ANY}/header(/next|/previous)*/element instanceof java/lang/Object aliases {ROOT}:(?!.*header(/next|/previous)*$).*
+
+end

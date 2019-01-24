@@ -5,12 +5,27 @@
 	<classpathentry kind="src" path="testCase"/>
 	<classpathentry kind="con" path="org.eclipse.jdt.junit.JUNIT_CONTAINER/4"/>
 	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER/org.eclipse.jdt.internal.debug.ui.launcher.StandardVMType/JavaSE-1.8"/>
-	<classpathentry kind="lib" path="lib/args4j-2.32.jar"/>
-	<classpathentry kind="lib" path="lib/javaparser-core-3.4.0.jar"/>
 	<classpathentry combineaccessrules="false" kind="src" path="/jbse"/>
 	<classpathentry combineaccessrules="false" kind="src" path="/sushi-lib"/>
 	<classpathentry combineaccessrules="false" kind="src" path="/sushi-master"/>
-	<classpathentry kind="lib" path="lib/evosuite-shaded-1.0.6-SNAPSHOT.jar"/>
 	<classpathentry combineaccessrules="false" kind="src" path="/sushi-experiments"/>
+	<classpathentry combineaccessrules="false" kind="src" path="/sushi-shaded"/>
+	<classpathentry kind="lib" path="D:/appro/jbse-concolic/lib/ant.jar"/>
+	<classpathentry kind="lib" path="D:/appro/jbse-concolic/lib/ant-launcher.jar"/>
+	<classpathentry kind="lib" path="D:/appro/jbse-concolic/lib/args4j-2.32.jar"/>
+	<classpathentry kind="lib" path="D:/appro/jbse-concolic/lib/caja-r4314.jar"/>
+	<classpathentry kind="lib" path="D:/appro/jbse-concolic/lib/compiler.jar"/>
+	<classpathentry kind="lib" path="D:/appro/jbse-concolic/lib/evosuite-shaded-1.0.3.jar"/>
+	<classpathentry kind="lib" path="D:/appro/jbse-concolic/lib/evosuite-shaded-1.0.6-SNAPSHOT.jar"/>
+	<classpathentry kind="lib" path="D:/appro/jbse-concolic/lib/ganttproject-guava.jar"/>
+	<classpathentry kind="lib" path="D:/appro/jbse-concolic/lib/guava.jar"/>
+	<classpathentry kind="lib" path="D:/appro/jbse-concolic/lib/jarjar.jar"/>
+	<classpathentry kind="lib" path="D:/appro/jbse-concolic/lib/javaparser-core-3.4.0.jar"/>
+	<classpathentry kind="lib" path="D:/appro/jbse-concolic/lib/json.jar"/>
+	<classpathentry kind="lib" path="D:/appro/jbse-concolic/lib/jsr305.jar"/>
+	<classpathentry kind="lib" path="D:/appro/jbse-concolic/lib/junit.jar"/>
+	<classpathentry kind="lib" path="D:/appro/jbse-concolic/lib/protobuf-java.jar"/>
+	<classpathentry kind="lib" path="D:/appro/jbse-concolic/lib/rhino.jar"/>
+	<classpathentry kind="lib" path="D:/appro/jbse-concolic/lib/tools.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>
