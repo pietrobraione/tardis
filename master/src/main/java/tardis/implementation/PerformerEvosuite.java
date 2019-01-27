@@ -38,8 +38,8 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 	private final String classesPath;
 	private final Path tmpPath;
 	private final Path tmpBinTestsPath;
-	private final String evosuitePath;
-	private final String sushiLibPath;
+	private final Path evosuitePath;
+	private final Path sushiLibPath;
 	private final Path outPath;
 	private final long timeBudgetSeconds;
 	private final boolean useMOSA;
@@ -51,8 +51,8 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 		this.classesPath = String.join(File.pathSeparator, stream(o.getClassesPath()).map(Object::toString).toArray(String[]::new)); 
 		this.tmpPath = o.getTmpDirectoryPath();
 		this.tmpBinTestsPath = o.getTmpBinTestsDirectoryPath();
-		this.evosuitePath = o.getEvosuitePath().toString();
-		this.sushiLibPath = o.getSushiLibPath().toString();
+		this.evosuitePath = o.getEvosuitePath();
+		this.sushiLibPath = o.getSushiLibPath();
 		this.outPath = o.getOutDirectory();
 		this.timeBudgetSeconds = o.getEvosuiteTimeBudgetUnit().toSeconds(o.getEvosuiteTimeBudgetDuration());
 		this.useMOSA = o.getUseMOSA();
@@ -192,7 +192,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 	 * @param items a {@link List}{@code <}{@link JBSEResult}{@code >}, results of symbolic execution.
 	 */
 	private void emitAndCompileEvoSuiteWrappers(int testCountInitial, List<JBSEResult> items) {
-		final String classpathCompilationWrapper = this.classesPath + File.pathSeparator + this.sushiLibPath;
+		final String classpathCompilationWrapper = this.classesPath + File.pathSeparator + this.sushiLibPath.toString();
 		int i = testCountInitial;
 		for (JBSEResult item : items) {
 			final State initialState = item.getInitialState();
@@ -227,12 +227,12 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 		final String targetClass = items.get(0).getTargetClassName();
 		final String targetMethodDescriptor = items.get(0).getTargetMethodDescriptor();
 		final String targetMethodName = items.get(0).getTargetMethodName();
-		final String classpathEvosuite = this.classesPath + File.pathSeparator + this.sushiLibPath + File.pathSeparator + this.tmpPath;
+		final String classpathEvosuite = this.classesPath + File.pathSeparator + this.sushiLibPath.toString() + (this.useMOSA ? "" : (File.pathSeparator + this.tmpPath.toString()));
 		final List<String> retVal = new ArrayList<String>();
 		retVal.add("java");
 		retVal.add("-Xmx4G");
 		retVal.add("-jar");
-		retVal.add(this.evosuitePath);
+		retVal.add(this.evosuitePath.toString());
 		retVal.add("-class");
 		retVal.add(targetClass.replace('/', '.'));
 		retVal.add("-mem");
@@ -254,6 +254,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 		retVal.add("-Davoid_replicas_of_individuals=true"); 
 		retVal.add("-Dno_change_iterations_before_reset=30");
 		if (this.useMOSA) {
+			retVal.add("-Dpath_condition_evaluators_dir=" + this.tmpPath.toString());
 			retVal.add("-Demit_tests_incrementally=true");
 			retVal.add("-Dcrossover_function=SUSHI_HYBRID");
 			retVal.add("-Dalgorithm=DYNAMOSA");
@@ -421,7 +422,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 			}
 			
 			//compiles the generated test
-			final String classpathCompilationTest = PerformerEvosuite.this.tmpBinTestsPath.toString() + File.pathSeparator + PerformerEvosuite.this.classesPath + File.pathSeparator + PerformerEvosuite.this.sushiLibPath + File.pathSeparator + PerformerEvosuite.this.evosuitePath;
+			final String classpathCompilationTest = PerformerEvosuite.this.tmpBinTestsPath.toString() + File.pathSeparator + PerformerEvosuite.this.classesPath + File.pathSeparator + PerformerEvosuite.this.sushiLibPath.toString() + File.pathSeparator + PerformerEvosuite.this.evosuitePath.toString();
 			final Path javacLogFilePath = PerformerEvosuite.this.tmpPath.resolve("javac-log-test-" +  testCount + ".txt");
 			final String[] javacParametersTestScaff = { "-cp", classpathCompilationTest, "-d", PerformerEvosuite.this.tmpBinTestsPath.toString(), testCaseScaff.toString() };
 			final String[] javacParametersTestCase = { "-cp", classpathCompilationTest, "-d", PerformerEvosuite.this.tmpBinTestsPath.toString(), testCase.toString() };
