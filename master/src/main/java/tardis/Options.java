@@ -20,7 +20,7 @@ import org.kohsuke.args4j.spi.PathOptionHandler;
 import jbse.bc.Classpath;
 import sushi.configure.SignatureHandler;
 import sushi.configure.Visibility;
-import tardis.implementation.MultiPathOptionHandlerPatched;
+import sushi.configure.MultiPathOptionHandlerPatched;
 import tardis.implementation.MultiSignatureOptionHandler;
 
 public final class Options implements Cloneable {
