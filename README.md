@@ -75,7 +75,7 @@ Here follows more detailed instructions for deploying TARDIS based on the plain 
 * TARDIS will not run if you deploy it on a machine that has a JRE, instead of a JDK, installed. This because TARDIS needs to invoke the platform's `javac` to compile some intermediate files. Therefore, you need to install a full JDK 8 on the target machine, providing both `tools.jar` and `javac` to TARDIS. Add `tools.jar` to the classpath.
 * Deploy the args4j, JavaParser and (if you do not use the `jbse-<version>-shaded.jar` uber-jar) Javassist jars that you find in the Gradle's cache. All these jars must be on the classpath.
 
-If you deploy the ``tardis-master-<VERSION>-shaded.jar` uber-jar you do not need to deploy the JBSE, SUSHI-Lib, args4j, JavaParser and Javassist jars.
+If you deploy the `tardis-master-<VERSION>-shaded.jar` uber-jar you do not need to deploy the JBSE, SUSHI-Lib, args4j, JavaParser and Javassist jars.
 
 ## Usage
 
@@ -83,7 +83,7 @@ Compile the target program with the debug symbols, then launch TARDIS either fro
 
     $ java -Xmx16G -cp <classpath> tardis.Main <options>
 
-where `<classpath>` must be set according to the indications of the previous section. (Note that TARDIS is resource-consuming, thus we increased to 16 GB the memory allocated to the JVM). If you launch TARDIS without options it will print a help screen that lists all the available options with a brief explanation. If you prefer to launch TARDIS from code, this is a possible template:
+where `<classpath>` must be set according to the indications of the previous section. (Note that TARDIS is resource-consuming, thus we increased to 16 GB the memory allocated to the JVM running it). If you launch TARDIS without options it will print a help screen that lists all the available options with a brief explanation. If you prefer to launch TARDIS from code, this is a possible template:
 
 ```Java
 import tardis.Main;
@@ -101,7 +101,7 @@ public class Launcher {
 
 In both cases you need to set a number of options. The indispensable ones, that you *must* set in order for TARDIS to work, are:
 
-* `-evosuite` (command line) or `setEvosuitePath` (code): the path to one of the two EvoSuite jar files contained in the `lib/` folder. Use `evosuite-shaded-1.0.6-SNAPSHOT.jar` if you activate the MOSA option (see next point), otherwise use `evosuite-shaded-1.0.3.jar`. The same jar file must be put on the classpath (see previous section).
+* `-evosuite` (command line) or `setEvosuitePath` (code): the path to one of the two EvoSuite jar files contained in the `lib/` folder. Use `evosuite-shaded-1.0.6-SNAPSHOT.jar` if you activate the `-use_mosa` option, otherwise use `evosuite-shaded-1.0.3.jar`. The same jar file must be put on the classpath (see previous section).
 * `-use_mosa` (command line) or `setUseMOSA` (code): configures EvoSuite to use a multi-objective search algorithm (MOSA). You usually want this option to be active, since it makes TARDIS faster in most cases.
 * `-jbse_lib` (command line) or `setJBSELibraryPath` (code): this must be set to the path of the JBSE jar file from the `jbse/build/libs` directory. It must be the same you put in the classpath. If you chose to deploy the `tardis-master-<VERSION>-shaded.jar` uber-jar, set this option to point to it.
 * `-sushi_lib` (command line) or `setSushiLibPath` (code): this must be set to the path of the SUSHI-Lib jar file from the `runtime/build/libs` directory.  If you chose to deploy the `tardis-master-<VERSION>-shaded.jar` uber-jar, set this option to point to it.
@@ -116,7 +116,7 @@ You will find examples of the code-based way of configuring TARDIS in the [tardi
 
     java -Xmx16G -cp tardis-master-0.1.0-SNAPSHOT.jar:sushi-lib-0.2.0-SNAPSHOT.jar:jbse-0.9.0-SNAPSHOT-shaded.jar:evosuite-shaded-1.0.6-SNAPSHOT.jar:args4j-2.32.jar:javaparser-core-3.4.0.jar:/usr/lib/jvm/java-8-openjdk-amd64/lib/tools.jar tardis.Main -jbse_lib jbse-0.9.0-SNAPSHOT-shaded.jar -sushi_lib sushi-lib-0.2.0-SNAPSHOT.jar -evosuite evosuite-shaded-1.0.6-SNAPSHOT.jar -use_mosa -z3 /opt/local/bin/z3 -classes ./my-application/bin -target_class my/Class -tmp_base ./tmp -out ./tests
     
-In the case you prefer (at your own risk) to use the TARDIS uber-jar the command line becomes:
+In the case you prefer (at your own risk) to use the TARDIS uber-jar the command line becomes a bit shorter:
 
     java -Xmx16G -cp tardis-master-0.1.0-SNAPSHOT-shaded.jar:evosuite-shaded-1.0.6-SNAPSHOT.jar:/usr/lib/jvm/java-8-openjdk-amd64/lib/tools.jar tardis.Main -jbse_lib tardis-master-0.1.0-SNAPSHOT-shaded.jar -sushi_lib tardis-master-0.1.0-SNAPSHOT-shaded.jar -evosuite evosuite-shaded-1.0.6-SNAPSHOT.jar -use_mosa -z3 /opt/local/bin/z3 -classes ./my-application/bin -target_class my/Class -tmp_base ./tmp -out ./tests
 

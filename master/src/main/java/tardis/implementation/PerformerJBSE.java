@@ -89,7 +89,8 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 		this.coverageSet.addAll(rp.getCoverage());
 		final TestCase tc = item.getTestCase();
 		System.out.println("[JBSE    ] Run test case " + tc.getClassName() + ", path condition " + shorten(tcFinalPC).toString());
-		System.out.println("[JBSE    ] Current coverage: " + this.coverageSet.size() + " branches");
+		final int coverage = this.coverageSet.size();
+		System.out.println("[JBSE    ] Current coverage: " + coverage + " branch" + (coverage == 1 ? "" : "es"));
 		final int tcFinalDepth = tcFinalState.getDepth();
 		boolean noPathConditionGenerated = true;
 		for (int currentDepth = startDepth; currentDepth < Math.min(this.maxDepth, tcFinalDepth); currentDepth++) {
