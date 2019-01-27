@@ -26,7 +26,7 @@ The runtime dependencies that are automatically resolved by Gradle and included 
 * The `tools.jar` library, that is part of every JDK 8 setup (note, *not* of the JRE).
 * [Javassist](http://jboss-javassist.github.io/javassist/), that is used by JBSE for all the bytecode manipulation tasks.
 * [args4j](http://args4j.kohsuke.org/), that is used by TARDIS to process command line arguments.
-* [JavaParser] (https://javaparser.org/), that is used by TARDIS to mangle Java source files.
+* [JavaParser](https://javaparser.org/), that is used by TARDIS to mangle Java source files.
 
 Another runtime dependency that is included in the git project is:
 
