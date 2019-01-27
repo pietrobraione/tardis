@@ -30,7 +30,7 @@ The runtime dependencies that are automatically resolved by Gradle and included 
 
 Another runtime dependency that is included in the git project is:
 
-* [EvoSuite](http://www.evosuite.org/); TARDIS depends on customized versions of EvoSuite that can be found in the `evosuite` subdirectory. It will not work with the EvoSuite jars that you can download from the EvoSuite web page.
+* [EvoSuite](http://www.evosuite.org/); TARDIS depends on customized versions of EvoSuite that can be found in the `lib` subdirectory. It will not work with the EvoSuite jars that you can download from the EvoSuite web page.
 
 There is one additional runtime dependencies that is not handled by Gradle so you will need to fix it manually. 
 
