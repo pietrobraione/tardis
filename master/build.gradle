@@ -28,3 +28,11 @@ build.dependsOn 'shadowJar'
 application {
     mainClassName = 'tardis.Main'
 }
+
+jar {
+    manifest {
+        attributes 'Implementation-Title': 'TARDIS',
+                   'Implementation-Vendor': 'University of Milano-Bicocca',
+                   'Implementation-Version': version
+    }
+}

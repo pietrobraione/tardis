@@ -25,6 +25,39 @@ import sushi.configure.Visibility;
 import tardis.Options;
 
 public class Util {
+	/**
+	 * Returns the name of this application, as resulting
+	 * from the containing jar file.
+	 * 
+	 * @return a {@link String} or {@code null} if this 
+	 *         class is not packaged in a jar file.
+	 */
+    public static String getName() {
+        return Util.class.getPackage().getImplementationTitle();
+    }
+
+	/**
+	 * Returns the vendor of this application, as resulting
+	 * from the containing jar file.
+	 * 
+	 * @return a {@link String} or {@code null} if this 
+	 *         class is not packaged in a jar file.
+	 */
+    public static String getVendor() {
+        return Util.class.getPackage().getImplementationVendor();
+    }
+
+	/**
+	 * Returns the version of this application, as resulting
+	 * from the containing jar file.
+	 * 
+	 * @return a {@link String} or {@code null} if this 
+	 *         class is not packaged in a jar file.
+	 */
+	public static String getVersion() {
+		return Util.class.getPackage().getImplementationVersion();
+	}
+
     /**
      * Converts an iterable to a stream.
      * See <a href="https://stackoverflow.com/a/23177907/450589">https://stackoverflow.com/a/23177907/450589</a>.
@@ -35,6 +68,15 @@ public class Util {
         return StreamSupport.stream(it.spliterator(), false);
     }
     
+    /**
+     * Shortens a sequence of {@link Clause}s by dropping all the clauses
+     * about class initialization.
+     * 
+     * @param pc a {@link Collection}{@code <}{@link Clause}{@code >}.
+     * @return {@code pc} filtered, where the filter drops all the clauses
+     *         that are {@code instanceof }{@link ClauseAssumeClassInitialized}
+     *         or {@link ClauseAssumeClassNotInitialized}.
+     */
 	static Collection<Clause> shorten(Collection<Clause> pc) {
 		return pc.stream().filter(x -> !(x instanceof ClauseAssumeClassInitialized || x instanceof ClauseAssumeClassNotInitialized)).collect(Collectors.toList());
 	}

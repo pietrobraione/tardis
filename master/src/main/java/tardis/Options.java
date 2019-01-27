@@ -79,9 +79,9 @@ public final class Options implements Cloneable {
 	private Path outDir = Paths.get(".", "out");
 	
 	@Option(name = "-z3",
-			usage = "Path to Z3 binary (default: none, expect Z3 on the system PATH)",
+			usage = "Path to Z3 binary",
 			handler = PathOptionHandler.class)
-	private Path z3Path;
+	private Path z3Path = Paths.get("/usr", "bin", "z3");
 	
 	@Option(name = "-jbse_lib",
 			usage = "Path to JBSE library",

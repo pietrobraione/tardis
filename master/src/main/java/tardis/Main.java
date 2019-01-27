@@ -51,6 +51,7 @@ import jbse.rewr.CalculatorRewriting;
 import jbse.rewr.RewriterOperationOnSimplex;
 import jbse.val.HistoryPoint;
 import jbse.val.SymbolFactory;
+
 import tardis.framework.TerminationManager;
 import tardis.implementation.CoverageSet;
 import tardis.implementation.EvosuiteResult;
@@ -59,6 +60,7 @@ import tardis.implementation.PerformerEvosuite;
 import tardis.implementation.PerformerJBSE;
 import tardis.implementation.QueueInputOutputBuffer;
 import tardis.implementation.TestCase;
+import tardis.implementation.Util;
 
 public final class Main {
 	private final Options o;
@@ -108,6 +110,7 @@ public final class Main {
 		}
 		
 		//starts everything
+		System.out.println("[MAIN    ] This is " + Util.getName() + ", version " + Util.getVersion() + ", " + '\u00a9' + " 2017-2019 " + Util.getVendor());
 		final DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss");
 		System.out.println("[MAIN    ] Starting at " + dtf.format(LocalDateTime.now()));
 		performerJBSE.start();
