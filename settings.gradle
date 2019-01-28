@@ -1,0 +1,10 @@
+rootProject.name = 'tardis'
+
+include ':jbse'
+include ':sushi-lib'
+include ':tardis-master'
+
+project(':jbse').projectDir = file('jbse')
+project(':sushi-lib').projectDir = file('runtime')
+project(':tardis-master').projectDir = file('master')
+

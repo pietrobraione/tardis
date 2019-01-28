@@ -1,0 +1,38 @@
+plugins {
+    id 'application'
+    id 'com.github.johnrengelman.shadow' version '4.0.3'
+}
+
+dependencies {
+    implementation 'args4j:args4j:2.32'
+    implementation 'com.github.javaparser:javaparser-core:3.4.0'
+    implementation files("${System.getProperty('java.home')}/../lib/tools.jar")
+    implementation project(':sushi-lib')
+    implementation project(':jbse')
+}
+
+shadowJar {
+    classifier = 'shaded'
+    exclude 'tools.jar'
+    relocate 'javassist', 'tardis.javassist'
+    relocate 'jbse', 'tardis.jbse'
+    relocate 'org.jacoco', 'tardis.org.jacoco'
+    relocate 'org.objectweb', 'tardis.org.objectweb'
+    relocate 'org.kohsuke', 'tardis.org.kohsuke'
+    relocate 'com.github', 'tardis.com.github'
+    relocate 'sushi', 'tardis'
+}
+
+build.dependsOn 'shadowJar'
+
+application {
+    mainClassName = 'tardis.Main'
+}
+
+jar {
+    manifest {
+        attributes 'Implementation-Title': 'TARDIS',
+                   'Implementation-Vendor': 'University of Milano-Bicocca',
+                   'Implementation-Version': version
+    }
+}
