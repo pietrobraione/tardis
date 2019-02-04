@@ -19,6 +19,7 @@ import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import jbse.algo.exc.CannotManageStateException;
 import jbse.apps.run.DecisionProcedureGuidance;
 import jbse.apps.run.DecisionProcedureGuidanceJDI;
+import jbse.apps.run.GuidanceException;
 import jbse.bc.exc.InvalidClassFileFactoryClassException;
 import jbse.common.exc.ClasspathException;
 import jbse.dec.DecisionProcedureAlgorithms;
@@ -157,6 +158,13 @@ public class RunnerPath {
 		@Override
 		public boolean atStepPost() {
 			final State currentState = getEngine().getCurrentState();
+			if (this.postInitial && !this.guid.isGuidanceEnded() && !this.getEngine().atInitialState()) {
+				try {
+					this.guid.step(currentState);
+				} catch (GuidanceException e) {
+					throw new RuntimeException(e); //TODO better exception!
+				}   
+			}
 			if (this.postInitial && this.atJump) {
 				try {
 					this.coverage.add(currentState.getCurrentMethodSignature().toString() + ":" + this.jumpPC + ":" + currentState.getPC());
@@ -193,6 +201,17 @@ public class RunnerPath {
 			}
 
 			return super.atBacktrackPost(bp);
+		}
+		
+		@Override
+		public boolean atTraceEnd() {
+			if (this.testDepth < 0) {
+				final State finalState = this.getEngine().getCurrentState();
+				this.stateList.add(finalState);
+				return true;
+			} else {
+				return super.atTraceEnd();
+			}
 		}
 
 		@Override
