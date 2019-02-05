@@ -40,6 +40,7 @@ import jbse.jvm.exc.FailureException;
 import jbse.jvm.exc.InitializationException;
 import jbse.jvm.exc.NonexistingObservedVariablesException;
 import jbse.mem.State;
+import jbse.mem.State.Phase;
 import jbse.mem.exc.ContradictionException;
 import jbse.mem.exc.FrozenStateException;
 import jbse.mem.exc.ThreadStackEmptyException;
@@ -99,7 +100,6 @@ public class RunnerPath {
 		private final ArrayList<State> stateList = new ArrayList<State>();
 		private boolean savePreState = false;
 		private State preState = null;
-		private boolean postInitial = false;
 		private boolean atJump = false;
 		private int jumpPC = 0;
 		private final HashSet<String> coverage = new HashSet<>();
@@ -127,7 +127,6 @@ public class RunnerPath {
 		
 		@Override
 		public boolean atInitial() {
-			this.postInitial = true;
 			if (this.testDepth == 0) {
 				this.guid.endGuidance();
 				this.savePreState = true;
@@ -137,9 +136,9 @@ public class RunnerPath {
 		
 		@Override
 		public boolean atStepPre() {
-			if (this.postInitial) {
+			final State currentState = getEngine().getCurrentState();
+			if (currentState.phase() != Phase.PRE_INITIAL) {
 				try {
-					final State currentState = getEngine().getCurrentState();
 					this.atJump = bytecodeJump(currentState.getInstruction());
 					if (this.atJump) {
 						this.jumpPC = currentState.getPC();
@@ -158,14 +157,12 @@ public class RunnerPath {
 		@Override
 		public boolean atStepPost() {
 			final State currentState = getEngine().getCurrentState();
-			if (this.postInitial && !this.guid.isGuidanceEnded() && !this.getEngine().atInitialState()) {
-				try {
-					this.guid.step(currentState);
-				} catch (GuidanceException e) {
-					throw new RuntimeException(e); //TODO better exception!
-				}   
-			}
-			if (this.postInitial && this.atJump) {
+			try {
+				this.guid.step(currentState);
+			} catch (GuidanceException e) {
+				throw new RuntimeException(e); //TODO better exception!
+			}   
+			if (currentState.phase() != Phase.PRE_INITIAL && this.atJump) {
 				try {
 					this.coverage.add(currentState.getCurrentMethodSignature().toString() + ":" + this.jumpPC + ":" + currentState.getPC());
 				} catch (ThreadStackEmptyException | FrozenStateException e) {
