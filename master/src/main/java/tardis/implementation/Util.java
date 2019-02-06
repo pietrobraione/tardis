@@ -140,7 +140,11 @@ public class Util {
 				currentBytecode == Opcodes.OP_GETFIELD ||
 				currentBytecode == Opcodes.OP_NEWARRAY ||
 				currentBytecode == Opcodes.OP_ANEWARRAY ||
-				currentBytecode == Opcodes.OP_MULTIANEWARRAY);
+				currentBytecode == Opcodes.OP_MULTIANEWARRAY ||
+				currentBytecode == Opcodes.OP_INVOKEVIRTUAL ||
+				currentBytecode == Opcodes.OP_INVOKESTATIC ||
+				currentBytecode == Opcodes.OP_INVOKEINTERFACE ||
+				currentBytecode == Opcodes.OP_INVOKESPECIAL); //TODO invokedynamic, invokehandle
 	}
 	
 	private final static Set<String> EXCLUDED;

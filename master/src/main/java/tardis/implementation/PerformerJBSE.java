@@ -93,7 +93,7 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 		System.out.println("[JBSE    ] Current coverage: " + coverage + " branch" + (coverage == 1 ? "" : "es"));
 		final int tcFinalDepth = tcFinalState.getDepth();
 		boolean noPathConditionGenerated = true;
-		for (int currentDepth = startDepth; currentDepth < Math.min(this.maxDepth, tcFinalDepth); currentDepth++) {
+		for (int currentDepth = startDepth; currentDepth < Math.min(this.maxDepth, tcFinalDepth); ++currentDepth) {
 			//runs the program
 			final List<State> newStates = rp.runProgram(currentDepth);
 			
