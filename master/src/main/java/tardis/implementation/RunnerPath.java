@@ -1,12 +1,16 @@
 package tardis.implementation;
 
+import static jbse.algo.Util.valueString;
+import static jbse.bc.Signatures.JAVA_STRING;
 import static tardis.implementation.Util.bytecodeBranch;
 import static tardis.implementation.Util.bytecodeJump;
+import static tardis.implementation.Util.bytecodeLoadConstant;
 
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -39,16 +43,22 @@ import jbse.jvm.exc.EngineStuckException;
 import jbse.jvm.exc.FailureException;
 import jbse.jvm.exc.InitializationException;
 import jbse.jvm.exc.NonexistingObservedVariablesException;
+import jbse.mem.Objekt;
 import jbse.mem.State;
 import jbse.mem.State.Phase;
 import jbse.mem.exc.ContradictionException;
 import jbse.mem.exc.FrozenStateException;
+import jbse.mem.exc.InvalidNumberOfOperandsException;
 import jbse.mem.exc.ThreadStackEmptyException;
 import jbse.rewr.CalculatorRewriting;
 import jbse.rewr.RewriterOperationOnSimplex;
 import jbse.rules.ClassInitRulesRepo;
 import jbse.rules.LICSRulesRepo;
 import jbse.tree.StateTree.BranchPoint;
+import jbse.val.Reference;
+import jbse.val.ReferenceConcrete;
+import jbse.val.ReferenceSymbolic;
+import jbse.val.Value;
 import tardis.Options;
 
 public class RunnerPath {
@@ -102,27 +112,14 @@ public class RunnerPath {
 		private State preState = null;
 		private boolean atJump = false;
 		private int jumpPC = 0;
+		private boolean atLoadConstant = false;
+		private int loadConstantStackSize = 0;
+		private final HashMap<Long, String> stringLiterals = new HashMap<>();
 		private final HashSet<String> coverage = new HashSet<>();
 		
 		public ActionsRunner(int testDepth, DecisionProcedureGuidance guid) {
 			this.testDepth = testDepth;
 			this.guid = guid;
-		}
-		
-		public ArrayList<State> getStateList() {
-			return this.stateList;
-		}
-		
-		public State getPreState() {
-			return this.preState;
-		}
-		
-		public boolean getAtJump() {
-			return this.atJump;
-		}
-		
-		public HashSet<String> getCoverage() {
-			return this.coverage;
 		}
 		
 		@Override
@@ -139,11 +136,20 @@ public class RunnerPath {
 			final State currentState = getEngine().getCurrentState();
 			if (currentState.phase() != Phase.PRE_INITIAL) {
 				try {
-					this.atJump = bytecodeJump(currentState.getInstruction());
+					final byte currentInstruction = currentState.getInstruction(); 
+					//detects whether we are at a jump bytecode
+					this.atJump = bytecodeJump(currentInstruction);
 					if (this.atJump) {
 						this.jumpPC = currentState.getPC();
 					}
-					if (bytecodeBranch(currentState.getInstruction()) && this.savePreState) {
+					
+					//detects whether we are at a load constant bytecode
+					this.atLoadConstant = bytecodeLoadConstant(currentInstruction);
+					if (this.atLoadConstant) {
+						this.loadConstantStackSize = currentState.getStackSize();
+					}
+					
+					if (bytecodeBranch(currentInstruction) && this.savePreState) {
 						this.preState = currentState.clone();
 					}
 				} catch (ThreadStackEmptyException | FrozenStateException e) {
@@ -157,11 +163,15 @@ public class RunnerPath {
 		@Override
 		public boolean atStepPost() {
 			final State currentState = getEngine().getCurrentState();
+			
+			//steps guidance
 			try {
 				this.guid.step(currentState);
 			} catch (GuidanceException e) {
 				throw new RuntimeException(e); //TODO better exception!
-			}   
+			}
+			
+			//manages jump
 			if (currentState.phase() != Phase.PRE_INITIAL && this.atJump) {
 				try {
 					this.coverage.add(currentState.getCurrentMethodSignature().toString() + ":" + this.jumpPC + ":" + currentState.getPC());
@@ -170,6 +180,27 @@ public class RunnerPath {
 					throw new RuntimeException(e); //TODO better exception!
 				}
 			}
+			
+			//manages constant loading
+			if (currentState.phase() != Phase.PRE_INITIAL && this.atLoadConstant) {
+				try {
+					if (this.loadConstantStackSize == currentState.getStackSize()) {
+						final Value operand = currentState.getCurrentFrame().operands(1)[0];
+						if (operand instanceof Reference) {
+							final Reference r = (Reference) operand;
+							final Objekt o = currentState.getObject(r);
+							if (o != null && JAVA_STRING.equals(o.getType().getClassName())) {
+								final String s = valueString(currentState, r);
+								final long heapPosition = (r instanceof ReferenceConcrete ? ((ReferenceConcrete) r).getHeapPosition() : currentState.getResolution((ReferenceSymbolic) r));
+								this.stringLiterals.put(heapPosition, s);
+							}
+						}					
+					}
+				} catch (FrozenStateException | InvalidNumberOfOperandsException | ThreadStackEmptyException e) {
+					throw new RuntimeException(e); //TODO better exception!
+				}
+			}
+			
 			if (currentState.getDepth() == this.testDepth) {
 				this.guid.endGuidance();
 				this.savePreState = true;
@@ -226,6 +257,7 @@ public class RunnerPath {
 	private State initialState = null;
 	private State preState = null;
 	private boolean atJump = false;
+	private HashMap<Long, String> stringLiterals = null;
 	private HashSet<String> coverage = null;
 	
 	/**
@@ -339,14 +371,15 @@ public class RunnerPath {
 
 		//outputs
 		this.initialState = rb.getEngine().getInitialState();
-		this.preState = actions.getPreState();
-		this.atJump = actions.getAtJump();
-		this.coverage = actions.getCoverage();
+		this.preState = actions.preState;
+		this.atJump = actions.atJump;
+		this.stringLiterals = actions.stringLiterals;
+		this.coverage = actions.coverage;
 		
 		//finalizes
 		rb.getEngine().close();
 
-		return actions.getStateList();
+		return actions.stateList;
 	}
 	
 	private static class CountVisitor extends VoidVisitorAdapter<Object> {
@@ -410,6 +443,21 @@ public class RunnerPath {
 	 */
 	public boolean getAtJump() {
 		return this.atJump;
+	}
+	
+	/**
+	 * Must be invoked after an invocation of {@link #runProgram(TestCase, int) runProgram(tc, depth)}.
+	 * Returns the string literals of the execution.
+	 * 
+	 * @return a {@link Map}{@code <}{@link Long}{@code , }{@link String}{@code >}, 
+	 *         mapping a heap position of a {@link String} literal to the
+	 *         corresponding value of the literal. 
+	 *         If this method is invoked
+	 *         before an invocation of {@link #runProgram(TestCase, int)}
+	 *         always returns {@code null}.
+	 */
+	public Map<Long, String> getStringLiterals() {
+		return this.stringLiterals;
 	}
 	
 	/**

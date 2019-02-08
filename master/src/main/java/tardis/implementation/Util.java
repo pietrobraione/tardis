@@ -147,6 +147,12 @@ public class Util {
 				currentBytecode == Opcodes.OP_INVOKESPECIAL); //TODO invokedynamic, invokehandle
 	}
 	
+	static boolean bytecodeLoadConstant(byte currentBytecode) {
+		return (currentBytecode == Opcodes.OP_LDC ||
+				currentBytecode == Opcodes.OP_LDC_W ||
+				currentBytecode == Opcodes.OP_LDC2_W);
+	}
+	
 	private final static Set<String> EXCLUDED;
 	
 	static {

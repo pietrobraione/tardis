@@ -1,5 +1,8 @@
 package tardis.implementation;
 
+import java.util.HashMap;
+import java.util.Map;
+
 import jbse.mem.State;
 
 public class JBSEResult {
@@ -10,9 +13,10 @@ public class JBSEResult {
 	private final State preState;
 	private final State finalState;
 	private final boolean atJump;
+	private final HashMap<Long, String> stringLiterals;
 	private final int depth;
 	
-	public JBSEResult(String targetClassName, String targetMethodDescriptor, String targetMethodName, State initialState, State preState, State finalState, boolean atJump, int depth) {
+	public JBSEResult(String targetClassName, String targetMethodDescriptor, String targetMethodName, State initialState, State preState, State finalState, boolean atJump, Map<Long, String> stringLiterals, int depth) {
 		this.targetClassName = targetClassName;
 		this.targetMethodDescriptor = targetMethodDescriptor;
 		this.targetMethodName = targetMethodName;
@@ -20,10 +24,11 @@ public class JBSEResult {
 		this.preState = preState.clone();
 		this.finalState = finalState.clone();
 		this.atJump = atJump;
+		this.stringLiterals = new HashMap<>(stringLiterals); //safety copy
 		this.depth = depth;
 	}
 	
-	public JBSEResult(EvosuiteResult er, State initialState, State preState, State finalState, boolean atJump, int depth) {
+	public JBSEResult(EvosuiteResult er, State initialState, State preState, State finalState, boolean atJump, Map<Long, String> stringLiterals, int depth) {
 		this.targetClassName = er.getTargetClassName();
 		this.targetMethodDescriptor = er.getTargetMethodDescriptor();
 		this.targetMethodName = er.getTargetMethodName();
@@ -31,6 +36,7 @@ public class JBSEResult {
 		this.preState = preState.clone();
 		this.finalState = finalState.clone();
 		this.atJump = atJump;
+		this.stringLiterals = new HashMap<>(stringLiterals); //safety copy
 		this.depth = depth;
 	}
 	
@@ -60,6 +66,10 @@ public class JBSEResult {
 	
 	public boolean getAtJump() {
 		return this.atJump;
+	}
+	
+	public Map<Long, String> getStringLiterals() {
+		return this.stringLiterals;
 	}
 	
 	public int getDepth() {

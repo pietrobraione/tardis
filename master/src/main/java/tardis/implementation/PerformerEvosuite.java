@@ -163,11 +163,16 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 	 *        for which we want to generate the wrapper.
 	 * @param finalState a {@link State}; must be the final state in the execution 
 	 *        for which we want to generate the wrapper.
+	 * @param stringLiterals a {@link Map}{@code <}{@link Long}{@code , }{@link String}{@code >}, 
+	 *         mapping a heap position of a {@link String} literal to the
+	 *         corresponding value of the literal.
 	 * @return a {@link Path}, the file path of the generated EvoSuite wrapper.
 	 */
-	private Path emitEvoSuiteWrapper(int testCount, State initialState, State finalState) {
+	private Path emitEvoSuiteWrapper(int testCount, State initialState, State finalState, Map<Long, String> stringLiterals) {
 		final StateFormatterSushiPathCondition fmt = new StateFormatterSushiPathCondition(testCount, () -> initialState);
+		fmt.setConstants(stringLiterals);
 		fmt.formatPrologue();
+		fmt.formatStringLiterals();
 		fmt.formatState(finalState);
 		fmt.formatEpilogue();
 
@@ -197,7 +202,8 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 		for (JBSEResult item : items) {
 			final State initialState = item.getInitialState();
 			final State finalState = item.getFinalState();
-			final Path wrapperFilePath = emitEvoSuiteWrapper(i, initialState, finalState);
+			final Map<Long, String> stringLiterals = item.getStringLiterals();
+			final Path wrapperFilePath = emitEvoSuiteWrapper(i, initialState, finalState, stringLiterals);
 			final Path javacLogFilePath = this.tmpPath.resolve("javac-log-wrapper-" + i + ".txt");
 			final String[] javacParameters = { "-cp", classpathCompilationWrapper, "-d", this.tmpPath.toString(), wrapperFilePath.toString() };
 			try (final OutputStream w = new BufferedOutputStream(Files.newOutputStream(javacLogFilePath))) {

@@ -18,6 +18,7 @@ import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -140,7 +141,7 @@ public final class Main {
 				final State s = new State(true, HistoryPoint.startingPreInitial(true), 1_000, 100_000, this.o.getClasspath(), ClassFileFactoryJavassist.class, new HashMap<>(), calc, new SymbolFactory(calc));
 				final ClassFile cf = s.getClassHierarchy().loadCreateClass(CLASSLOADER_APP, targetMethod.get(0), true);
 				s.pushFrameSymbolic(cf, new Signature(targetMethod.get(0), targetMethod.get(1), targetMethod.get(2)));
-				retVal.add(new JBSEResult(targetMethod.get(0), targetMethod.get(1), targetMethod.get(2), s, s, s, false, -1));
+				retVal.add(new JBSEResult(targetMethod.get(0), targetMethod.get(1), targetMethod.get(2), s, s, s, false, Collections.emptyMap(), -1));
 			}
 			return retVal;
 		} catch (ClassNotFoundException | WrongClassNameException | BadClassFileVersionException | ClassFileNotFoundException | IncompatibleClassFileException | 

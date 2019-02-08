@@ -5,6 +5,7 @@ import static tardis.implementation.Util.shorten;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 
 import jbse.algo.exc.CannotManageStateException;
 import jbse.bc.exc.InvalidClassFileFactoryClassException;
@@ -106,12 +107,13 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 			final State initialState = rp.getInitialState();
 			final State preState = rp.getPreState();
 			final boolean atJump = rp.getAtJump();
+			final Map<Long, String> stringLiterals = rp.getStringLiterals();
 			for (State newState : newStates) {
 				final Collection<Clause> currentPC = newState.getPathCondition();
 				if (alreadyExplored(currentPC, tcFinalPC)) {
 					continue;
 				}
-				this.getOutputBuffer().add(new JBSEResult(item, initialState, preState, newState, atJump, currentDepth));
+				this.getOutputBuffer().add(new JBSEResult(item, initialState, preState, newState, atJump, stringLiterals, currentDepth));
 				System.out.println("[JBSE    ] From test case " + tc.getClassName() + " generated path condition " + shorten(currentPC).toString());
 				noPathConditionGenerated = false;
 			}
