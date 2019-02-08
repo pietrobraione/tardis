@@ -172,7 +172,6 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 		final StateFormatterSushiPathCondition fmt = new StateFormatterSushiPathCondition(testCount, () -> initialState);
 		fmt.setConstants(stringLiterals);
 		fmt.formatPrologue();
-		fmt.formatStringLiterals();
 		fmt.formatState(finalState);
 		fmt.formatEpilogue();
 
