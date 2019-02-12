@@ -69,7 +69,7 @@ public class TardisTool implements ITestingTool {
 					"-num_threads", "5", "-max_depth", "50",
 					"-tmp_base", TMP_DIR, "-out", OUT_DIR, 
 					"-global_time_budget_duration", Long.toString(timeBudget), "-global_time_budget_unit", "SECONDS",
-					"-classes", this.classPathSUT, "-target_class", cName
+					"-classes", this.classPathSUT, "-target_class", cName.replace('.', '/')
 			);
 
 			pbuilder.redirectErrorStream(true);
