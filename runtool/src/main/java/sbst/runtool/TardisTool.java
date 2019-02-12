@@ -84,6 +84,7 @@ public class TardisTool implements ITestingTool {
 			stdin = new OutputStreamWriter(process.getOutputStream());
 
 			final PrintStream dump = new PrintStream(new FileOutputStream(new File(TMP_DIR + "/" + new SimpleDateFormat("yyyy_MM_dd_HH_mm_ss").format(new Date()) + ".txt"), false));
+			dump.println(pbuilder.command().toString());
 			final BufferedReader reader = new BufferedReader(stdout);
 			String line = null;
 			while ((line = reader.readLine()) != null) {
