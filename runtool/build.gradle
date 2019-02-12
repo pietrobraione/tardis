@@ -1,5 +1,4 @@
 plugins {
-	id 'application'
     id 'java'
     id 'eclipse'
 }
@@ -15,14 +14,11 @@ dependencies {
     implementation project(':tardis-master')
 }
 
-application {
-    mainClassName = 'sbst.runtool.Main'
-}
-
 jar {
     manifest {
         attributes 'Implementation-Title': name,
                    'Implementation-Vendor': 'University of Milano-Bicocca',
-                   'Implementation-Version': version
+                   'Implementation-Version': version,
+                   'Main-Class': 'sbst.runtool.Main'
     }
 }
