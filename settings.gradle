@@ -3,8 +3,9 @@ rootProject.name = 'tardis'
 include ':jbse'
 include ':sushi-lib'
 include ':tardis-master'
+include ':runtool'
 
 project(':jbse').projectDir = file('jbse')
 project(':sushi-lib').projectDir = file('runtime')
 project(':tardis-master').projectDir = file('master')
-
+project(':runtool').projectDir = file('runtool')
