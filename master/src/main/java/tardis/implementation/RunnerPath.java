@@ -8,19 +8,12 @@ import static tardis.implementation.Util.bytecodeInvoke;
 import static tardis.implementation.Util.bytecodeJump;
 import static tardis.implementation.Util.bytecodeLoadConstant;
 
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-
-import com.github.javaparser.JavaParser;
-import com.github.javaparser.ast.expr.MethodCallExpr;
-import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 
 import jbse.algo.exc.CannotManageStateException;
 import jbse.apps.run.DecisionProcedureGuidance;
@@ -354,22 +347,23 @@ public class RunnerPath {
 										calc, z3CommandLine), 
 								calc, new LICSRulesRepo()), 
 						calc, new ClassInitRulesRepo()), calc));
+		final ClassInitRulesRepo guidingInitRules = new ClassInitRulesRepo();
+		guidingInitRules.addNotInitializedClassPattern(".*");
 		pGuiding.setDecisionProcedure(
 				new DecisionProcedureAlgorithms(
 						new DecisionProcedureClassInit(
 								new DecisionProcedureAlwSat(), 
-								calc, new ClassInitRulesRepo()), 
+								calc, guidingInitRules), 
 						calc)); //for concrete execution
 
 		//sets the guiding method (to be executed concretely)
 		pGuiding.setMethodSignature(this.testCase.getClassName(), this.testCase.getMethodDescriptor(), this.testCase.getMethodName());
 		
+		pGuiding.setBypassStandardLoading(true);
+		
 		//determines the number of hits (best effort)
-		int numberOfHits = countNumberOfInvocations(this.testCase.getSourcePath(), this.targetMethodName);
-		if (numberOfHits == 0) {
-			numberOfHits = countNumberOfInvocations2(pGuiding.clone(), this.targetMethodClassName, this.targetMethodDescriptor, this.targetMethodName);
-		} 
-		//TODO if (numberOfHits == 0) ...
+		final int numberOfHits = countNumberOfInvocations(pGuiding.clone(), this.targetMethodClassName, this.targetMethodDescriptor, this.targetMethodName);
+		//TODO if (numberOfHits == 0) raise error
 		
 		//creates the guidance decision procedure and sets it
 		final DecisionProcedureGuidanceJDI guid = new DecisionProcedureGuidanceJDI(pGuided.getDecisionProcedure(),
@@ -432,7 +426,7 @@ public class RunnerPath {
 		}
 	}
 
-	private int countNumberOfInvocations2(RunnerParameters params, String methodClassName, String methodDescriptor, String methodName) 
+	private int countNumberOfInvocations(RunnerParameters params, String methodClassName, String methodDescriptor, String methodName) 
 	throws CannotBuildEngineException, DecisionException, InitializationException, InvalidClassFileFactoryClassException, 
 	NonexistingObservedVariablesException, ClasspathException, ContradictionException, CannotBacktrackException, 
 	CannotManageStateException, ThreadStackEmptyException, EngineStuckException, FailureException {
@@ -444,35 +438,6 @@ public class RunnerPath {
 		return actions.methodCallCounter;
 	}
 
-	private static class CountVisitor extends VoidVisitorAdapter<Object> {
-		final String methodName;
-		int methodCallCounter = 0;
-
-		public CountVisitor(String methodName) {
-			this.methodName = methodName;
-		}
-
-		@Override
-		public void visit(MethodCallExpr n, Object arg) {
-			super.visit(n, arg);
-			if (n.getNameAsString().equals(this.methodName)) {
-				this.methodCallCounter++;
-			}
-		}
-	}
-
-	private int countNumberOfInvocations(Path sourcePath, String methodName){
-		//TODO use the whole signature of the target method to avoid ambiguities (that's quite hard)
-		final CountVisitor v = new CountVisitor(methodName);
-		try {
-			final FileInputStream in = new FileInputStream(sourcePath.toFile());
-			v.visit(JavaParser.parse(in), null);
-		} catch (FileNotFoundException e) {
-			e.printStackTrace();
-		}
-		return v.methodCallCounter;
-	}
-	
 	/**
 	 * Must be invoked after an invocation of {@link #runProgram(TestCase, int) runProgram(tc, depth)}.
 	 * Returns the initial state of symbolic execution.
