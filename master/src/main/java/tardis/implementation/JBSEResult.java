@@ -29,7 +29,7 @@ public class JBSEResult {
 	}
 	
 	public JBSEResult(EvosuiteResult er, State initialState, State preState, State finalState, boolean atJump, Map<Long, String> stringLiterals, int depth) {
-		this.targetClassName = er.getTargetClassName();
+		this.targetClassName = er.getTargetMethodClassName();
 		this.targetMethodDescriptor = er.getTargetMethodDescriptor();
 		this.targetMethodName = er.getTargetMethodName();
 		this.initialState = initialState.clone();

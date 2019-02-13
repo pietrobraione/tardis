@@ -1,8 +1,10 @@
 package tardis.implementation;
 
 import static jbse.algo.Util.valueString;
+import static jbse.bc.Opcodes.OP_INVOKEINTERFACE;
 import static jbse.bc.Signatures.JAVA_STRING;
 import static tardis.implementation.Util.bytecodeBranch;
+import static tardis.implementation.Util.bytecodeInvoke;
 import static tardis.implementation.Util.bytecodeJump;
 import static tardis.implementation.Util.bytecodeLoadConstant;
 
@@ -24,7 +26,10 @@ import jbse.algo.exc.CannotManageStateException;
 import jbse.apps.run.DecisionProcedureGuidance;
 import jbse.apps.run.DecisionProcedureGuidanceJDI;
 import jbse.apps.run.GuidanceException;
+import jbse.bc.Signature;
 import jbse.bc.exc.InvalidClassFileFactoryClassException;
+import jbse.bc.exc.InvalidIndexException;
+import jbse.common.Util;
 import jbse.common.exc.ClasspathException;
 import jbse.dec.DecisionProcedureAlgorithms;
 import jbse.dec.DecisionProcedureAlwSat;
@@ -49,6 +54,7 @@ import jbse.mem.State.Phase;
 import jbse.mem.exc.ContradictionException;
 import jbse.mem.exc.FrozenStateException;
 import jbse.mem.exc.InvalidNumberOfOperandsException;
+import jbse.mem.exc.InvalidProgramCounterException;
 import jbse.mem.exc.ThreadStackEmptyException;
 import jbse.rewr.CalculatorRewriting;
 import jbse.rewr.RewriterOperationOnSimplex;
@@ -66,6 +72,8 @@ public class RunnerPath {
 
 	private final String[] classpath;
 	private final String z3Path;
+	private final String targetMethodClassName;
+	private final String targetMethodDescriptor;
 	private final String targetMethodName;
 	private final TestCase testCase;
 	private final RunnerParameters commonParamsGuided;
@@ -79,12 +87,14 @@ public class RunnerPath {
 		_classpath.addAll(o.getClassesPath().stream().map(Object::toString).collect(Collectors.toList()));
 		this.classpath = _classpath.toArray(new String[0]);
 		this.z3Path = o.getZ3Path().toString();
+		this.targetMethodClassName = item.getTargetMethodClassName();
+		this.targetMethodDescriptor = item.getTargetMethodDescriptor();
 		this.targetMethodName = item.getTargetMethodName();
 		this.testCase = item.getTestCase();
 		
 		//builds the template parameters object for the guided (symbolic) execution
 		this.commonParamsGuided = new RunnerParameters();
-		this.commonParamsGuided.setMethodSignature(item.getTargetClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName());
+		this.commonParamsGuided.setMethodSignature(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName());
 		this.commonParamsGuided.addUserClasspath(this.classpath);
 		if (o.getHeapScope() != null) {
 			for (Map.Entry<String, Integer> e : o.getHeapScope().entrySet()) {
@@ -314,11 +324,11 @@ public class RunnerPath {
 	 * @throws FailureException
 	 */
 	public List<State> runProgram(int testDepth)
-			throws DecisionException, CannotBuildEngineException, InitializationException, 
-			InvalidClassFileFactoryClassException, NonexistingObservedVariablesException, 
-			ClasspathException, CannotBacktrackException, CannotManageStateException, 
-			ThreadStackEmptyException, ContradictionException, EngineStuckException, 
-			FailureException {
+	throws DecisionException, CannotBuildEngineException, InitializationException, 
+	InvalidClassFileFactoryClassException, NonexistingObservedVariablesException, 
+	ClasspathException, CannotBacktrackException, CannotManageStateException, 
+	ThreadStackEmptyException, ContradictionException, EngineStuckException, 
+	FailureException {
 
 		//builds the parameters
 		final RunnerParameters pGuided = this.commonParamsGuided.clone();
@@ -354,8 +364,14 @@ public class RunnerPath {
 		//sets the guiding method (to be executed concretely)
 		pGuiding.setMethodSignature(this.testCase.getClassName(), this.testCase.getMethodDescriptor(), this.testCase.getMethodName());
 		
+		//determines the number of hits (best effort)
+		int numberOfHits = countNumberOfInvocations(this.testCase.getSourcePath(), this.targetMethodName);
+		if (numberOfHits == 0) {
+			numberOfHits = countNumberOfInvocations2(pGuiding.clone(), this.targetMethodClassName, this.targetMethodDescriptor, this.targetMethodName);
+		} 
+		//TODO if (numberOfHits == 0) ...
+		
 		//creates the guidance decision procedure and sets it
-		final int numberOfHits = countNumberOfInvocations(this.testCase.getSourcePath(), this.targetMethodName);
 		final DecisionProcedureGuidanceJDI guid = new DecisionProcedureGuidanceJDI(pGuided.getDecisionProcedure(),
 				pGuided.getCalculator(), pGuiding, pGuided.getMethodSignature(), numberOfHits);
 		pGuided.setDecisionProcedure(guid);
@@ -382,6 +398,52 @@ public class RunnerPath {
 		return actions.stateList;
 	}
 	
+	private static class ActionsCounter extends Actions {
+		private final String methodClassName, methodDescriptor, methodName;
+		private int methodCallCounter = 0;
+		
+		public ActionsCounter(String methodClassName, String methodDescriptor, String methodName) {
+			this.methodClassName = methodClassName;
+			this.methodDescriptor = methodDescriptor;
+			this.methodName = methodName;
+		}
+		
+		@Override
+		public boolean atStepPre() {
+			try {
+				final State currentState = getEngine().getCurrentState();
+				if (currentState.phase() == Phase.POST_INITIAL && bytecodeInvoke(currentState.getInstruction())) {
+					final int UW = Util.byteCat(currentState.getInstruction(1), currentState.getInstruction(2));
+					final Signature sig;
+					if (currentState.getInstruction() == OP_INVOKEINTERFACE) {
+						sig = currentState.getCurrentClass().getInterfaceMethodSignature(UW);
+					} else {
+						sig = currentState.getCurrentClass().getMethodSignature(UW);
+					}
+					if (this.methodClassName.equals(sig.getClassName()) && this.methodDescriptor.equals(sig.getDescriptor()) && this.methodName.equals(sig.getName())) {
+						++this.methodCallCounter;
+					}
+				}
+			} catch (FrozenStateException | InvalidIndexException | ThreadStackEmptyException | InvalidProgramCounterException e) {
+				//this should never happen
+				throw new AssertionError(e);
+			}
+			return super.atStepPre();
+		}
+	}
+
+	private int countNumberOfInvocations2(RunnerParameters params, String methodClassName, String methodDescriptor, String methodName) 
+	throws CannotBuildEngineException, DecisionException, InitializationException, InvalidClassFileFactoryClassException, 
+	NonexistingObservedVariablesException, ClasspathException, ContradictionException, CannotBacktrackException, 
+	CannotManageStateException, ThreadStackEmptyException, EngineStuckException, FailureException {
+		final ActionsCounter actions = new ActionsCounter(methodClassName, methodDescriptor, methodName);
+		params.setActions(actions);
+		final RunnerBuilder rb = new RunnerBuilder();
+		final Runner r = rb.build(params);
+		r.run();
+		return actions.methodCallCounter;
+	}
+
 	private static class CountVisitor extends VoidVisitorAdapter<Object> {
 		final String methodName;
 		int methodCallCounter = 0;
