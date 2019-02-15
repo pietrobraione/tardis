@@ -20,9 +20,8 @@ public class TardisTool implements ITestingTool {
 	private static final String JBSE_LIB       = HOME + "/lib/jbse-0.9.0-SNAPSHOT-shaded.jar";
 	private static final String EVOSUITE_LIB   = HOME + "/lib/evosuite-shaded-1.0.6-SNAPSHOT.jar";
 	private static final String ARGS4J_LIB     = HOME + "/lib/args4j-2.32.jar";
-	private static final String JAVAPARSER_LIB = HOME + "/lib/javaparser-core-3.4.0.jar";
 	private static final String TOOLS_LIB      = "/usr/lib/jvm/java-8-openjdk-amd64/lib/tools.jar";
-	private static final String Z3_BIN         = "/usr/bin/z3";
+	private static final String Z3_BIN         = HOME + "/opt/bin/z3";
 	private static final String TMP_DIR        = HOME + "/temp/data";
 	private static final String OUT_DIR        = HOME + "/temp/testcases";
 	
@@ -36,7 +35,6 @@ public class TardisTool implements ITestingTool {
 		sb.append(JBSE_LIB); sb.append(":");
 		sb.append(EVOSUITE_LIB); sb.append(":");
 		sb.append(ARGS4J_LIB); sb.append(":");
-		sb.append(JAVAPARSER_LIB); sb.append(":");
 		sb.append(TOOLS_LIB);
 		this.classPathTardis = sb.toString();
 	}
