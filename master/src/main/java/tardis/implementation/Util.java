@@ -113,7 +113,9 @@ public class Util {
 		return (currentBytecode == Opcodes.OP_INVOKEVIRTUAL ||
 				currentBytecode == Opcodes.OP_INVOKESTATIC ||
 				currentBytecode == Opcodes.OP_INVOKEINTERFACE ||
-				currentBytecode == Opcodes.OP_INVOKESPECIAL); //TODO invokedynamic, invokehandle
+				currentBytecode == Opcodes.OP_INVOKESPECIAL ||
+				currentBytecode == Opcodes.OP_INVOKEDYNAMIC ||
+				currentBytecode == Opcodes.OP_INVOKEHANDLE);
 	}
 	
 	static boolean bytecodeBranch(byte currentBytecode) {
