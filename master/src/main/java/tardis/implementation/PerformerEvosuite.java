@@ -399,7 +399,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 			try {
 				final URLClassLoader cloader = URLClassLoader.newInstance(new URL[]{ PerformerEvosuite.this.tmpBinTestsPath.toUri().toURL() }); 
 				cloader.loadClass(className.replace('/',  '.')).getDeclaredMethod("test0");
-			} catch (SecurityException | ClassNotFoundException | MalformedURLException e) {
+			} catch (SecurityException | NoClassDefFoundError | ClassNotFoundException | MalformedURLException e) {
 				System.out.println("[EVOSUITE] Unexpected error while verifying that class " + className + " exists and has a test method: " + e);
 				//TODO throw an exception
 			} 			
