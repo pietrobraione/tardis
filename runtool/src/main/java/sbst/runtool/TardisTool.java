@@ -67,7 +67,7 @@ public class TardisTool implements ITestingTool {
                "tardis.Main", 
                "-sushi_lib", SUSHI_LIB, "-jbse_lib", JBSE_LIB, "-evosuite", EVOSUITE_LIB, "-z3", Z3_BIN,
                "-use_mosa", "-num_mosa_targets", "5", 
-               "-num_threads", "5", "-max_depth", "50",
+               "-num_threads", "3", "-max_depth", "50",
                "-tmp_base", TMP_DIR, "-out", OUT_DIR, 
                "-global_time_budget_duration", Long.toString(timeBudget), "-global_time_budget_unit", "SECONDS",
                "-classes", this.classPathSUT, "-target_class", cName.replace('.', '/')

@@ -397,7 +397,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 		 */
 		private void checkTestExists(String className) throws NoSuchMethodException {
 			try {
-				final URLClassLoader cloader = URLClassLoader.newInstance(new URL[]{ PerformerEvosuite.this.tmpBinTestsPath.toUri().toURL() }); 
+				final URLClassLoader cloader = URLClassLoader.newInstance(new URL[]{ PerformerEvosuite.this.tmpBinTestsPath.toUri().toURL(), PerformerEvosuite.this.evosuitePath.toUri().toURL() }); 
 				cloader.loadClass(className.replace('/',  '.')).getDeclaredMethod("test0");
 			} catch (SecurityException | NoClassDefFoundError | ClassNotFoundException | MalformedURLException e) {
 				System.out.println("[EVOSUITE] Unexpected error while verifying that class " + className + " exists and has a test method: " + e);
