@@ -14,29 +14,20 @@ import java.util.Date;
 import java.util.List;
 
 public class TardisTool implements ITestingTool {
-    private final String TARDIS;
-    private final String Z3_BIN;
-    private final String TMP_DIR;
-    private final String OUT_DIR;
-    private final String SUSHI_LIB;
-    private final String JBSE_LIB;
-    private final String EVOSUITE_LIB;
-    private final String ARGS4J_LIB;
-    private final String TOOLS_LIB;
+    private static final String TARDIS         = System.getProperty("user.dir") + "/lib/tardis-master-0.1.0-SNAPSHOT.jar";
+    private static final String Z3_BIN         = System.getProperty("user.dir") + "/opt/bin/z3";
+    private static final String TMP_DIR        = System.getProperty("user.dir") + "/temp/data";
+    private static final String OUT_DIR        = System.getProperty("user.dir") + "/temp/testcases";
+    private static final String SUSHI_LIB      = System.getProperty("user.dir") + "/lib/sushi-lib-0.2.0-SNAPSHOT.jar";
+    private static final String JBSE_LIB       = System.getProperty("user.dir") + "/lib/jbse-0.9.0-SNAPSHOT-shaded.jar";
+    private static final String EVOSUITE_LIB   = System.getProperty("user.dir") + "/lib/evosuite-shaded-1.0.6-SNAPSHOT.jar";
+    private static final String ARGS4J_LIB     = System.getProperty("user.dir") + "/lib/args4j-2.32.jar";
+    private static final String TOOLS_LIB      = System.getProperty("java.home") + "/../lib/tools.jar";
 
     private final String classPathTardis;
     private String classPathSUT;
 
-    public TardisTool(String currentDirectory) {
-        TARDIS         = currentDirectory + "/lib/tardis-master-0.1.0-SNAPSHOT.jar";
-        Z3_BIN         = currentDirectory + "/opt/bin/z3";
-        TMP_DIR        = currentDirectory + "/temp/data";
-        OUT_DIR        = currentDirectory + "/temp/testcases";
-        SUSHI_LIB      = currentDirectory + "/lib/sushi-lib-0.2.0-SNAPSHOT.jar";
-        JBSE_LIB       = currentDirectory + "/lib/jbse-0.9.0-SNAPSHOT-shaded.jar";
-        EVOSUITE_LIB   = currentDirectory + "/lib/evosuite-shaded-1.0.6-SNAPSHOT.jar";
-        ARGS4J_LIB     = currentDirectory + "/lib/args4j-2.32.jar";
-        TOOLS_LIB      = System.getProperty("java.home") + "/lib/tools.jar";
+    public TardisTool() {
         final StringBuilder sb = new StringBuilder();
         sb.append(TARDIS); sb.append(":");
         sb.append(SUSHI_LIB); sb.append(":");
@@ -45,6 +36,10 @@ public class TardisTool implements ITestingTool {
         sb.append(ARGS4J_LIB); sb.append(":");
         sb.append(TOOLS_LIB);
         this.classPathTardis = sb.toString();
+    }
+    
+    public static void main(String[] s) {
+        new TardisTool();
     }
 
     @Override
