@@ -75,11 +75,11 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 	 * @throws FailureException
 	 */
 	private void explore(EvosuiteResult item, int startDepth) 
-			throws DecisionException, CannotBuildEngineException, InitializationException, 
-			InvalidClassFileFactoryClassException, NonexistingObservedVariablesException, 
-			ClasspathException, CannotBacktrackException, CannotManageStateException, 
-			ThreadStackEmptyException, ContradictionException, EngineStuckException, 
-			FailureException {
+	throws DecisionException, CannotBuildEngineException, InitializationException, 
+	InvalidClassFileFactoryClassException, NonexistingObservedVariablesException, 
+	ClasspathException, CannotBacktrackException, CannotManageStateException, 
+	ThreadStackEmptyException, ContradictionException, EngineStuckException, 
+	FailureException {
 		if (this.maxDepth <= 0) {
 			return;
 		}
@@ -111,13 +111,15 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 			final State initialState = rp.getInitialState();
 			final State preState = rp.getPreState();
 			final boolean atJump = rp.getAtJump();
+			final List<String> targetBranches = rp.getTargetBranches(); 
 			final Map<Long, String> stringLiterals = rp.getStringLiterals();
-			for (State newState : newStates) {
+			for (int i = 0; i < newStates.size(); ++i) {
+			    final State newState = newStates.get(i);
 				final Collection<Clause> currentPC = newState.getPathCondition();
 				if (alreadyExplored(currentPC, tcFinalPC)) {
 					continue;
 				}
-				this.getOutputBuffer().add(new JBSEResult(item, initialState, preState, newState, atJump, stringLiterals, currentDepth));
+				this.getOutputBuffer().add(new JBSEResult(item, initialState, preState, newState, atJump, (atJump ? targetBranches.get(i) : null), stringLiterals, currentDepth));
 				System.out.println("[JBSE    ] From test case " + tc.getClassName() + " generated path condition " + shorten(currentPC).toString());
 				noPathConditionGenerated = false;
 			}

@@ -113,7 +113,7 @@ public final class Main {
 		//starts everything
 		System.out.println("[MAIN    ] This is " + Util.getName() + ", version " + Util.getVersion() + ", " + '\u00a9' + " 2017-2019 " + Util.getVendor());
 		final DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss");
-		System.out.println("[MAIN    ] Starting at " + dtf.format(LocalDateTime.now()));
+		System.out.println("[MAIN    ] Starting at " + dtf.format(LocalDateTime.now()) + ", target is " + (this.o.getTargetMethod() == null ? ("class " + this.o.getTargetClass()) : ("method " + this.o.getTargetMethod().get(0) + ":" + this.o.getTargetMethod().get(1) + ":" + this.o.getTargetMethod().get(2))));
 		performerJBSE.start();
 		performerEvosuite.start();
 		terminationManager.start();
@@ -141,7 +141,7 @@ public final class Main {
 				final State s = new State(true, HistoryPoint.startingPreInitial(true), 1_000, 100_000, this.o.getClasspath(), ClassFileFactoryJavassist.class, new HashMap<>(), calc, new SymbolFactory(calc));
 				final ClassFile cf = s.getClassHierarchy().loadCreateClass(CLASSLOADER_APP, targetMethod.get(0), true);
 				s.pushFrameSymbolic(cf, new Signature(targetMethod.get(0), targetMethod.get(1), targetMethod.get(2)));
-				retVal.add(new JBSEResult(targetMethod.get(0), targetMethod.get(1), targetMethod.get(2), s, s, s, false, Collections.emptyMap(), -1));
+				retVal.add(new JBSEResult(targetMethod.get(0), targetMethod.get(1), targetMethod.get(2), s, s, s, false, null, Collections.emptyMap(), -1));
 			}
 			return retVal;
 		} catch (ClassNotFoundException | WrongClassNameException | BadClassFileVersionException | ClassFileNotFoundException | IncompatibleClassFileException | 

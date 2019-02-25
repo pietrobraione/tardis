@@ -25,7 +25,7 @@ import tardis.implementation.MultiSignatureOptionHandler;
 
 public final class Options implements Cloneable {
 	@Option(name = "-help",
-			usage = "Prints usage and exits")
+	        usage = "Prints usage and exits")
 	private boolean help = false;
 
 	@Option(name = "-initial_test",
@@ -103,9 +103,13 @@ public final class Options implements Cloneable {
 	private int evosuiteTimeBudgetDuration = 180;
 	
 	@Option(name = "-evosuite_time_budget_unit",
-			usage = "Unit of the time budget for EvoSuite: NANOSECONDS, MICROSECONDS, MILLISECONDS, SECONDS, MINUTES, HOURS, DAYS")
+	        usage = "Unit of the time budget for EvoSuite: NANOSECONDS, MICROSECONDS, MILLISECONDS, SECONDS, MINUTES, HOURS, DAYS")
 	private TimeUnit evosuiteTimeBudgetUnit = TimeUnit.SECONDS;
-	
+
+	@Option(name = "-evosuite_no_dependency",
+	        usage = "Whether the generated tests should have no dependency on the Evosuite runtime")
+	private boolean evosuiteNoDependency = false;
+
 	@Option(name = "-global_time_budget_duration",
 			usage = "Duration of the global time budget")
 	private long globalTimeBudgetDuration = 10;
@@ -319,6 +323,14 @@ public final class Options implements Cloneable {
 		this.evosuiteTimeBudgetUnit = evosuiteTimeBudgetUnit;
 	}
 	
+	public boolean getEvosuiteNoDependency() {
+	    return this.evosuiteNoDependency;
+	}
+	
+        public void setEvosuiteNoDependency(boolean evosuiteNoDependency) {
+            this.evosuiteNoDependency = evosuiteNoDependency;
+        }
+        
 	public long getGlobalTimeBudgetDuration() {
 		return this.globalTimeBudgetDuration;
 	}
