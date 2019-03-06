@@ -48,8 +48,6 @@ import jbse.common.exc.InvalidInputException;
 import jbse.mem.State;
 import jbse.mem.exc.CannotAssumeSymbolicObjectException;
 import jbse.mem.exc.HeapMemoryExhaustedException;
-import jbse.rewr.CalculatorRewriting;
-import jbse.rewr.RewriterOperationOnSimplex;
 import jbse.val.HistoryPoint;
 import jbse.val.SymbolFactory;
 
@@ -126,8 +124,6 @@ public final class Main {
 	private ArrayList<JBSEResult> seedForEvosuite() {
 		//this is the "no initial test case" situation
 		try {
-			final CalculatorRewriting calc = new CalculatorRewriting();
-			calc.addRewriter(new RewriterOperationOnSimplex());
 			final ArrayList<JBSEResult> retVal = new ArrayList<>();
 			final List<List<String>> targetMethods;
 			if (this.o.getTargetMethod() == null) {
@@ -138,7 +134,7 @@ public final class Main {
 				targetMethods = getUniqueTargetMethod(this.o);
 			}
 			for (List<String> targetMethod : targetMethods) {
-				final State s = new State(true, HistoryPoint.startingPreInitial(true), 1_000, 100_000, this.o.getClasspath(), ClassFileFactoryJavassist.class, new HashMap<>(), calc, new SymbolFactory(calc));
+				final State s = new State(true, HistoryPoint.startingPreInitial(true), 1_000, 100_000, this.o.getClasspath(), ClassFileFactoryJavassist.class, new HashMap<>(), new SymbolFactory());
 				final ClassFile cf = s.getClassHierarchy().loadCreateClass(CLASSLOADER_APP, targetMethod.get(0), true);
 				s.pushFrameSymbolic(cf, new Signature(targetMethod.get(0), targetMethod.get(1), targetMethod.get(2)));
 				retVal.add(new JBSEResult(targetMethod.get(0), targetMethod.get(1), targetMethod.get(2), s, s, s, false, null, Collections.emptyMap(), -1));

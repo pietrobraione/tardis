@@ -24,6 +24,7 @@ import jbse.bc.Signature;
 import jbse.bc.exc.InvalidClassFileFactoryClassException;
 import jbse.bc.exc.InvalidIndexException;
 import jbse.common.exc.ClasspathException;
+import jbse.common.exc.InvalidInputException;
 import jbse.dec.DecisionProcedureAlgorithms;
 import jbse.dec.DecisionProcedureAlwSat;
 import jbse.dec.DecisionProcedureClassInit;
@@ -390,10 +391,10 @@ public class RunnerPath {
         //sets the calculator
         final CalculatorRewriting calc = new CalculatorRewriting();
         calc.addRewriter(new RewriterOperationOnSimplex());
+        pGuiding.setCalculator(calc);
         if (pGuided != null) {
             pGuided.setCalculator(calc);
         }
-        pGuiding.setCalculator(calc);
 
         //sets the decision procedures
         final ArrayList<String> z3CommandLine = new ArrayList<>();
@@ -402,24 +403,25 @@ public class RunnerPath {
         z3CommandLine.add(SWITCH_CHAR + "in");
         z3CommandLine.add(SWITCH_CHAR + "t:10");
         final ClassInitRulesRepo initRules = new ClassInitRulesRepo();
-        if (pGuided != null) {
-            pGuided.setDecisionProcedure(new DecisionProcedureAlgorithms(
-                                           new DecisionProcedureClassInit(
-                                             new DecisionProcedureLICS( //useless?
-                                               new DecisionProcedureSMTLIB2_AUFNIRA(
-                                                 new DecisionProcedureAlwSat(), calc, z3CommandLine), 
-                                               calc, new LICSRulesRepo()), 
-                                             calc, initRules), 
-                                           calc));
-        }
-        pGuiding.setDecisionProcedure(new DecisionProcedureAlgorithms(
-                                        new DecisionProcedureClassInit(
-                                          new DecisionProcedureAlwSat(), calc, initRules), 
-                                        calc));
-        if (pGuided != null) {
-            final DecisionProcedureGuidanceJDI guid = 
-                new DecisionProcedureGuidanceJDI(pGuided.getDecisionProcedure(), pGuided.getCalculator(), pGuiding, pGuided.getMethodSignature(), this.numberOfHits);
-            pGuided.setDecisionProcedure(guid);
+        try {
+            pGuiding.setDecisionProcedure(new DecisionProcedureAlgorithms(
+                                            new DecisionProcedureClassInit(
+                                               new DecisionProcedureAlwSat(calc), initRules)));
+            if (pGuided != null) {
+                final DecisionProcedureGuidanceJDI guid = 
+                    new DecisionProcedureGuidanceJDI(
+                      new DecisionProcedureAlgorithms(
+                        new DecisionProcedureClassInit(
+                          new DecisionProcedureLICS( //useless?
+                            new DecisionProcedureSMTLIB2_AUFNIRA(
+                              new DecisionProcedureAlwSat(calc), z3CommandLine), 
+                            new LICSRulesRepo()), 
+                          initRules)), calc, pGuiding, pGuided.getMethodSignature(), this.numberOfHits);
+                pGuided.setDecisionProcedure(guid);
+            }
+        } catch (InvalidInputException e) {
+            //this should never happen
+            throw new AssertionError(e);
         }
     }
 
