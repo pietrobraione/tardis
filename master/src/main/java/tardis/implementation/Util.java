@@ -19,8 +19,14 @@ import java.util.stream.StreamSupport;
 
 import jbse.bc.Opcodes;
 import jbse.mem.Clause;
+import jbse.mem.ClauseAssume;
+import jbse.mem.ClauseAssumeAliases;
 import jbse.mem.ClauseAssumeClassInitialized;
 import jbse.mem.ClauseAssumeClassNotInitialized;
+import jbse.mem.ClauseAssumeExpands;
+import jbse.mem.ClauseAssumeNull;
+import jbse.val.Primitive;
+import jbse.val.Symbolic;
 import sushi.configure.Visibility;
 import tardis.Options;
 
@@ -299,4 +305,38 @@ public class Util {
             return "L" + s + ";";
         }
     }
+    
+   public static final String stringifyPathCondition(Collection<Clause> pathCondition) {
+       final StringBuilder retVal = new StringBuilder();
+       boolean first = true;
+       for (Clause c : pathCondition) {
+           if (first) {
+               first = false;
+           } else {
+               retVal.append(" && ");
+           }
+           if (c instanceof ClauseAssume) {
+               final Primitive p = ((ClauseAssume) c).getCondition();
+               if (p instanceof Symbolic) {
+                   retVal.append(((Symbolic) p).asOriginString());
+               } else {
+                   retVal.append(p.toString());
+               }
+           } else if (c instanceof ClauseAssumeExpands) {
+               retVal.append(((ClauseAssumeExpands) c).getReference().asOriginString());
+               retVal.append(" fresh ");
+               retVal.append(((ClauseAssumeExpands) c).getObjekt().getType().getClassName());
+           } else if (c instanceof ClauseAssumeAliases) {
+               retVal.append(((ClauseAssumeAliases) c).getReference().asOriginString());
+               retVal.append(" aliases ");
+               retVal.append(((ClauseAssumeAliases) c).getObjekt().getOrigin().asOriginString());
+           } else if (c instanceof ClauseAssumeNull) {
+               retVal.append(((ClauseAssumeNull) c).getReference().asOriginString());
+               retVal.append(" null");
+           } else {
+               retVal.append(c.toString());
+           }
+       }
+       return retVal.toString();
+   }
 }

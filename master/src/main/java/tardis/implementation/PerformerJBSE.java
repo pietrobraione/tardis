@@ -1,6 +1,7 @@
 package tardis.implementation;
 
 import static tardis.implementation.Util.shorten;
+import static tardis.implementation.Util.stringifyPathCondition;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -91,7 +92,7 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 		
 		//prints some feedback
 		final TestCase tc = item.getTestCase();
-		System.out.println("[JBSE    ] Run test case " + tc.getClassName() + ", path condition " + shorten(tcFinalPC).toString());
+		System.out.println("[JBSE    ] Run test case " + tc.getClassName() + ", path condition " + stringifyPathCondition(shorten(tcFinalPC)));
 		final int coverage = this.coverageSet.size();
 		System.out.println("[JBSE    ] Current coverage: " + coverage + " branch" + (coverage == 1 ? "" : "es"));
 		final int tcFinalDepth = tcFinalState.getDepth();
@@ -120,7 +121,7 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 					continue;
 				}
 				this.getOutputBuffer().add(new JBSEResult(item, initialState, preState, newState, atJump, (atJump ? targetBranches.get(i) : null), stringLiterals, currentDepth));
-				System.out.println("[JBSE    ] From test case " + tc.getClassName() + " generated path condition " + shorten(currentPC).toString());
+				System.out.println("[JBSE    ] From test case " + tc.getClassName() + " generated path condition " + stringifyPathCondition(shorten(currentPC)));
 				noPathConditionGenerated = false;
 			}
 		}
