@@ -408,11 +408,11 @@ public class RunnerPath {
         z3CommandLine.add(SWITCH_CHAR + "t:10");
         final ClassInitRulesRepo initRules = new ClassInitRulesRepo();
         try {
-            pGuiding.setDecisionProcedure(new DecisionProcedureAlgorithms(
-                                            new DecisionProcedureClassInit(
-                                              new DecisionProcedureAlwSat(calc), initRules)));
             if (pGuided == null) {
                 initRules.addNotInitializedClassPattern(".*");
+                pGuiding.setDecisionProcedure(new DecisionProcedureAlgorithms(
+                                                new DecisionProcedureClassInit(
+                                                  new DecisionProcedureAlwSat(calc), initRules)));
             } else {
                 pGuiding.setDecisionProcedure(new DecisionProcedureAlgorithms(
                                                 new DecisionProcedureClassInit(
