@@ -459,7 +459,7 @@ public class RunnerPath {
                     } else {
                         sig = currentState.getCurrentClass().getMethodSignature(UW);
                     }
-                    this.atInvocation = (this.methodClassName.equals(sig.getClassName()) && this.methodDescriptor.equals(sig.getDescriptor()) && this.methodName.equals(sig.getName()));
+                    this.atInvocation = (this.methodDescriptor.equals(sig.getDescriptor()) && this.methodName.equals(sig.getName())); //we do not check sig.getClassName() because it is the pre-resolution classname 
                     this.preInvocationStackSize = currentState.getStackSize();
                     //Note that being at at invocation bytecode does not mean that the method
                     //will be invoked at the next step: E.g., a class could be initialized
@@ -470,7 +470,7 @@ public class RunnerPath {
                     //at an invocation bytecode, and in the atStepPost we check whether we 
                     //actually are in the invoked method frame.
                 } else {
-                    atInvocation = false;
+                    this.atInvocation = false;
                 }
             } catch (FrozenStateException | InvalidIndexException | ThreadStackEmptyException | InvalidProgramCounterException e) {
                 //this should never happen
