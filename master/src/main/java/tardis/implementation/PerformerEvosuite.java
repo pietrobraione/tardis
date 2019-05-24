@@ -366,7 +366,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 		 * for their further analysis.
 		 */
 		private void detectTestsAndScheduleJBSE() {
-			final Pattern patternEmittedTest = Pattern.compile("^.*\\* EMITTED TEST CASE: EvoSuiteWrapper_(\\d+), \\w+\\z");
+			final Pattern patternEmittedTest = Pattern.compile("^.*\\* EMITTED TEST CASE: .*EvoSuiteWrapper_(\\d+), \\w+\\z");
 			final HashSet<Integer> generated = new HashSet<>();
 			try (final BufferedReader r = Files.newBufferedReader(this.evosuiteLogFilePath)) {
 				//modified from https://stackoverflow.com/a/154588/450589
