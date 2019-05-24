@@ -81,7 +81,7 @@ public class RunnerPath {
         final ArrayList<String> _classpath = new ArrayList<>();
         _classpath.add(o.getJBSELibraryPath().toString());
         _classpath.add(o.getEvosuitePath().toString());
-        _classpath.add(o.getTmpBinTestsDirectoryPath().toString());
+        _classpath.add(o.getTmpBinDirectoryPath().toString());
         _classpath.addAll(o.getClassesPath().stream().map(Object::toString).collect(Collectors.toList()));
         this.classpath = _classpath.toArray(new String[0]);
         this.z3Path = o.getZ3Path().toString();
@@ -116,8 +116,12 @@ public class RunnerPath {
         this.commonParamsGuiding.setBypassStandardLoading(true); //this has no effect with JDI guidance (unfortunately introduces misalignments between the two)
         
         //disallows aliasing to static, pre-initial objects (too hard)
-        this.commonParamsGuided.getEngineParameters().setMakePreInitClassesSymbolic(false);
-        this.commonParamsGuiding.getEngineParameters().setMakePreInitClassesSymbolic(false);
+        this.commonParamsGuided.setMakePreInitClassesSymbolic(false);
+        this.commonParamsGuiding.setMakePreInitClassesSymbolic(false);
+        
+        //set the maximum length of arrays with simple representation
+        this.commonParamsGuided.setMaxSimpleArrayLength(o.getMaxSimpleArrayLength());
+        this.commonParamsGuiding.setMaxSimpleArrayLength(o.getMaxSimpleArrayLength());
 
         //sets the guiding method (to be executed concretely)
         this.commonParamsGuiding.setMethodSignature(this.testCase.getClassName(), this.testCase.getMethodDescriptor(), this.testCase.getMethodName());
@@ -406,8 +410,13 @@ public class RunnerPath {
         try {
             pGuiding.setDecisionProcedure(new DecisionProcedureAlgorithms(
                                             new DecisionProcedureClassInit(
-                                               new DecisionProcedureAlwSat(calc), initRules)));
-            if (pGuided != null) {
+                                              new DecisionProcedureAlwSat(calc), initRules)));
+            if (pGuided == null) {
+                initRules.addNotInitializedClassPattern(".*");
+            } else {
+                pGuiding.setDecisionProcedure(new DecisionProcedureAlgorithms(
+                                                new DecisionProcedureClassInit(
+                                                   new DecisionProcedureAlwSat(calc), initRules)));
                 final DecisionProcedureGuidanceJDI guid = 
                     new DecisionProcedureGuidanceJDI(
                       new DecisionProcedureAlgorithms(

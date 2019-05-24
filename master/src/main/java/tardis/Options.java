@@ -148,6 +148,10 @@ public final class Options implements Cloneable {
             handler = MultiSignatureOptionHandler.class)
     private List<List<String>> uninterpreted = new ArrayList<>();
 
+    @Option(name = "-max_simple_array_length",
+            usage = "Maximum size of arrays with simple representation")
+    private int maxSimpleArrayLength = 100_000;
+
     public boolean getHelp() {
         return this.help;
     }
@@ -256,8 +260,12 @@ public final class Options implements Cloneable {
         }
     }
 
-    public Path getTmpBinTestsDirectoryPath() {
+    public Path getTmpBinDirectoryPath() {
         return getTmpDirectoryPath().resolve("bin");
+    }
+
+    public Path getTmpWrappersDirectoryPath() {
+        return getTmpDirectoryPath().resolve("wrap");
     }
 
     public Path getOutDirectory() {
@@ -423,6 +431,14 @@ public final class Options implements Cloneable {
     @SafeVarargs
     public final void setUninterpreted(List<String>... signatures) {
         this.uninterpreted = Arrays.asList(signatures);
+    }
+    
+    public void setMaxSimpleArrayLength(int maxSimpleArrayLength) {
+        this.maxSimpleArrayLength = maxSimpleArrayLength;
+    }
+
+    public int getMaxSimpleArrayLength() {
+        return this.maxSimpleArrayLength;
     }
 
     @Override

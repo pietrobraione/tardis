@@ -28,7 +28,7 @@ import javax.tools.JavaCompiler;
 import javax.tools.ToolProvider;
 
 import jbse.mem.State;
-
+import jbse.mem.exc.FrozenStateException;
 import sushi.formatters.StateFormatterSushiPathCondition;
 import tardis.Options;
 import tardis.framework.InputBuffer;
@@ -38,7 +38,8 @@ import tardis.framework.Performer;
 public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 	private final String classesPath;
 	private final Path tmpPath;
-	private final Path tmpBinTestsPath;
+	private final Path tmpBinPath;
+        private final Path tmpWrapPath;
 	private final Path evosuitePath;
 	private final Path sushiLibPath;
 	private final Path outPath;
@@ -52,7 +53,8 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 		super(in, out, o.getNumOfThreads(), (o.getUseMOSA() ? o.getNumMOSATargets() : 1), o.getTimeoutMOSATaskCreationDuration(), o.getTimeoutMOSATaskCreationUnit());
 		this.classesPath = String.join(File.pathSeparator, stream(o.getClassesPath()).map(Object::toString).toArray(String[]::new)); 
 		this.tmpPath = o.getTmpDirectoryPath();
-		this.tmpBinTestsPath = o.getTmpBinTestsDirectoryPath();
+                this.tmpWrapPath = o.getTmpWrappersDirectoryPath();
+		this.tmpBinPath = o.getTmpBinDirectoryPath();
 		this.evosuitePath = o.getEvosuitePath();
 		this.sushiLibPath = o.getSushiLibPath();
 		this.outPath = o.getOutDirectory();
@@ -179,7 +181,24 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 		fmt.formatState(finalState);
 		fmt.formatEpilogue();
 
-		final Path wrapperFilePath = this.tmpPath.resolve("EvoSuiteWrapper_" + testCount + ".java");
+                final String initialCurrentClassName;
+                try {
+                    initialCurrentClassName = initialState.getStack().get(0).getCurrentClass().getClassName();
+                } catch (FrozenStateException e) {
+                    System.out.println("[EVOSUITE] Unexpected error while creating EvoSuite wrapper directory: The initial state is frozen.");
+                    fmt.cleanup();
+                    return null; //TODO throw an exception
+                }
+                final String initialCurrentClassPackageName = initialCurrentClassName.substring(0, initialCurrentClassName.lastIndexOf('/'));
+		final Path wrapperDirectoryPath = this.tmpWrapPath.resolve(initialCurrentClassPackageName);
+		try {
+		    Files.createDirectories(wrapperDirectoryPath);
+		} catch (IOException e) {
+		    System.out.println("[EVOSUITE] Unexpected I/O error while creating EvoSuite wrapper directory " + wrapperDirectoryPath.toString() + ": " + e);
+		    fmt.cleanup();
+		    return null; //TODO throw an exception
+                }
+		final Path wrapperFilePath = wrapperDirectoryPath.resolve("EvoSuiteWrapper_" + testCount + ".java");
 		try (final BufferedWriter w = Files.newBufferedWriter(wrapperFilePath)) {
 			w.write(fmt.emit());
 		} catch (IOException e) {
@@ -208,7 +227,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 			final Map<Long, String> stringLiterals = item.getStringLiterals();
 			final Path wrapperFilePath = emitEvoSuiteWrapper(i, initialState, finalState, stringLiterals);
 			final Path javacLogFilePath = this.tmpPath.resolve("javac-log-wrapper-" + i + ".txt");
-			final String[] javacParameters = { "-cp", classpathCompilationWrapper, "-d", this.tmpPath.toString(), wrapperFilePath.toString() };
+			final String[] javacParameters = { "-cp", classpathCompilationWrapper, "-d", this.tmpBinPath.toString(), wrapperFilePath.toString() };
 			try (final OutputStream w = new BufferedOutputStream(Files.newOutputStream(javacLogFilePath))) {
 				this.compiler.run(null, w, w, javacParameters);
 			} catch (IOException e) {
@@ -233,23 +252,23 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 	 *         suitable to be passed to a {@link ProcessBuilder}.
 	 */
 	private List<String> buildEvoSuiteCommand(int testCountInitial, List<JBSEResult> items) {
-		final String targetClass = items.get(0).getTargetClassName();
+		final String targetClass = items.get(0).getTargetClassName().replace('/', '.');
 		final String targetMethodDescriptor = items.get(0).getTargetMethodDescriptor();
 		final String targetMethodName = items.get(0).getTargetMethodName();
-		final String classpathEvosuite = this.classesPath + File.pathSeparator + this.sushiLibPath.toString() + (this.useMOSA ? "" : (File.pathSeparator + this.tmpPath.toString()));
+		final String classpathEvosuite = this.classesPath + File.pathSeparator + this.sushiLibPath.toString() + (this.useMOSA ? "" : (File.pathSeparator + this.tmpBinPath.toString()));
 		final List<String> retVal = new ArrayList<String>();
 		retVal.add("java");
 		retVal.add("-Xmx4G");
 		retVal.add("-jar");
 		retVal.add(this.evosuitePath.toString());
 		retVal.add("-class");
-		retVal.add(targetClass.replace('/', '.'));
+		retVal.add(targetClass);
 		retVal.add("-mem");
 		retVal.add("2048");
 		retVal.add("-DCP=" + classpathEvosuite); 
 		retVal.add("-Dassertions=false");
 		retVal.add("-Dglobal_timeout=" + this.timeBudgetSeconds);
-		retVal.add("-Dreport_dir=" + this.tmpPath);
+		retVal.add("-Dreport_dir=" + this.tmpPath.toString());
 		retVal.add("-Dsearch_budget=" + this.timeBudgetSeconds);
 		retVal.add("-Dtest_dir=" + this.outPath.toString());
 		retVal.add("-Dvirtual_fs=false");
@@ -266,7 +285,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 		    retVal.add("-Dno_runtime_dependency");
 		}
 		if (this.useMOSA) {
-			retVal.add("-Dpath_condition_evaluators_dir=" + this.tmpPath.toString());
+			retVal.add("-Dpath_condition_evaluators_dir=" + this.tmpBinPath.toString());
 			retVal.add("-Demit_tests_incrementally=true");
 			retVal.add("-Dcrossover_function=SUSHI_HYBRID");
 			retVal.add("-Dalgorithm=DYNAMOSA");
@@ -284,7 +303,8 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 			if (i > testCountInitial) {
 				optionPC.append(":");
 			}
-			optionPC.append(targetClass.replace('/', '.') + "," + targetMethodName + targetMethodDescriptor + ",EvoSuiteWrapper_" + i);
+			final String targetPackage = targetClass.substring(0, targetClass.lastIndexOf('.'));
+			optionPC.append(targetClass + "," + targetMethodName + targetMethodDescriptor + "," + targetPackage + ".EvoSuiteWrapper_" + i);
 		}
 		retVal.add(optionPC.toString());
 		
@@ -402,7 +422,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 		 */
 		private void checkTestExists(String className) throws NoSuchMethodException {
 			try {
-				final URLClassLoader cloader = URLClassLoader.newInstance(new URL[]{ PerformerEvosuite.this.tmpBinTestsPath.toUri().toURL(), PerformerEvosuite.this.evosuitePath.toUri().toURL() }); 
+				final URLClassLoader cloader = URLClassLoader.newInstance(new URL[]{ PerformerEvosuite.this.tmpBinPath.toUri().toURL(), PerformerEvosuite.this.evosuitePath.toUri().toURL() }); 
 				cloader.loadClass(className.replace('/',  '.')).getDeclaredMethod("test0");
 			} catch (SecurityException | NoClassDefFoundError | ClassNotFoundException | MalformedURLException e) {
 				System.out.println("[EVOSUITE] Unexpected error while verifying that class " + className + " exists and has a test method: " + e);
@@ -434,12 +454,12 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 			}
 			
 			//compiles the generated test
-			final String classpathCompilationTest = PerformerEvosuite.this.tmpBinTestsPath.toString() + File.pathSeparator + PerformerEvosuite.this.classesPath + File.pathSeparator + PerformerEvosuite.this.sushiLibPath.toString() + File.pathSeparator + PerformerEvosuite.this.evosuitePath.toString();
+			final String classpathCompilationTest = PerformerEvosuite.this.tmpBinPath.toString() + File.pathSeparator + PerformerEvosuite.this.classesPath + File.pathSeparator + PerformerEvosuite.this.sushiLibPath.toString() + File.pathSeparator + PerformerEvosuite.this.evosuitePath.toString();
 			final Path javacLogFilePath = PerformerEvosuite.this.tmpPath.resolve("javac-log-test-" +  testCount + ".txt");
-			final String[] javacParametersTestCase = { "-cp", classpathCompilationTest, "-d", PerformerEvosuite.this.tmpBinTestsPath.toString(), testCase.toString() };
+			final String[] javacParametersTestCase = { "-cp", classpathCompilationTest, "-d", PerformerEvosuite.this.tmpBinPath.toString(), testCase.toString() };
 			try (final OutputStream w = new BufferedOutputStream(Files.newOutputStream(javacLogFilePath))) {
 			    if (testCaseScaff != null) {
-			        final String[] javacParametersTestScaff = { "-cp", classpathCompilationTest, "-d", PerformerEvosuite.this.tmpBinTestsPath.toString(), testCaseScaff.toString() };
+			        final String[] javacParametersTestScaff = { "-cp", classpathCompilationTest, "-d", PerformerEvosuite.this.tmpBinPath.toString(), testCaseScaff.toString() };
 			        PerformerEvosuite.this.compiler.run(null, w, w, javacParametersTestScaff);
 			    }
 			    PerformerEvosuite.this.compiler.run(null, w, w, javacParametersTestCase);

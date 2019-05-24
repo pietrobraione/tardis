@@ -74,8 +74,8 @@ public final class Main {
 			if (!exists(o.getTmpDirectoryPath())) {
 				createDirectory(o.getTmpDirectoryPath());
 			}
-			if (!exists(o.getTmpBinTestsDirectoryPath())) {
-				createDirectory(o.getTmpBinTestsDirectoryPath());
+			if (!exists(o.getTmpBinDirectoryPath())) {
+				createDirectory(o.getTmpBinDirectoryPath());
 			}
 		} catch (IOException e) {
 			System.out.println("[MAIN    ] Error: unable to create temporary directories, does the base directory exist?");
@@ -185,7 +185,7 @@ public final class Main {
 		final TestCase tc = new TestCase(this.o);
 		final String classpathCompilationTest = String.join(File.pathSeparator, stream(this.o.getClassesPath()).map(Object::toString).toArray(String[]::new));
 		final Path javacLogFilePath = this.o.getTmpDirectoryPath().resolve("javac-log-test-0.txt");
-		final String[] javacParametersTestCase = { "-cp", classpathCompilationTest, "-d", this.o.getTmpBinTestsDirectoryPath().toString(), tc.getSourcePath().toString() };
+		final String[] javacParametersTestCase = { "-cp", classpathCompilationTest, "-d", this.o.getTmpBinDirectoryPath().toString(), tc.getSourcePath().toString() };
 		final JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
 		if (compiler == null) {
 			System.out.println("[MAIN    ] Failed to find a system Java compiler. Did you install a JDK?");
