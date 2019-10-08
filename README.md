@@ -72,9 +72,9 @@ Here follows detailed instructions for deploying TARDIS based on the plain jars:
 * Deploy the `sushi-lib-<VERSION>.jar` and set the Java classpath to point at it.
 * Deploy the two EvoSuite jars contained in the `lib` directory. Although TARDIS executes EvoSuite in a separate process, TARDIS will nevertheless try to load some of its classes, therefore you need to put one of the two EvoSuite jars in the classpath (read later to learn which of the two). 
 * TARDIS will not run if you deploy it on a machine that has a JRE, instead of a JDK, installed. This because TARDIS needs to invoke the platform's `javac` to compile some intermediate files. Therefore, you need to install a full JDK 8 on the target machine, providing both `tools.jar` and `javac` to TARDIS. Add `tools.jar` to the classpath.
-* Deploy the args4j, JavaParser and (if you do not use the `jbse-<version>-shaded.jar` uber-jar) Javassist jars that you find in the Gradle's cache. All these jars must be on the classpath.
+* Deploy the args4j and (if you do not use the `jbse-<version>-shaded.jar` uber-jar) Javassist jars that you find in the Gradle's cache. All these jars must be on the classpath.
 
-If you deploy the `tardis-master-<VERSION>-shaded.jar` uber-jar you do not need to deploy the JBSE, SUSHI-Lib, args4j, JavaParser and Javassist jars.
+If you deploy the `tardis-master-<VERSION>-shaded.jar` uber-jar you do not need to deploy the JBSE, SUSHI-Lib, args4j and Javassist jars.
 
 ## Usage
 
@@ -113,7 +113,7 @@ In both cases you need to set a number of options. The indispensable ones, that 
 
 You will find examples of the code-based way of configuring TARDIS in the [tardis-experiments](https://github.com/pietrobraione/tardis-experiments) project. A possible example of command line is the following:
 
-    java -Xms16G -Xmx16G -cp tardis-master-0.1.0-SNAPSHOT.jar:sushi-lib-0.2.0-SNAPSHOT.jar:jbse-0.9.0-SNAPSHOT-shaded.jar:evosuite-shaded-1.0.6-SNAPSHOT.jar:args4j-2.32.jar:javaparser-core-3.4.0.jar:/usr/lib/jvm/java-8-openjdk-amd64/lib/tools.jar tardis.Main -jbse_lib jbse-0.9.0-SNAPSHOT-shaded.jar -sushi_lib sushi-lib-0.2.0-SNAPSHOT.jar -evosuite evosuite-shaded-1.0.6-SNAPSHOT.jar -use_mosa -z3 /opt/local/bin/z3 -classes ./my-application/bin -target_class my/Class -tmp_base ./tmp -out ./tests
+    java -Xms16G -Xmx16G -cp tardis-master-0.1.0-SNAPSHOT.jar:sushi-lib-0.2.0-SNAPSHOT.jar:jbse-0.9.0-SNAPSHOT-shaded.jar:evosuite-shaded-1.0.6-SNAPSHOT.jar:args4j-2.32.jar:/usr/lib/jvm/java-8-openjdk-amd64/lib/tools.jar tardis.Main -jbse_lib jbse-0.9.0-SNAPSHOT-shaded.jar -sushi_lib sushi-lib-0.2.0-SNAPSHOT.jar -evosuite evosuite-shaded-1.0.6-SNAPSHOT.jar -use_mosa -z3 /opt/local/bin/z3 -classes ./my-application/bin -target_class my/Class -tmp_base ./tmp -out ./tests
     
 In the case you prefer (at your own risk) to use the TARDIS uber-jar the command line becomes a bit shorter:
 
