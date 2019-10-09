@@ -1,5 +1,5 @@
 package tardis.framework;
 
 public interface OutputBuffer<E> {
-	boolean add(E e);
+    boolean add(E e);
 }

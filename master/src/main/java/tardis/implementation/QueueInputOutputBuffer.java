@@ -7,20 +7,20 @@ import tardis.framework.InputBuffer;
 import tardis.framework.OutputBuffer;
 
 public class QueueInputOutputBuffer<E> implements InputBuffer<E>, OutputBuffer<E> {
-	private final LinkedBlockingQueue<E> queue = new LinkedBlockingQueue<>();
+    private final LinkedBlockingQueue<E> queue = new LinkedBlockingQueue<>();
 
-	@Override
-	public boolean add(E e) {
-		return this.queue.add(e);
-	}
+    @Override
+    public boolean add(E e) {
+        return this.queue.add(e);
+    }
 
-	@Override
-	public E poll(long timeout, TimeUnit unit) throws InterruptedException {
-		return this.queue.poll(timeout, unit);
-	}
+    @Override
+    public E poll(long timeout, TimeUnit unit) throws InterruptedException {
+        return this.queue.poll(timeout, unit);
+    }
 
-	@Override
-	public boolean isEmpty() {
-		return this.queue.isEmpty();
-	}
+    @Override
+    public boolean isEmpty() {
+        return this.queue.isEmpty();
+    }
 }

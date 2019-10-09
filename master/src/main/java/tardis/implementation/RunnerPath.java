@@ -110,22 +110,22 @@ public class RunnerPath {
         this.commonParamsGuiding = new RunnerParameters();
         this.commonParamsGuiding.addUserClasspath(this.classpath);
         this.commonParamsGuiding.setStateIdentificationMode(StateIdentificationMode.COMPACT);
-        
+
         //accelerate things by bypassing standard loading
         this.commonParamsGuided.setBypassStandardLoading(true);
         this.commonParamsGuiding.setBypassStandardLoading(true); //this has no effect with JDI guidance (unfortunately introduces misalignments between the two)
-        
+
         //disallows aliasing to static, pre-initial objects (too hard)
         this.commonParamsGuided.setMakePreInitClassesSymbolic(false);
         this.commonParamsGuiding.setMakePreInitClassesSymbolic(false);
-        
+
         //set the maximum length of arrays with simple representation
         this.commonParamsGuided.setMaxSimpleArrayLength(o.getMaxSimpleArrayLength());
         this.commonParamsGuiding.setMaxSimpleArrayLength(o.getMaxSimpleArrayLength());
 
         //sets the guiding method (to be executed concretely)
         this.commonParamsGuiding.setMethodSignature(this.testCase.getClassName(), this.testCase.getMethodDescriptor(), this.testCase.getMethodName());
-        
+
         //calculates the number of hits
         final RunnerParameters pGuiding = this.commonParamsGuiding.clone();
         completeParameters(pGuiding);
@@ -386,11 +386,11 @@ public class RunnerPath {
 
         return actions.stateList;
     }
-    
+
     private void completeParameters(RunnerParameters pGuiding) throws DecisionException {
         completeParameters(null, pGuiding);
     }
-    
+
     private void completeParameters(RunnerParameters pGuided, RunnerParameters pGuiding) throws DecisionException {
         //sets the calculator
         final CalculatorRewriting calc = new CalculatorRewriting();
@@ -411,21 +411,21 @@ public class RunnerPath {
             if (pGuided == null) {
                 initRules.addNotInitializedClassPattern(".*");
                 pGuiding.setDecisionProcedure(new DecisionProcedureAlgorithms(
-                                                new DecisionProcedureClassInit(
-                                                  new DecisionProcedureAlwSat(calc), initRules)));
+                                                                              new DecisionProcedureClassInit(
+                                                                                                             new DecisionProcedureAlwSat(calc), initRules)));
             } else {
                 pGuiding.setDecisionProcedure(new DecisionProcedureAlgorithms(
-                                                new DecisionProcedureClassInit(
-                                                   new DecisionProcedureAlwSat(calc), initRules)));
+                                                                              new DecisionProcedureClassInit(
+                                                                                                             new DecisionProcedureAlwSat(calc), initRules)));
                 final DecisionProcedureGuidanceJDI guid = 
-                    new DecisionProcedureGuidanceJDI(
-                      new DecisionProcedureAlgorithms(
-                        new DecisionProcedureClassInit(
-                          new DecisionProcedureLICS( //useless?
-                            new DecisionProcedureSMTLIB2_AUFNIRA(
-                              new DecisionProcedureAlwSat(calc), z3CommandLine), 
-                            new LICSRulesRepo()), 
-                          initRules)), calc, pGuiding, pGuided.getMethodSignature(), this.numberOfHits);
+                new DecisionProcedureGuidanceJDI(
+                                                 new DecisionProcedureAlgorithms(
+                                                                                 new DecisionProcedureClassInit(
+                                                                                                                new DecisionProcedureLICS( //useless?
+                                                                                                                                           new DecisionProcedureSMTLIB2_AUFNIRA(
+                                                                                                                                                                                new DecisionProcedureAlwSat(calc), z3CommandLine), 
+                                                                                                                                           new LICSRulesRepo()), 
+                                                                                                                initRules)), calc, pGuiding, pGuided.getMethodSignature(), this.numberOfHits);
                 pGuided.setDecisionProcedure(guid);
             }
         } catch (InvalidInputException e) {
@@ -543,7 +543,7 @@ public class RunnerPath {
     public boolean getAtJump() {
         return this.atJump;
     }
-    
+
     /**
      * Must be invoked after an invocation of {@link #runProgram(int) runProgram(depth)}.
      * Returns the branches that the states at depth {@code depth + 1} cover.

@@ -432,7 +432,7 @@ public final class Options implements Cloneable {
     public final void setUninterpreted(List<String>... signatures) {
         this.uninterpreted = Arrays.asList(signatures);
     }
-    
+
     public void setMaxSimpleArrayLength(int maxSimpleArrayLength) {
         this.maxSimpleArrayLength = maxSimpleArrayLength;
     }
