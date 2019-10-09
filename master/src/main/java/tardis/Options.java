@@ -233,7 +233,7 @@ public final class Options implements Cloneable {
     }
 
     public void setClassesPath(Path... paths) {
-        this.classesPath = Arrays.asList(paths);
+        this.classesPath = Arrays.asList(paths.clone());
     }
 
     public Path getTmpDirectoryBase() {
@@ -430,7 +430,7 @@ public final class Options implements Cloneable {
 
     @SafeVarargs
     public final void setUninterpreted(List<String>... signatures) {
-        this.uninterpreted = Arrays.asList(signatures);
+        this.uninterpreted = Arrays.asList(signatures.clone());
     }
 
     public void setMaxSimpleArrayLength(int maxSimpleArrayLength) {
