@@ -1,5 +1,6 @@
 package tardis;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -12,6 +13,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import org.kohsuke.args4j.Option;
 import org.kohsuke.args4j.spi.MapOptionHandler;
@@ -309,10 +311,13 @@ public final class Options implements Cloneable {
     }
 
     public Classpath getClasspath() throws IOException {
+        final ArrayList<Path> extClasspath = 
+            new ArrayList<>(Arrays.stream(System.getProperty("java.ext.dirs").split(File.pathSeparator))
+            .map(s -> Paths.get(s)).collect(Collectors.toList()));
         final ArrayList<Path> userClasspath = new ArrayList<>();
         userClasspath.add(getJBSELibraryPath());
         userClasspath.addAll(getClassesPath());
-        return new Classpath(Paths.get(System.getProperty("java.home")), Collections.emptyList(), userClasspath);
+        return new Classpath(Paths.get(System.getProperty("java.home")), extClasspath, userClasspath);
     }
 
     public int getEvosuiteTimeBudgetDuration() {
