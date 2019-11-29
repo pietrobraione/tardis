@@ -170,7 +170,7 @@ public class RunnerPath {
                     //if at a jump bytecode, saves the start program counter
                     this.atJump = bytecodeJump(currentInstruction);
                     if (this.atJump) {
-                        this.jumpPC = currentState.getPC();
+                        this.jumpPC = currentState.getCurrentProgramCounter();
                     }
 
                     //if at a load constant bytecode, saves the stack size
@@ -201,12 +201,12 @@ public class RunnerPath {
             } catch (GuidanceException e) {
                 throw new RuntimeException(e); //TODO better exception!
             }
-
+            
             //manages jump
             if (currentState.phase() != Phase.PRE_INITIAL && this.atJump) {
                 try {
-                    this.coverage.add(currentState.getCurrentMethodSignature().toString() + ":" + this.jumpPC + ":" + currentState.getPC());
-                } catch (ThreadStackEmptyException | FrozenStateException e) {
+                    this.coverage.add(currentState.getCurrentMethodSignature().toString() + ":" + this.jumpPC + ":" + currentState.getCurrentProgramCounter());
+                } catch (ThreadStackEmptyException e) {
                     //this should never happen
                     throw new RuntimeException(e); //TODO better exception!
                 }
@@ -241,8 +241,8 @@ public class RunnerPath {
                 this.stateList.add(currentState.clone());
                 if (this.atJump) {
                     try {
-                        this.branchList.add(currentState.getCurrentMethodSignature().toString() + ":" + this.jumpPC + ":" + currentState.getPC());
-                    } catch (ThreadStackEmptyException | FrozenStateException e) {
+                        this.branchList.add(currentState.getCurrentMethodSignature().toString() + ":" + this.jumpPC + ":" + currentState.getCurrentProgramCounter());
+                    } catch (ThreadStackEmptyException e) {
                         //this should never happen
                         throw new RuntimeException(e); //TODO better exception!
                     }
@@ -259,8 +259,8 @@ public class RunnerPath {
             this.stateList.add(currentState.clone());
             if (this.atJump) {
                 try {
-                    this.branchList.add(currentState.getCurrentMethodSignature().toString() + ":" + this.jumpPC + ":" + currentState.getPC());
-                } catch (ThreadStackEmptyException | FrozenStateException e) {
+                    this.branchList.add(currentState.getCurrentMethodSignature().toString() + ":" + this.jumpPC + ":" + currentState.getCurrentProgramCounter());
+                } catch (ThreadStackEmptyException e) {
                     //this should never happen
                     throw new RuntimeException(e); //TODO better exception!
                 }
@@ -408,25 +408,26 @@ public class RunnerPath {
         z3CommandLine.add(SWITCH_CHAR + "t:10");
         final ClassInitRulesRepo initRules = new ClassInitRulesRepo();
         try {
+            initRules.addNotInitializedClassPattern(".*");
+            final DecisionProcedureAlgorithms decGuiding = 
+                new DecisionProcedureAlgorithms(
+                    new DecisionProcedureClassInit(
+                        new DecisionProcedureAlwSat(calc), initRules));
+            pGuiding.setDecisionProcedure(decGuiding);
             if (pGuided == null) {
-                initRules.addNotInitializedClassPattern(".*");
-                pGuiding.setDecisionProcedure(new DecisionProcedureAlgorithms(
-                                                                              new DecisionProcedureClassInit(
-                                                                                                             new DecisionProcedureAlwSat(calc), initRules)));
+                //nothing
             } else {
-                pGuiding.setDecisionProcedure(new DecisionProcedureAlgorithms(
-                                                                              new DecisionProcedureClassInit(
-                                                                                                             new DecisionProcedureAlwSat(calc), initRules)));
-                final DecisionProcedureGuidanceJDI guid = 
-                new DecisionProcedureGuidanceJDI(
-                                                 new DecisionProcedureAlgorithms(
-                                                                                 new DecisionProcedureClassInit(
-                                                                                                                new DecisionProcedureLICS( //useless?
-                                                                                                                                           new DecisionProcedureSMTLIB2_AUFNIRA(
-                                                                                                                                                                                new DecisionProcedureAlwSat(calc), z3CommandLine), 
-                                                                                                                                           new LICSRulesRepo()), 
-                                                                                                                initRules)), calc, pGuiding, pGuided.getMethodSignature(), this.numberOfHits);
-                pGuided.setDecisionProcedure(guid);
+                final DecisionProcedureGuidanceJDI decGuided = 
+                    new DecisionProcedureGuidanceJDI(
+                        new DecisionProcedureAlgorithms(
+                            new DecisionProcedureClassInit(
+                                new DecisionProcedureLICS( //useless?
+                                    new DecisionProcedureSMTLIB2_AUFNIRA(
+                                        new DecisionProcedureAlwSat(calc), z3CommandLine), 
+                                    new LICSRulesRepo()), 
+                                initRules)), 
+                        calc, pGuiding, pGuided.getMethodSignature(), this.numberOfHits);
+                pGuided.setDecisionProcedure(decGuided);
             }
         } catch (InvalidInputException e) {
             //this should never happen
@@ -490,7 +491,7 @@ public class RunnerPath {
                         ++this.methodCallCounter;
                     }
                 }
-            } catch (FrozenStateException | ThreadStackEmptyException e) {
+            } catch (ThreadStackEmptyException e) {
                 //this should never happen
                 throw new AssertionError(e);
             }
