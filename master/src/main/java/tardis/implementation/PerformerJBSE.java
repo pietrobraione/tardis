@@ -5,6 +5,7 @@ import static tardis.implementation.Util.stringifyPathCondition;
 
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -31,6 +32,7 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
     private final Options o;
     private final int maxDepth;
     private final CoverageSet coverageSet;
+    private final HashMap<String, State> initialStateCache = new HashMap<>();
 
     public PerformerJBSE(Options o, InputBuffer<EvosuiteResult> in, OutputBuffer<JBSEResult> out, CoverageSet coverageSet) {
         super(in, out, o.getNumOfThreads(), 1, o.getGlobalTimeBudgetDuration(), o.getGlobalTimeBudgetUnit());
@@ -54,6 +56,21 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             }
         };
         return job;
+    }
+    
+    private State possiblyGetInitialStateCached(EvosuiteResult item) {
+        final String key = item.getTargetMethodClassName() + ":" + item.getTargetMethodDescriptor() + ":" + item.getTargetMethodName();
+        final State value = this.initialStateCache.get(key);
+        return (value == null ? null : value.clone());
+    }
+    
+    private void possiblySetInitialStateCached(EvosuiteResult item, State initialState) {
+        final String key = item.getTargetMethodClassName() + ":" + item.getTargetMethodDescriptor() + ":" + item.getTargetMethodName();
+        if (this.initialStateCache.containsKey(key)) {
+            return;
+        } else {
+            this.initialStateCache.put(key, initialState.clone());
+        }
     }
 
     /**
@@ -85,8 +102,10 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             return;
         }
         //runs the test case up to the final state, and takes the final state's path condition
-        final RunnerPath rp = new RunnerPath(this.o, item);
+        final RunnerPath rp = new RunnerPath(this.o, item, possiblyGetInitialStateCached(item));
         final State tcFinalState = rp.runProgram();
+        final State initialState = rp.getInitialState();
+        possiblySetInitialStateCached(item, initialState);
         final Collection<Clause> tcFinalPC = tcFinalState.getPathCondition();
         this.coverageSet.addAll(rp.getCoverage());
 
@@ -109,7 +128,6 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             }
 
             //creates all the output jobs
-            final State initialState = rp.getInitialState();
             final State preState = rp.getPreState();
             final boolean atJump = rp.getAtJump();
             final List<String> targetBranches = rp.getTargetBranches(); 

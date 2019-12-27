@@ -152,6 +152,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 		}
 	}
 
+<<<<<<< HEAD
 	/**
 	 * Emits the EvoSuite wrapper (file .java) for the path condition of some state.
 	 *
@@ -171,6 +172,27 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 		fmt.formatPrologue();
 		fmt.formatState(finalState);
 		fmt.formatEpilogue();
+=======
+    /**
+     * Emits the EvoSuite wrapper (file .java) for the path condition of some state.
+     * 
+     * @param testCount an {@code int}, the number used to identify the test.
+     * @param initialState a {@link State}; must be the initial state in the execution 
+     *        for which we want to generate the wrapper.
+     * @param finalState a {@link State}; must be the final state in the execution 
+     *        for which we want to generate the wrapper.
+     * @param stringLiterals a {@link Map}{@code <}{@link Long}{@code , }{@link String}{@code >}, 
+     *         mapping a heap position of a {@link String} literal to the
+     *         corresponding value of the literal.
+     * @return a {@link Path}, the file path of the generated EvoSuite wrapper.
+     */
+    private Path emitEvoSuiteWrapper(int testCount, State initialState, State finalState, Map<Long, String> stringLiterals) {
+        final StateFormatterSushiPathCondition fmt = new StateFormatterSushiPathCondition(testCount, () -> initialState, true);
+        fmt.setConstants(stringLiterals);
+        fmt.formatPrologue();
+        fmt.formatState(finalState);
+        fmt.formatEpilogue();
+>>>>>>> refs/remotes/origin/master
 
 		final String initialCurrentClassName;
 		try {
