@@ -8,6 +8,8 @@ dependencies {
     implementation files("${System.getProperty('java.home')}/../lib/tools.jar")
     implementation project(':sushi-lib')
     implementation project(':jbse')
+    implementation 'com.github.javaparser:javaparser-symbol-solver-core:3.15.2'
+  
 }
 
 shadowJar {

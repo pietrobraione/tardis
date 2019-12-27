@@ -53,6 +53,38 @@ public abstract class Performer<I,O> {
         this.seed = null;
         this.items = null;
     }
+    public Performer(OutputBuffer<O> out, int numOfThreads, int numInputs, long timeoutDuration, TimeUnit timeoutUnit) {
+       this.in = null;
+        this.out = out;
+        this.threadPool = new PausableFixedThreadPoolExecutor(numOfThreads);
+        this.numInputs = numInputs;
+        this.timeoutDuration = timeoutDuration;
+        this.timeoutUnit = timeoutUnit;
+        this.mainThread = new Thread(() -> {
+            submitSeedIfPresent();
+            while (true) {
+                try {
+                    waitIfPaused();
+                    waitInputAndSubmitJob();
+                } catch (InterruptedException e) {
+                    if (this.paused) {
+                        //interrupted by pause(): goes on to waitIfPaused()
+                        continue; //pleonastic
+                    } else {
+                        //interrupted by stop(): exit from the loop 
+                        break;
+                    } 
+                }
+            }
+            this.threadPool.shutdown();
+        });
+        this.lockPause = new ReentrantLock();
+        this.conditionNotPaused = this.lockPause.newCondition();
+        this.conditionPaused = this.lockPause.newCondition();
+        this.paused = false;
+        this.seed = null;
+        this.items = null;
+    }
 
     protected abstract Runnable makeJob(List<I> items);
 
@@ -69,7 +101,7 @@ public abstract class Performer<I,O> {
      *        the items that seed the performer.
      */
     public final void seed(List<I> seed) {
-        this.seed = new ArrayList<>(seed);
+         this.seed = new ArrayList<>(seed);
     }
 
     /**
