@@ -74,7 +74,7 @@ public class RunnerPath {
     private final RunnerParameters commonParamsGuiding;
     private final int numberOfHits;
 
-    public RunnerPath(Options o, EvosuiteResult item) 
+    public RunnerPath(Options o, EvosuiteResult item, State initialState) 
     throws DecisionException, CannotBuildEngineException, InitializationException, InvalidClassFileFactoryClassException, 
     NonexistingObservedVariablesException, ClasspathException, ContradictionException, CannotBacktrackException, 
     CannotManageStateException, ThreadStackEmptyException, EngineStuckException, FailureException {
@@ -92,8 +92,12 @@ public class RunnerPath {
 
         //builds the template parameters object for the guided (symbolic) execution
         this.commonParamsGuided = new RunnerParameters();
-        this.commonParamsGuided.setMethodSignature(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName());
-        this.commonParamsGuided.addUserClasspath(this.classpath);
+        if (initialState == null) {
+            this.commonParamsGuided.addUserClasspath(this.classpath);
+            this.commonParamsGuided.setMethodSignature(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName());
+        } else {
+            this.commonParamsGuided.setInitialState(initialState);
+        }
         if (o.getHeapScope() != null) {
             for (Map.Entry<String, Integer> e : o.getHeapScope().entrySet()) {
                 this.commonParamsGuided.setHeapScope(e.getKey(), e.getValue());
@@ -112,7 +116,9 @@ public class RunnerPath {
         this.commonParamsGuiding.setStateIdentificationMode(StateIdentificationMode.COMPACT);
 
         //accelerate things by bypassing standard loading
-        this.commonParamsGuided.setBypassStandardLoading(true);
+        if (initialState == null) {
+            this.commonParamsGuided.setBypassStandardLoading(true);
+        }
         this.commonParamsGuiding.setBypassStandardLoading(true); //this has no effect with JDI guidance (unfortunately introduces misalignments between the two)
 
         //disallows aliasing to static, pre-initial objects (too hard)
@@ -303,8 +309,7 @@ public class RunnerPath {
      * Performs symbolic execution of the target method guided by a test case,
      * and returns the final state. Equivalent to {@link #runProgram(int) runProgram}{@code (-1).}
      * {@link List#get(int) get}{@code (0)}.
-     * 
-     * @param testCase a {@link TestCase}, it will guide symbolic execution.
+     *
      * @return the final {@link State}.
      * @throws DecisionException
      * @throws CannotBuildEngineException
@@ -332,7 +337,6 @@ public class RunnerPath {
      * Performs symbolic execution of the target method guided by a test case 
      * up to some depth, then peeks the states on the next branch.  
      * 
-     * @param testCase a {@link TestCase}, it will guide symbolic execution.
      * @param testDepth the maximum depth up to which {@code t} guides 
      *        symbolic execution, or a negative value.
      * @return a {@link List}{@code <}{@link State}{@code >} containing
@@ -358,12 +362,11 @@ public class RunnerPath {
     ClasspathException, CannotBacktrackException, CannotManageStateException, 
     ThreadStackEmptyException, ContradictionException, EngineStuckException, 
     FailureException {
-
         //builds the parameters
         final RunnerParameters pGuided = this.commonParamsGuided.clone();
         final RunnerParameters pGuiding = this.commonParamsGuiding.clone();
         completeParameters(pGuided, pGuiding);
-
+        
         //sets the actions
         final ActionsRunner actions = new ActionsRunner(testDepth, (DecisionProcedureGuidance) pGuided.getDecisionProcedure());
         pGuided.setActions(actions);
@@ -374,7 +377,11 @@ public class RunnerPath {
         r.run();
 
         //outputs
-        this.initialState = rb.getEngine().getInitialState();
+        this.initialState = this.commonParamsGuided.getInitialState();
+        if (this.initialState == null) {
+            this.initialState = rb.getEngine().getInitialState();
+            this.commonParamsGuided.setInitialState(this.initialState);
+        }
         this.preState = actions.preState;
         this.atJump = actions.atJump;
         this.targetBranches = actions.branchList;
@@ -417,6 +424,7 @@ public class RunnerPath {
             if (pGuided == null) {
                 //nothing
             } else {
+                final Signature stopSignature = (pGuided.getMethodSignature() == null ? pGuided.getInitialState().getRootMethodSignature() : pGuided.getMethodSignature());
                 final DecisionProcedureGuidanceJDI decGuided = 
                     new DecisionProcedureGuidanceJDI(
                         new DecisionProcedureAlgorithms(
@@ -426,10 +434,10 @@ public class RunnerPath {
                                         new DecisionProcedureAlwSat(calc), z3CommandLine), 
                                     new LICSRulesRepo()), 
                                 initRules)), 
-                        calc, pGuiding, pGuided.getMethodSignature(), this.numberOfHits);
+                        calc, pGuiding, stopSignature, this.numberOfHits);
                 pGuided.setDecisionProcedure(decGuided);
             }
-        } catch (InvalidInputException e) {
+        } catch (InvalidInputException | ThreadStackEmptyException e) {
             //this should never happen
             throw new AssertionError(e);
         }
@@ -457,7 +465,7 @@ public class RunnerPath {
                     final Signature sig;
                     if (currentState.getInstruction() == OP_INVOKEINTERFACE) {
                         sig = currentState.getCurrentClass().getInterfaceMethodSignature(UW);
-                    } else {
+                    } else { //TODO invokedynamic and invokehandle
                         sig = currentState.getCurrentClass().getMethodSignature(UW);
                     }
                     this.atInvocation = (this.methodDescriptor.equals(sig.getDescriptor()) && this.methodName.equals(sig.getName())); //we do not check sig.getClassName() because it is the pre-resolution classname 
