@@ -175,7 +175,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
      * @return a {@link Path}, the file path of the generated EvoSuite wrapper.
      */
     private Path emitEvoSuiteWrapper(int testCount, State initialState, State finalState, Map<Long, String> stringLiterals) {
-        final StateFormatterSushiPathCondition fmt = new StateFormatterSushiPathCondition(testCount, () -> initialState);
+        final StateFormatterSushiPathCondition fmt = new StateFormatterSushiPathCondition(testCount, () -> initialState, true);
         fmt.setConstants(stringLiterals);
         fmt.formatPrologue();
         fmt.formatState(finalState);
