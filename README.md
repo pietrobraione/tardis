@@ -44,7 +44,7 @@ Gradle will download them to compile SUSHI-Lib, but you can avoid to deploy them
 
 ## Working under Eclipse
 
-If you want to work (as us) under Eclipse 2018-12 for Java Developers, you are lucky: All the plugins that are necessary to import TARDIS under Eclipse and make it work are already present in the distribution. If you use another version of Eclipse you must install the egit and the Buildship plugins, both available in the Eclipse Marketplace. After that, you are ready to import TARDIS under Eclipse:
+If you want to work (as us) under Eclipse 2019-12 for Java Developers, you are lucky: All the plugins that are necessary to import TARDIS under Eclipse and make it work are already present in the distribution. If you use another version of Eclipse you must install the egit and the Buildship plugins, both available in the Eclipse Marketplace. After that, you are ready to import TARDIS under Eclipse:
 
 * To avoid conflicts we advise to import TARDIS under an empty workspace.
 * Be sure that the default Eclipse JRE is the JRE subdirectory of a full JDK 8 setup, *not* a standalone (i.e., not part of a JDK) JRE.
@@ -64,7 +64,7 @@ In the end, your Eclipse workspace should contain these projects:
 
 Deploying TARDIS to be used outside Eclipse is tricky. The `gradlew build` command will produce a SUSHI-Lib jar `runtime/build/libs/sushi-lib-<VERSION>.jar`, the JBSE jars in `jbse/build/libs` (refer to the JBSE project's README file for more information on them), and a jar for the main TARDIS application `master/build/libs/tardis-master-<VERSION>.jar`. You need to deploy them and all their dependencies. Moreover, `gradlew build` will produce an uber-jar `master/build/libs/tardis-master-<VERSION>-shaded.jar` containing all the runtime dependencies excluded EvoSuite, `tools.jar`, and the native files (Z3). Deploying based on the uber-jar is easier, but to our experience the uber-jar setup is more crash-prone. 
 
-Here follows detailed instructions for deploying TARDIS based on the plain jars:
+Here follow detailed instructions for deploying TARDIS based on the plain jars:
 
 * Deploy Z3, possibly adding the Z3 binary to the system PATH.
 * Deploy the `tardis-master-<VERSION>.jar` and set the Java classpath to point at it.
