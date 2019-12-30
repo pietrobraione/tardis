@@ -4,7 +4,6 @@ import static jbse.algo.Util.valueString;
 import static jbse.bc.Opcodes.OP_INVOKEINTERFACE;
 import static jbse.bc.Signatures.JAVA_STRING;
 import static jbse.common.Util.byteCat;
-import static tardis.implementation.Util.bytecodeBranch;
 import static tardis.implementation.Util.bytecodeInvoke;
 import static tardis.implementation.Util.bytecodeJump;
 import static tardis.implementation.Util.bytecodeLoadConstant;
