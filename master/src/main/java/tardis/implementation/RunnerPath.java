@@ -199,7 +199,13 @@ public class RunnerPath implements AutoCloseable {
                     throw new RuntimeException(e); //TODO better exception!
                 }
             }
-            return super.atStepPre();
+            
+            //stops if at the pre-frontier
+            if (currentState.getDepth() == this.testDepth) {
+                return true;
+            } else {
+                return super.atStepPre();
+            }
         }
 
         @Override
@@ -243,12 +249,7 @@ public class RunnerPath implements AutoCloseable {
                 }
             }
 
-            //stops if at the pre-frontier
-            if (currentState.getDepth() == this.testDepth) {
-                return true;
-            } else {
-                return super.atStepPost();
-            }
+            return super.atStepPost();
         }
 
         @Override
@@ -703,7 +704,7 @@ public class RunnerPath implements AutoCloseable {
      *         always returns {@code false}.
      */
     public boolean getAtJump() {
-        return this.actionsRunnerPreFrontier.atJump;
+        return this.actionsRunnerPostFrontier.atJump;
     }
 
     /**
