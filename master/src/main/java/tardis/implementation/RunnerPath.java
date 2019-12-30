@@ -105,7 +105,7 @@ public class RunnerPath implements AutoCloseable {
             this.commonParamsGuided.addUserClasspath(this.classpath);
             this.commonParamsGuided.setMethodSignature(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName());
         } else {
-            this.commonParamsGuided.setInitialState(initialState);
+            this.commonParamsGuided.setStartingState(initialState);
         }
         if (o.getHeapScope() != null) {
             for (Map.Entry<String, Integer> e : o.getHeapScope().entrySet()) {
@@ -492,7 +492,7 @@ public class RunnerPath implements AutoCloseable {
         //gets the pre-frontier state and sets as the initial
         //state of the post-frontier runner
         this.preState = this.runnerPreFrontier.getEngine().getCurrentState().clone();
-        pSymbolic.setInitialState(this.preState);
+        pSymbolic.setStartingState(this.preState);
         
         //builds the actions
         this.actionsRunnerPostFrontier = new ActionsRunnerPostFrontier(this.actionsRunnerPreFrontier.stringLiterals);
@@ -571,7 +571,7 @@ public class RunnerPath implements AutoCloseable {
             if (pGuided == null) {
                 //nothing
             } else {
-                final Signature stopSignature = (pGuided.getMethodSignature() == null ? pGuided.getInitialState().getRootMethodSignature() : pGuided.getMethodSignature());
+                final Signature stopSignature = (pGuided.getMethodSignature() == null ? pGuided.getStartingState().getRootMethodSignature() : pGuided.getMethodSignature());
                 final DecisionProcedureGuidanceJDI decGuided = 
                     new DecisionProcedureGuidanceJDI(
                         new DecisionProcedureAlgorithms(
@@ -676,10 +676,10 @@ public class RunnerPath implements AutoCloseable {
      *         before an invocation of {@link #runProgram(int)}.
      */
     public State getInitialState() {
-        State retVal = this.commonParamsGuided.getInitialState();
+        State retVal = this.commonParamsGuided.getStartingState();
         if (retVal == null) {
             retVal = this.runnerPreFrontier.getEngine().getInitialState();
-            this.commonParamsGuided.setInitialState(retVal);
+            this.commonParamsGuided.setStartingState(retVal);
         }
         return retVal;
     }

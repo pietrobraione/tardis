@@ -139,7 +139,7 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
                         continue;
                     }
                     this.getOutputBuffer().add(new JBSEResult(item, initialState, preState, newState, atJump, (atJump ? targetBranches.get(i) : null), stringLiterals, currentDepth));
-                    System.out.println("[JBSE    ] From test case " + tc.getClassName() + " generated path condition " + stringifyPathCondition(shorten(currentPC)));
+                    System.out.println("[JBSE    ] From test case " + tc.getClassName() + " generated path condition " + stringifyPathCondition(shorten(currentPC)) + (atJump ? (" aimed at branch " + targetBranches.get(i)) : ""));
                     noPathConditionGenerated = false;
                 }
             }
