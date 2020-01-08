@@ -3,7 +3,6 @@ package tardis.implementation;
 import static tardis.implementation.Util.shorten;
 import static tardis.implementation.Util.stringifyPathCondition;
 
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -32,6 +31,7 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
     private final Options o;
     private final int maxDepth;
     private final CoverageSet coverageSet;
+    private final TreePath treePath = new TreePath();
     private final HashMap<String, State> initialStateCache = new HashMap<>();
 
     public PerformerJBSE(Options o, InputBuffer<EvosuiteResult> in, OutputBuffer<JBSEResult> out, CoverageSet coverageSet) {
@@ -106,8 +106,9 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             final State tcFinalState = rp.runProgram();
             final State initialState = rp.getInitialState();
             possiblySetInitialStateCached(item, initialState);
-            final Collection<Clause> tcFinalPC = tcFinalState.getPathCondition();
             this.coverageSet.addAll(rp.getCoverage());
+            final Collection<Clause> tcFinalPC = tcFinalState.getPathCondition();
+            this.treePath.insertPath(tcFinalPC);
 
             //prints some feedback
             final TestCase tc = item.getTestCase();
@@ -135,10 +136,12 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
                 for (int i = 0; i < newStates.size(); ++i) {
                     final State newState = newStates.get(i);
                     final Collection<Clause> currentPC = newState.getPathCondition();
-                    if (alreadyExplored(currentPC, tcFinalPC)) {
+                    if (this.treePath.containsPath(currentPC)) {
                         continue;
                     }
-                    this.getOutputBuffer().add(new JBSEResult(item, initialState, preState, newState, atJump, (atJump ? targetBranches.get(i) : null), stringLiterals, currentDepth));
+                    final JBSEResult output = new JBSEResult(item, initialState, preState, newState, atJump, (atJump ? targetBranches.get(i) : null), stringLiterals, currentDepth);
+                    this.getOutputBuffer().add(output);
+                    this.treePath.insertPath(currentPC);
                     System.out.println("[JBSE    ] From test case " + tc.getClassName() + " generated path condition " + stringifyPathCondition(shorten(currentPC)) + (atJump ? (" aimed at branch " + targetBranches.get(i)) : ""));
                     noPathConditionGenerated = false;
                 }
@@ -148,15 +151,5 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             }
         }
     }
-
-    private static boolean alreadyExplored(Collection<Clause> newPC, Collection<Clause> oldPC) {
-        final List<Clause> donePC = 
-        Arrays.asList(Arrays.copyOfRange(oldPC.toArray(new Clause[0]), 0, newPC.size()));
-        if (donePC.toString().equals(newPC.toString())) {
-            return true;
-        } else {
-            return false;
-        }
-    }	
 }
 
