@@ -1,9 +1,33 @@
 package tardis.implementation;
 
+import static jbse.bc.ClassLoaders.CLASSLOADER_APP;
+
+import java.io.IOException;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
+import jbse.bc.ClassFile;
+import jbse.bc.ClassFileFactoryJavassist;
+import jbse.bc.Signature;
+import jbse.bc.exc.BadClassFileVersionException;
+import jbse.bc.exc.ClassFileIllFormedException;
+import jbse.bc.exc.ClassFileNotAccessibleException;
+import jbse.bc.exc.ClassFileNotFoundException;
+import jbse.bc.exc.IncompatibleClassFileException;
+import jbse.bc.exc.InvalidClassFileFactoryClassException;
+import jbse.bc.exc.MethodCodeNotFoundException;
+import jbse.bc.exc.MethodNotFoundException;
+import jbse.bc.exc.PleaseLoadClassException;
+import jbse.bc.exc.WrongClassNameException;
+import jbse.common.exc.InvalidInputException;
 import jbse.mem.State;
+import jbse.mem.exc.CannotAssumeSymbolicObjectException;
+import jbse.mem.exc.HeapMemoryExhaustedException;
+import jbse.val.HistoryPoint;
+import jbse.val.SymbolFactory;
+import tardis.Options;
 
 public class JBSEResult {
     private final String targetMethodClassName;
@@ -17,17 +41,25 @@ public class JBSEResult {
     private final HashMap<Long, String> stringLiterals;
     private final int depth;
 
-    public JBSEResult(String targetMethodClassName, String targetMethodDescriptor, String targetMethodName, State initialState, State preState, State finalState, boolean atJump, String targetBranch, Map<Long, String> stringLiterals, int depth) {
-        this.targetMethodClassName = targetMethodClassName;
-        this.targetMethodDescriptor = targetMethodDescriptor;
-        this.targetMethodName = targetMethodName;
-        this.initialState = initialState.clone();
-        this.preState = preState.clone();
-        this.finalState = finalState.clone();
-        this.atJump = atJump;
-        this.targetBranch = (atJump ? targetBranch : null);
-        this.stringLiterals = new HashMap<>(stringLiterals); //safety copy
-        this.depth = depth;
+    public JBSEResult(Options o, List<String> targetMethod) 
+    throws InvalidClassFileFactoryClassException, InvalidInputException, IOException, 
+    ClassFileNotFoundException, ClassFileIllFormedException, ClassFileNotAccessibleException, 
+    IncompatibleClassFileException, PleaseLoadClassException, BadClassFileVersionException, 
+    WrongClassNameException, CannotAssumeSymbolicObjectException, MethodNotFoundException, 
+    MethodCodeNotFoundException, HeapMemoryExhaustedException {
+        final State s = new State(true, HistoryPoint.startingPreInitial(true), 1_000, 100_000, o.getClasspath(), ClassFileFactoryJavassist.class, new HashMap<>(), new SymbolFactory());
+        final ClassFile cf = s.getClassHierarchy().loadCreateClass(CLASSLOADER_APP, targetMethod.get(0), true);
+        s.pushFrameSymbolic(cf, new Signature(targetMethod.get(0), targetMethod.get(1), targetMethod.get(2)));
+        this.targetMethodClassName = targetMethod.get(0);
+        this.targetMethodDescriptor = targetMethod.get(1);
+        this.targetMethodName = targetMethod.get(2);
+        this.initialState = s;
+        this.preState = s.clone();
+        this.finalState = s.clone();
+        this.atJump = false;
+        this.targetBranch = null;
+        this.stringLiterals = new HashMap<>(Collections.emptyMap());
+        this.depth = -1;
     }
 
     public JBSEResult(EvosuiteResult er, State initialState, State preState, State finalState, boolean atJump, String targetBranch, Map<Long, String> stringLiterals, int depth) {

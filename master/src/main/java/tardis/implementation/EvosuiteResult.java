@@ -1,5 +1,7 @@
 package tardis.implementation;
 
+import java.util.List;
+
 public class EvosuiteResult {
     private final String targetMethodClassName;
     private final String targetMethodDescriptor;
@@ -7,10 +9,10 @@ public class EvosuiteResult {
     private final TestCase tc;
     private final int startDepth;
 
-    public EvosuiteResult(String targetMethodClassName, String targetMethodDescriptor, String targetMethodName, TestCase tc, int startDepth) {
-        this.targetMethodClassName = targetMethodClassName;
-        this.targetMethodDescriptor = targetMethodDescriptor;
-        this.targetMethodName = targetMethodName;
+    public EvosuiteResult(List<String> targetMethod, TestCase tc, int startDepth) {
+        this.targetMethodClassName = targetMethod.get(0);
+        this.targetMethodDescriptor = targetMethod.get(1);
+        this.targetMethodName = targetMethod.get(2);
         this.tc = new TestCase(tc);
         this.startDepth = startDepth;
     }

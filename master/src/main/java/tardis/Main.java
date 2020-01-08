@@ -3,7 +3,6 @@ package tardis;
 import static java.nio.file.Files.createDirectory;
 import static java.nio.file.Files.exists;
 
-import static jbse.bc.ClassLoaders.CLASSLOADER_APP;
 import static tardis.implementation.Util.getUniqueTargetMethod;
 import static tardis.implementation.Util.getVisibleTargetMethods;
 import static tardis.implementation.Util.stream;
@@ -18,8 +17,6 @@ import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -31,9 +28,6 @@ import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.ParserProperties;
 
-import jbse.bc.ClassFile;
-import jbse.bc.ClassFileFactoryJavassist;
-import jbse.bc.Signature;
 import jbse.bc.exc.BadClassFileVersionException;
 import jbse.bc.exc.ClassFileIllFormedException;
 import jbse.bc.exc.ClassFileNotAccessibleException;
@@ -45,11 +39,8 @@ import jbse.bc.exc.MethodNotFoundException;
 import jbse.bc.exc.PleaseLoadClassException;
 import jbse.bc.exc.WrongClassNameException;
 import jbse.common.exc.InvalidInputException;
-import jbse.mem.State;
 import jbse.mem.exc.CannotAssumeSymbolicObjectException;
 import jbse.mem.exc.HeapMemoryExhaustedException;
-import jbse.val.HistoryPoint;
-import jbse.val.SymbolFactory;
 
 import tardis.framework.TerminationManager;
 import tardis.implementation.CoverageSet;
@@ -99,17 +90,17 @@ public final class Main {
         if (this.o.getTargetMethod() == null || this.o.getInitialTestCase() == null) {
             //the target is a whole class, or is a single method but
             //there is no initial test case: EvoSuite should start
-            final ArrayList<JBSEResult> seed = seedForEvosuite();
+            final ArrayList<JBSEResult> seed = generateSeedForPerformerEvosuite();
             performerEvosuite.seed(seed);
         } else {
             //the target is a single method and there is one
             //initial test case: JBSE should start
-            final ArrayList<EvosuiteResult> seed = seedForJBSE();
+            final ArrayList<EvosuiteResult> seed = generateSeedForPerformerJBSE();
             performerJBSE.seed(seed);
         }
 
         //starts everything
-        System.out.println("[MAIN    ] This is " + Util.getName() + ", version " + Util.getVersion() + ", " + '\u00a9' + " 2017-2019 " + Util.getVendor());
+        System.out.println("[MAIN    ] This is " + Util.getName() + ", version " + Util.getVersion() + ", " + '\u00a9' + " 2017-2020 " + Util.getVendor());
         final DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss");
         System.out.println("[MAIN    ] Starting at " + dtf.format(LocalDateTime.now()) + ", target is " + (this.o.getTargetMethod() == null ? ("class " + this.o.getTargetClass()) : ("method " + this.o.getTargetMethod().get(0) + ":" + this.o.getTargetMethod().get(1) + ":" + this.o.getTargetMethod().get(2))));
         performerJBSE.start();
@@ -121,7 +112,7 @@ public final class Main {
         System.out.println("[MAIN    ] Ending at " + dtf.format(LocalDateTime.now()));
     }
 
-    private ArrayList<JBSEResult> seedForEvosuite() {
+    private ArrayList<JBSEResult> generateSeedForPerformerEvosuite() {
         //this is the "no initial test case" situation
         try {
             final ArrayList<JBSEResult> retVal = new ArrayList<>();
@@ -134,10 +125,7 @@ public final class Main {
                 targetMethods = getUniqueTargetMethod(this.o);
             }
             for (List<String> targetMethod : targetMethods) {
-                final State s = new State(true, HistoryPoint.startingPreInitial(true), 1_000, 100_000, this.o.getClasspath(), ClassFileFactoryJavassist.class, new HashMap<>(), new SymbolFactory());
-                final ClassFile cf = s.getClassHierarchy().loadCreateClass(CLASSLOADER_APP, targetMethod.get(0), true);
-                s.pushFrameSymbolic(cf, new Signature(targetMethod.get(0), targetMethod.get(1), targetMethod.get(2)));
-                retVal.add(new JBSEResult(targetMethod.get(0), targetMethod.get(1), targetMethod.get(2), s, s, s, false, null, Collections.emptyMap(), -1));
+                retVal.add(new JBSEResult(this.o, targetMethod));
             }
             return retVal;
         } catch (ClassNotFoundException | WrongClassNameException | BadClassFileVersionException | ClassFileNotFoundException | IncompatibleClassFileException | 
@@ -181,7 +169,7 @@ public final class Main {
         return null; //to keep the compiler happy
     }
 
-    private ArrayList<EvosuiteResult> seedForJBSE() {
+    private ArrayList<EvosuiteResult> generateSeedForPerformerJBSE() {
         final TestCase tc = new TestCase(this.o);
         final String classpathCompilationTest = String.join(File.pathSeparator, stream(this.o.getClassesPath()).map(Object::toString).toArray(String[]::new));
         final Path javacLogFilePath = this.o.getTmpDirectoryPath().resolve("javac-log-test-0.txt");
@@ -199,7 +187,7 @@ public final class Main {
             System.exit(2);
         }
         final ArrayList<EvosuiteResult> retVal = new ArrayList<>();
-        retVal.add(new EvosuiteResult(this.o.getTargetMethod().get(0), this.o.getTargetMethod().get(1), this.o.getTargetMethod().get(2), tc, 0));
+        retVal.add(new EvosuiteResult(this.o.getTargetMethod(), tc, 0));
         return retVal;
     }
 
