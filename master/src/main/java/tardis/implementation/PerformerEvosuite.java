@@ -1,5 +1,11 @@
 package tardis.implementation;
 
+import static jbse.common.Type.splitParametersDescriptors;
+import static tardis.implementation.Util.getVisibleTargetMethods;
+import static tardis.implementation.Util.shorten;
+import static tardis.implementation.Util.stream;
+import static tardis.implementation.Util.stringifyPathCondition;
+
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.MalformedURLException;
@@ -7,17 +13,16 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.nio.file.Files;
-
-import static tardis.implementation.Util.shorten;
-import static tardis.implementation.Util.stream;
-import static tardis.implementation.Util.stringifyPathCondition;
 
 import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
@@ -27,6 +32,24 @@ import java.io.File;
 import javax.tools.JavaCompiler;
 import javax.tools.ToolProvider;
 
+import com.github.javaparser.StaticJavaParser;
+import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.NodeList;
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.Parameter;
+import com.github.javaparser.ast.body.VariableDeclarator;
+import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.ast.expr.Name;
+import com.github.javaparser.ast.expr.SimpleName;
+import com.github.javaparser.ast.stmt.ExpressionStmt;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
+import com.github.javaparser.ast.type.Type;
+import com.github.javaparser.ast.visitor.ModifierVisitor;
+import com.github.javaparser.ast.visitor.Visitable;
+
+import jbse.mem.Clause;
 import jbse.mem.State;
 import jbse.mem.exc.FrozenStateException;
 import sushi.formatters.StateFormatterSushiPathCondition;
@@ -35,7 +58,35 @@ import tardis.framework.InputBuffer;
 import tardis.framework.OutputBuffer;
 import tardis.framework.Performer;
 
+
+class RenamerVisitor extends ModifierVisitor<Void> {
+    private final String from, to;
+    
+    public RenamerVisitor(String from, String to) {
+        this.from = from;
+        this.to = to;
+    }
+    
+    @Override
+    public Visitable visit(SimpleName n, Void arg) {
+        if (n.asString().equals(this.from)) {
+            n.setIdentifier(this.to);
+        }
+        return super.visit(n, arg);
+    }
+    
+    @Override
+    public Visitable visit(Name n, Void arg) {
+        if (n.asString().equals(this.from)) {
+            n.setIdentifier(this.to);
+        }
+        return super.visit(n, arg);
+    }
+}
+
+
 public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
+    private final List<List<String>> visibleTargetMethods;
     private final String classesPath;
     private final Path tmpPath;
     private final Path tmpBinPath;
@@ -49,8 +100,13 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
     private final TestIdentifier testIdentifier;
     private final JavaCompiler compiler;
 
-    public PerformerEvosuite(Options o, InputBuffer<JBSEResult> in, OutputBuffer<EvosuiteResult> out) {
+    public PerformerEvosuite(Options o, InputBuffer<JBSEResult> in, OutputBuffer<EvosuiteResult> out) throws PerformerEvosuiteInitException {
         super(in, out, o.getNumOfThreads(), (o.getUseMOSA() ? o.getNumMOSATargets() : 1), o.getTimeoutMOSATaskCreationDuration(), o.getTimeoutMOSATaskCreationUnit());
+        try {
+            this.visibleTargetMethods = getVisibleTargetMethods(o);
+        } catch (ClassNotFoundException | MalformedURLException | SecurityException e) {
+            throw new PerformerEvosuiteInitException(e);
+        }
         this.classesPath = String.join(File.pathSeparator, stream(o.getClassesPath()).map(Object::toString).toArray(String[]::new)); 
         this.tmpPath = o.getTmpDirectoryPath();
         this.tmpWrapPath = o.getTmpWrappersDirectoryPath();
@@ -64,8 +120,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
         this.testIdentifier = new TestIdentifier(o.getInitialTestCase() == null ? 0 : 1);
         this.compiler = ToolProvider.getSystemJavaCompiler();
         if (this.compiler == null) {
-            System.out.println("[EVOSUITE] Failed to find a system Java compiler. Did you install a JDK?");
-            //TODO throw an exception
+            throw new PerformerEvosuiteInitException("Failed to find a system Java compiler. Did you install a JDK?");
         }
     }
 
@@ -73,10 +128,64 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
     protected Runnable makeJob(List<JBSEResult> items) {
         final int testCountInitial = this.testIdentifier.getTestCount();
         this.testIdentifier.testCountAdd(items.size());
-        final Runnable job = () -> generateTestsAndScheduleJBSE(testCountInitial, items);
+        final Runnable job = (items.get(0).isSeed() && !items.get(0).hasTargetMethod() ? 
+                              () -> generateTestsAndScheduleJBSESeed(testCountInitial, items.get(0)) :
+                              () -> generateTestsAndScheduleJBSE(testCountInitial, items));
         return job;
     }
 
+    /**
+     * Invokes EvoSuite to generate a set of {@link TestCase}s that cover a 
+     * set of methods.
+     * 
+     * @param testCountInitial an {@code int}, the number used to identify 
+     *        the generated tests. The test generated will be numbered starting 
+     *        from {@code testCountInitial} henceforth.
+     * @param item a {@link JBSEResult}. It must be
+     *              {@code item.}{@link JBSEResult#isSeed() isSeed}{@code () == true && item.}{@link JBSEResult#hasTargetMethod() hasTargetMethod}{@code () == false}.
+     */
+    private void generateTestsAndScheduleJBSESeed(int testCountInitial, JBSEResult item) {
+        //builds the EvoSuite command line
+        final List<String> evosuiteCommand = buildEvoSuiteCommandSeed(item); 
+
+        //launches EvoSuite
+        final Path evosuiteLogFilePath = this.tmpPath.resolve("evosuite-log-seed.txt");
+        final Process processEvosuite;
+        try {
+            processEvosuite = launchProcess(evosuiteCommand, evosuiteLogFilePath);
+            System.out.println("[EVOSUITE] Launched EvoSuite seed process, command line: " + evosuiteCommand.stream().reduce("", (s1, s2) -> { return s1 + " " + s2; }));
+        } catch (IOException e) {
+            System.out.println("[EVOSUITE] Unexpected I/O error while running EvoSuite seed: " + e);
+            return; //TODO throw an exception?
+        }
+
+        //waits for EvoSuite to end
+        try {
+            processEvosuite.waitFor();
+        } catch (InterruptedException e) {
+            //this performer was shut down: kills the EvoSuite job
+            //and return
+            processEvosuite.destroy();
+            return;
+        }
+
+        //splits output
+        final List<JBSEResult> splitItems;
+        try {
+            splitItems = splitEvosuiteSeed(testCountInitial, item);
+        } catch (IOException e) {
+            System.out.println("[EVOSUITE] Unexpected I/O error while splitting EvoSuite seed: " + e);
+            return; //TODO throw an exception?
+        }
+        
+        //schedules JBSE
+        int testCount = testCountInitial;
+        for (JBSEResult splitItem : splitItems) {
+            checkTestCompileAndScheduleJBSE(testCount, splitItem);
+            ++testCount;
+        }
+    }
+    
     /**
      * Invokes EvoSuite to generate a set of {@link TestCase}s that cover a 
      * set of path condition, and then explores the generated test cases 
@@ -95,7 +204,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
 
         //splits items in sublists having same target method
         final Map<String, List<JBSEResult>> splitItems = 
-        items.stream().collect(Collectors.groupingBy(r -> r.getTargetClassName() + ":" + r.getTargetMethodDescriptor() + ":" + r.getTargetMethodName()));
+        items.stream().collect(Collectors.groupingBy(r -> r.getTargetMethodClassName() + ":" + r.getTargetMethodDescriptor() + ":" + r.getTargetMethodName()));
 
         //launches an EvoSuite process for each sublist
         final ArrayList<Thread> threads = new ArrayList<>();
@@ -239,6 +348,62 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
     }
 
     /**
+     * Builds the command line for invoking EvoSuite for the generation of the
+     * seed tests.
+     * 
+     * @param item a {@link JBSEResult} such that {@code item.}{@link JBSEResult#isSeed() isSeed}{@code () == true && }{@link JBSEResult#hasTargetMethod() hasTargetMethod}{@code () == false}.
+     *        All the items in {@code items} must refer to the same target method, i.e., must have same
+     *        {@link JBSEResult#getTargetMethodClassName() class name}, {@link JBSEResult#getTargetMethodDescriptor() method descriptor}, and 
+     *        {@link JBSEResult#getTargetMethodName() method name}.
+     * @return a command line in the format of a {@link List}{@code <}{@link String}{@code >},
+     *         suitable to be passed to a {@link ProcessBuilder}.
+     */
+    private List<String> buildEvoSuiteCommandSeed(JBSEResult item) {
+        final String targetClass = item.getTargetClassName().replace('/', '.');
+        final String classpathEvosuite = this.classesPath + File.pathSeparator + this.sushiLibPath.toString() + (this.useMOSA ? "" : (File.pathSeparator + this.tmpBinPath.toString()));
+        final List<String> retVal = new ArrayList<String>();
+        retVal.add("java");
+        retVal.add("-Xmx4G");
+        retVal.add("-jar");
+        retVal.add(this.evosuitePath.toString());
+        retVal.add("-class");
+        retVal.add(targetClass);
+        retVal.add("-mem");
+        retVal.add("2048");
+        retVal.add("-DCP=" + classpathEvosuite); 
+        retVal.add("-Dassertions=false");
+        retVal.add("-Dglobal_timeout=" + this.timeBudgetSeconds);
+        retVal.add("-Dreport_dir=" + this.tmpPath.toString());
+        retVal.add("-Dsearch_budget=" + this.timeBudgetSeconds);
+        retVal.add("-Dtest_dir=" + this.tmpPath.toString());
+        retVal.add("-Dvirtual_fs=false");
+        retVal.add("-Dselection_function=ROULETTEWHEEL");
+        retVal.add("-Dcriterion=BRANCH");                
+        retVal.add("-Dinline=false");
+        retVal.add("-Dsushi_modifiers_local_search=true");
+        retVal.add("-Duse_minimizer_during_crossover=true");
+        retVal.add("-Davoid_replicas_of_individuals=true"); 
+        retVal.add("-Dno_change_iterations_before_reset=30");
+        retVal.add("-Djunit_suffix=" + "_Seed_Test");
+        if (this.evosuiteNoDependency) {
+            retVal.add("-Dno_runtime_dependency");
+        }
+        if (this.useMOSA) {
+            retVal.add("-Dcrossover_function=SUSHI_HYBRID");
+            retVal.add("-Dalgorithm=DYNAMOSA");
+            retVal.add("-generateMOSuite");
+        } else {
+            retVal.add("-Dhtml=false");
+            retVal.add("-Dcrossover_function=SINGLEPOINT");
+            retVal.add("-Dcrossover_implementation=SUSHI_HYBRID");
+            retVal.add("-Dmax_size=1");
+            retVal.add("-Dmax_initial_tests=1");
+        }
+
+        return retVal;
+    }
+
+    /**
      * Builds the command line for invoking EvoSuite.
      * 
      * @param testCountInitial an {@code int}, the number used to identify 
@@ -246,13 +411,13 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
      *        will be numbered {@code testCountInitial + i}.
      * @param items a {@link List}{@code <}{@link JBSEResult}{@code >}, results of symbolic execution.
      *        All the items in {@code items} must refer to the same target method, i.e., must have same
-     *        {@link JBSEResult#getTargetClassName() class name}, {@link JBSEResult#getTargetMethodDescriptor() method descriptor}, and 
+     *        {@link JBSEResult#getTargetMethodClassName() class name}, {@link JBSEResult#getTargetMethodDescriptor() method descriptor}, and 
      *        {@link JBSEResult#getTargetMethodName() method name}.
      * @return a command line in the format of a {@link List}{@code <}{@link String}{@code >},
      *         suitable to be passed to a {@link ProcessBuilder}.
      */
     private List<String> buildEvoSuiteCommand(int testCountInitial, List<JBSEResult> items) {
-        final String targetClass = items.get(0).getTargetClassName().replace('/', '.');
+        final String targetClass = items.get(0).getTargetMethodClassName().replace('/', '.');
         final String targetMethodDescriptor = items.get(0).getTargetMethodDescriptor();
         final String targetMethodName = items.get(0).getTargetMethodName();
         final String classpathEvosuite = this.classesPath + File.pathSeparator + this.sushiLibPath.toString() + (this.useMOSA ? "" : (File.pathSeparator + this.tmpBinPath.toString()));
@@ -325,6 +490,227 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
         final ProcessBuilder pb = new ProcessBuilder(commandLine).redirectErrorStream(true).redirectOutput(logFilePath.toFile());
         final Process pr = pb.start();
         return pr;
+    }
+    
+    /**
+     * Splits a seed test class generated by EvoSuite, 
+     * with multiple test methods, into multiple classes
+     * with a single test method.
+     * 
+     * @param testCountInitial an {@code int}, the number used to identify 
+     *        the generated tests. The test generated will be numbered starting 
+     *        from {@code testCountInitial} henceforth.
+     * @param item a {@link JBSEResult}. It must be
+     *        {@code item.}{@link JBSEResult#isSeed() isSeed}{@code () == true && item.}{@link JBSEResult#hasTargetMethod() hasTargetMethod}{@code () == false}.
+     * @return an {@code int}, the final value of test count, i.e., {@code testCountInitial}
+     *         plus the total number of generated tests.
+     * @throws IOException if it fails to open the test class or scaffolding class
+     *         produced by the seed process
+     */
+    private List<JBSEResult> splitEvosuiteSeed(int testCountInitial, JBSEResult item) throws IOException {
+        //parses the seed compilation unit
+        final String testClassName = (item.getTargetClassName() + "_Seed_Test");
+        final String scaffClassName = (this.evosuiteNoDependency ? null : testClassName + "_scaffolding");
+        final Path testFile = this.tmpPath.resolve(testClassName + ".java");
+        final Path scaffFile = (this.evosuiteNoDependency ? null : this.tmpPath.resolve(scaffClassName + ".java"));
+        if (!testFile.toFile().exists() || (scaffFile != null && !scaffFile.toFile().exists())) {
+            System.out.println("[EVOSUITE] Failed to split the seed test class " + testFile + ": the test class does not seem to exist");
+            return null; //TODO throw some exception?
+        }
+        final CompilationUnit cuTestClass = StaticJavaParser.parse(testFile);
+        
+        //finds all the test method declarations 
+        //in the compilation unit
+        final ArrayList<MethodDeclaration> testMethodDeclarations = new ArrayList<>();
+        cuTestClass.findAll(MethodDeclaration.class).forEach(md -> {
+            if (md.isAnnotationPresent("Test")) {
+                testMethodDeclarations.add(md);
+            }
+        });
+        
+        final ArrayList<JBSEResult> retVal = new ArrayList<>();
+        int testCount = testCountInitial;
+        for (MethodDeclaration testMethodDeclaration : testMethodDeclarations) {
+            //builds a map of variable declarations (variable names to
+            //class names)
+            final HashMap<String, String> varDecls = new HashMap<>();
+            testMethodDeclaration.findAll(VariableDeclarator.class).forEach(vd -> {
+                varDecls.put(vd.getNameAsString(), typePattern(vd.getTypeAsString()));
+            });
+            
+            //gets all the statements in the method
+            final List<ExpressionStmt> stmts = testMethodDeclaration.findAll(ExpressionStmt.class);
+            Collections.reverse(stmts); //from last to first one
+            
+            for (ExpressionStmt stmt : stmts) {
+                //finds a method call
+                final MethodCallExpr methodCallExpr;
+                if (stmt.getExpression().isMethodCallExpr()) {
+                    methodCallExpr = stmt.getExpression().asMethodCallExpr();
+                } else if (stmt.getExpression().isAssignExpr() && stmt.getExpression().asAssignExpr().getValue().isMethodCallExpr()) {
+                    methodCallExpr = stmt.getExpression().asAssignExpr().getValue().asMethodCallExpr();
+                } else if (stmt.getExpression().isVariableDeclarationExpr() && stmt.getExpression().asVariableDeclarationExpr().getVariable(0).getInitializer().isPresent() &&
+                           stmt.getExpression().asVariableDeclarationExpr().getVariable(0).getInitializer().get().isMethodCallExpr()) {
+                    methodCallExpr = stmt.getExpression().asVariableDeclarationExpr().getVariable(0).getInitializer().get().asMethodCallExpr();
+                } else {
+                    continue; //gives up
+                }
+                
+                //determines the invoked method
+                final String methodName = methodCallExpr.getNameAsString();
+                final ArrayList<String> argumentTypes = new ArrayList<>();
+                for (Expression e : methodCallExpr.getArguments()) {
+                    argumentTypes.add(inferType(e, varDecls));
+                }
+                List<String> targetMethod = null;
+                visibleTargetMethodsLoop:
+                for (List<String> visibleTargetMethod : this.visibleTargetMethods) {
+                    if (visibleTargetMethod.get(2).equals(methodName)) {
+                        String[] visibleTargetMethodArgumentTypes = splitParametersDescriptors(visibleTargetMethod.get(1));
+                        if (visibleTargetMethodArgumentTypes.length == argumentTypes.size()) {
+                            boolean allMatch = true;
+                            allMatchLoop:
+                            for (int i = 0; i < visibleTargetMethodArgumentTypes.length; ++i) {
+                                final Pattern p = Pattern.compile(argumentTypes.get(i));
+                                final Matcher m = p.matcher(visibleTargetMethodArgumentTypes[i]);
+                                if (!m.matches()) {
+                                    allMatch = false;
+                                    break allMatchLoop;
+                                }
+                            }
+                            if (allMatch) {
+                                targetMethod = visibleTargetMethod;
+                                break visibleTargetMethodsLoop;
+                            }
+                        }
+                    }
+                }
+                if (targetMethod == null) {
+                    continue;
+                }
+
+                //creates a new test class declaration
+                final ClassOrInterfaceDeclaration testClassDeclaration = (ClassOrInterfaceDeclaration) testMethodDeclaration.getParentNode().get();
+                final ClassOrInterfaceDeclaration testClassDeclarationNew = testClassDeclaration.clone();
+                final MethodDeclaration testMethodDeclarationNew = testClassDeclarationNew.getMethodsBySignature(testMethodDeclaration.getNameAsString(), testMethodDeclaration.getParameters().stream().map(Parameter::getType).map(Type::toString).toArray(String[]::new)).get(0);
+                final ArrayList<MethodDeclaration> toExpunge = new ArrayList<>();
+                testClassDeclarationNew.findAll(MethodDeclaration.class).forEach(md -> {
+                    if (md.isAnnotationPresent("Test") && !md.equals(testMethodDeclarationNew)) {
+                        toExpunge.add(md);
+                    }
+                });
+                for (MethodDeclaration md : toExpunge) {
+                    testClassDeclarationNew.remove(md);
+                }
+                testMethodDeclarationNew.setName("test0");
+                final String testClassNameNew = (item.getTargetClassName() + "_" + testCount + "_Test");
+                final String testClassNameNew_Unqualified = testClassNameNew.substring(testClassNameNew.lastIndexOf('/') + 1);
+                final String scaffClassNameNew = (this.evosuiteNoDependency ? null : testClassNameNew + "_scaffolding");
+                testClassDeclarationNew.setName(testClassNameNew_Unqualified);
+
+                //creates the compilation unit for the scaffolding
+                final CompilationUnit cuTestScaffNew;
+                if (this.evosuiteNoDependency) {
+                    cuTestScaffNew = null;
+                } else {
+                    //creates a new scaffolding class declaration
+                    cuTestScaffNew = StaticJavaParser.parse(scaffFile);
+                    final String scaffClassName_Unqualified = scaffClassName.substring(scaffClassName.lastIndexOf('/') + 1);
+                    final String scaffClassNameNew_Unqualified = scaffClassNameNew.substring(scaffClassNameNew.lastIndexOf('/') + 1);
+                    final ClassOrInterfaceDeclaration scaffClassDeclarationNew = cuTestScaffNew.findFirst(ClassOrInterfaceDeclaration.class, cid ->  cid.getName().asString().equals(scaffClassName_Unqualified)).get();
+                    scaffClassDeclarationNew.setName(scaffClassNameNew_Unqualified);
+
+                    //fixes the initializeClasses method
+                    final RenamerVisitor v = new RenamerVisitor(scaffClassName_Unqualified, scaffClassNameNew_Unqualified);
+                    cuTestScaffNew.accept(v, null);
+
+                    //changes the "extends" declaration of the new test class
+                    //declaration to point to the new scaffolding class declaration
+                    final NodeList<ClassOrInterfaceType> testClassExtensions = testClassDeclarationNew.getExtendedTypes();
+                    for (Iterator<ClassOrInterfaceType> it = testClassExtensions.iterator(); it.hasNext(); ) {
+                        final ClassOrInterfaceType testClassExtension = it.next();
+                        if (testClassExtension.getName().asString().equals(scaffClassName_Unqualified)) {
+                            it.remove();
+                            break;
+                        }
+                    }
+                    testClassDeclarationNew.addExtendedType(scaffClassNameNew_Unqualified);
+                }
+
+                //creates the compilation unit for the test class
+                final CompilationUnit cuTestClassNew = cuTestClass.clone();
+                final String testClassName_Unqualified = testClassName.substring(testClassName.lastIndexOf('/') + 1);
+                final ClassOrInterfaceDeclaration testClassDeclarationOld = cuTestClassNew.findFirst(ClassOrInterfaceDeclaration.class, cid -> cid.getName().asString().equals(testClassName_Unqualified)).get();
+                cuTestClassNew.replace(testClassDeclarationOld, testClassDeclarationNew);
+
+                //writes the compilation units to files
+                final Path testFileNew = this.outPath.resolve(testClassNameNew + ".java");
+                Files.createDirectories(testFileNew.getParent());
+                try (final BufferedWriter w = Files.newBufferedWriter(testFileNew)) {
+                    w.write(cuTestClassNew.toString());
+                }
+                if (this.evosuiteNoDependency) {
+                    //nothing else to write
+                } else {
+                    final Path scaffFileNew = this.outPath.resolve(scaffClassNameNew + ".java");
+                    try (final BufferedWriter w = Files.newBufferedWriter(scaffFileNew)) {
+                        w.write(cuTestScaffNew.toString());
+                    }
+                }
+                
+                //creates the new item
+                final JBSEResult newItem = new JBSEResult(targetMethod);
+                retVal.add(newItem);
+
+                ++testCount;
+            }
+        }
+        
+        return retVal;
+    }
+    
+    private static String typePattern(String type) {
+        if ("boolean".equals(type)) {
+            return "Z";
+        } else if ("byte".equals(type)) {
+            return "B";
+        } else if ("char".equals(type)) {
+            return "C";
+        } else if ("double".equals(type)) {
+            return "D";
+        } else if ("float".equals(type)) {
+            return "F";
+        } else if ("int".equals(type)) {
+            return "I";
+        } else if ("long".equals(type)) {
+            return "J";
+        } else if ("short".equals(type)) {
+            return "S";
+        } else if (type.endsWith("[]")) {
+            return "\\[" + typePattern(type.substring(0, type.length() - 2));
+        } else {
+            return "L.*" + type.replace(".", "(\\$|/)") + ";";
+        }
+    }
+    
+    private static String inferType(Expression e, HashMap<String, String> varDecls) {
+        if (e.isBooleanLiteralExpr()) {
+            return "Z";
+        } else if (e.isCharLiteralExpr()) {
+            return "C";
+        } else if (e.isDoubleLiteralExpr()) {
+            return "D";
+        } else if (e.isIntegerLiteralExpr()) {
+            return "I";
+        } else if (e.isLongLiteralExpr()) {
+            return "J";
+        } else if (e.isArrayAccessExpr()) {
+            return "[" + inferType(e.asArrayAccessExpr().getName(), varDecls);
+        } else if (e.isNameExpr() && varDecls.containsKey(e.asNameExpr().getNameAsString())) {
+            return varDecls.get(e.asNameExpr().getNameAsString());
+        } else {
+            return ".*"; //gives up
+        }
     }
 
     /**
@@ -411,73 +797,74 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
                 ++testCount;
             }
         }
+    }
 
-        /**
-         * Checks that an emitted test class has the {@code test0} method,
-         * to filter out the cases where EvoSuite fails but emits the test class.
-         * 
-         * @param className a {@link String}, the name of the test class.
-         * @throws NoSuchMethodException if the class {@code className} has not
-         *         a {@code void test0()} method.
-         */
-        private void checkTestExists(String className) throws NoSuchMethodException {
-            try {
-                final URLClassLoader cloader = URLClassLoader.newInstance(new URL[]{ PerformerEvosuite.this.tmpBinPath.toUri().toURL(), PerformerEvosuite.this.evosuitePath.toUri().toURL() }); 
-                cloader.loadClass(className.replace('/',  '.')).getDeclaredMethod("test0");
-            } catch (SecurityException | NoClassDefFoundError | ClassNotFoundException | MalformedURLException e) {
-                System.out.println("[EVOSUITE] Unexpected error while verifying that class " + className + " exists and has a test method: " + e);
-                //TODO throw an exception
-            } 			
+    /**
+     * Checks that an emitted test class has the {@code test0} method,
+     * to filter out the cases where EvoSuite fails but emits the test class.
+     * 
+     * @param className a {@link String}, the name of the test class.
+     * @throws NoSuchMethodException if the class {@code className} has not
+     *         a {@code void test0()} method.
+     */
+    private void checkTestExists(String className) throws NoSuchMethodException {
+        try {
+            final URLClassLoader cloader = URLClassLoader.newInstance(new URL[]{ this.tmpBinPath.toUri().toURL(), this.evosuitePath.toUri().toURL() }); 
+            cloader.loadClass(className.replace('/',  '.')).getDeclaredMethod("test0");
+        } catch (SecurityException | NoClassDefFoundError | ClassNotFoundException | MalformedURLException e) {
+            System.out.println("[EVOSUITE] Unexpected error while verifying that class " + className + " exists and has a test method: " + e);
+            //TODO throw an exception
+        }                   
+    }
+
+    /**
+     * Checks whether EvoSuite emitted a well-formed test class, and in the
+     * positive case compiles the generated test and schedules JBSE for its
+     * exploration.
+     *  
+     * @param testCount an {@code int}, the number that identifies 
+     *        the generated test.
+     * @param item a {@link JBSEResult}, the result of the symbolic execution
+     *        from which the test was generated.
+     */
+    private void checkTestCompileAndScheduleJBSE(int testCount, JBSEResult item) {
+        final List<Clause> pathConditionClauses = (item.getFinalState() == null ? null : item.getFinalState().getPathCondition());
+        final String pathCondition = (pathConditionClauses == null ? "true" : stringifyPathCondition(shorten(pathConditionClauses)));
+        
+        //checks if EvoSuite generated the files
+        final String testCaseClassName = (item.hasTargetMethod() ? item.getTargetMethodClassName() : item.getTargetClassName()) + "_" + testCount + "_Test";
+        final Path testCaseScaff = (this.evosuiteNoDependency ? null : this.outPath.resolve(testCaseClassName + "_scaffolding.java"));
+        final Path testCase = this.outPath.resolve(testCaseClassName + ".java");
+        if (!testCase.toFile().exists() || (testCaseScaff != null && !testCaseScaff.toFile().exists())) {
+            System.out.println("[EVOSUITE] Failed to generate the test case " + testCaseClassName + " for path condition: " + pathCondition + ": the generated files do not seem to exist");
+            return;
         }
 
-        /**
-         * Checks whether EvoSuite emitted a well-formed test class, and in the
-         * positive case compiles the generated test and schedules JBSE for its
-         * exploration.
-         *  
-         * @param testCount an {@code int}, the number that identifies 
-         *        the generated test.
-         * @param item a {@link JBSEResult}, the result of the symbolic execution
-         *        from which the test was generated.
-         */
-        private void checkTestCompileAndScheduleJBSE(int testCount, JBSEResult item) {
-            final jbse.mem.State finalState = item.getFinalState();
+        //compiles the generated test
+        final String classpathCompilationTest = this.tmpBinPath.toString() + File.pathSeparator + this.classesPath + File.pathSeparator + this.sushiLibPath.toString() + File.pathSeparator + this.evosuitePath.toString();
+        final Path javacLogFilePath = this.tmpPath.resolve("javac-log-test-" +  testCount + ".txt");
+        final String[] javacParametersTestCase = { "-cp", classpathCompilationTest, "-d", this.tmpBinPath.toString(), testCase.toString() };
+        try (final OutputStream w = new BufferedOutputStream(Files.newOutputStream(javacLogFilePath))) {
+            if (testCaseScaff != null) {
+                final String[] javacParametersTestScaff = { "-cp", classpathCompilationTest, "-d", this.tmpBinPath.toString(), testCaseScaff.toString() };
+                this.compiler.run(null, w, w, javacParametersTestScaff);
+            }
+            this.compiler.run(null, w, w, javacParametersTestCase);
+        } catch (IOException e) {
+            System.out.println("[EVOSUITE] Unexpected I/O error while creating test case compilation log file " + javacLogFilePath.toString() + ": " + e);
+            //TODO throw an exception
+        }
+
+        //creates the TestCase and schedules it for further exploration
+        try {
+            checkTestExists(testCaseClassName);
             final int depth = item.getDepth();
-
-            //checks if EvoSuite generated the files
-            final String testCaseClassName = item.getTargetClassName() + "_" + testCount + "_Test";
-            final Path testCaseScaff = (PerformerEvosuite.this.evosuiteNoDependency ? null : PerformerEvosuite.this.outPath.resolve(testCaseClassName + "_scaffolding.java"));
-            final Path testCase = PerformerEvosuite.this.outPath.resolve(testCaseClassName + ".java");
-            if (!testCase.toFile().exists() || (testCaseScaff != null && !testCaseScaff.toFile().exists())) {
-                System.out.println("[EVOSUITE] Failed to generate the test case " + testCaseClassName + " for path condition: " + stringifyPathCondition(shorten(finalState.getPathCondition())) + ": the generated files do not seem to exist");
-                return;
-            }
-
-            //compiles the generated test
-            final String classpathCompilationTest = PerformerEvosuite.this.tmpBinPath.toString() + File.pathSeparator + PerformerEvosuite.this.classesPath + File.pathSeparator + PerformerEvosuite.this.sushiLibPath.toString() + File.pathSeparator + PerformerEvosuite.this.evosuitePath.toString();
-            final Path javacLogFilePath = PerformerEvosuite.this.tmpPath.resolve("javac-log-test-" +  testCount + ".txt");
-            final String[] javacParametersTestCase = { "-cp", classpathCompilationTest, "-d", PerformerEvosuite.this.tmpBinPath.toString(), testCase.toString() };
-            try (final OutputStream w = new BufferedOutputStream(Files.newOutputStream(javacLogFilePath))) {
-                if (testCaseScaff != null) {
-                    final String[] javacParametersTestScaff = { "-cp", classpathCompilationTest, "-d", PerformerEvosuite.this.tmpBinPath.toString(), testCaseScaff.toString() };
-                    PerformerEvosuite.this.compiler.run(null, w, w, javacParametersTestScaff);
-                }
-                PerformerEvosuite.this.compiler.run(null, w, w, javacParametersTestCase);
-            } catch (IOException e) {
-                System.out.println("[EVOSUITE] Unexpected I/O error while creating test case compilation log file " + javacLogFilePath.toString() + ": " + e);
-                //TODO throw an exception
-            }
-
-            //creates the TestCase and schedules it for further exploration
-            try {
-                checkTestExists(testCaseClassName);
-                System.out.println("[EVOSUITE] Generated test case " + testCaseClassName + ", depth: " + depth + ", path condition: " + stringifyPathCondition(shorten(finalState.getPathCondition())));
-                final TestCase newTC = new TestCase(testCaseClassName, "()V", "test0", PerformerEvosuite.this.outPath);
-                PerformerEvosuite.this.getOutputBuffer().add(new EvosuiteResult(item, newTC, depth + 1));
-            } catch (NoSuchMethodException e) { 
-                //EvoSuite failed to generate the test case, thus we just ignore it 
-                System.out.println("[EVOSUITE] Failed to generate the test case " + testCaseClassName + " for path condition: " + stringifyPathCondition(shorten(finalState.getPathCondition())) + ": the generated file does not contain a test method");
-            }
+            System.out.println("[EVOSUITE] Generated test case " + testCaseClassName + ", depth: " + depth + ", path condition: " + pathCondition);
+            final TestCase newTC = new TestCase(testCaseClassName, "()V", "test0", this.outPath);
+            this.getOutputBuffer().add(new EvosuiteResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), newTC, depth + 1)); //TODO what if the item has not a target method, as it happens with seeds???
+        } catch (NoSuchMethodException e) { 
+            //EvoSuite failed to generate the test case, thus we just ignore it 
+            System.out.println("[EVOSUITE] Failed to generate the test case " + testCaseClassName + " for path condition: " + pathCondition + ": the generated file does not contain a test method");
         }
     }
 }

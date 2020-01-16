@@ -3,15 +3,12 @@ package tardis;
 import static java.nio.file.Files.createDirectory;
 import static java.nio.file.Files.exists;
 
-import static tardis.implementation.Util.getUniqueTargetMethod;
-import static tardis.implementation.Util.getVisibleTargetMethods;
 import static tardis.implementation.Util.stream;
 
 import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.net.MalformedURLException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
@@ -28,25 +25,14 @@ import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.ParserProperties;
 
-import jbse.bc.exc.BadClassFileVersionException;
-import jbse.bc.exc.ClassFileIllFormedException;
-import jbse.bc.exc.ClassFileNotAccessibleException;
-import jbse.bc.exc.ClassFileNotFoundException;
-import jbse.bc.exc.IncompatibleClassFileException;
-import jbse.bc.exc.InvalidClassFileFactoryClassException;
-import jbse.bc.exc.MethodCodeNotFoundException;
-import jbse.bc.exc.MethodNotFoundException;
-import jbse.bc.exc.PleaseLoadClassException;
-import jbse.bc.exc.WrongClassNameException;
-import jbse.common.exc.InvalidInputException;
-import jbse.mem.exc.CannotAssumeSymbolicObjectException;
-import jbse.mem.exc.HeapMemoryExhaustedException;
-
 import tardis.framework.TerminationManager;
 import tardis.implementation.CoverageSet;
 import tardis.implementation.EvosuiteResult;
 import tardis.implementation.JBSEResult;
+import tardis.implementation.JavaCompilerIOException;
+import tardis.implementation.NoJavaCompilerException;
 import tardis.implementation.PerformerEvosuite;
+import tardis.implementation.PerformerEvosuiteInitException;
 import tardis.implementation.PerformerJBSE;
 import tardis.implementation.QueueInputOutputBuffer;
 import tardis.implementation.TestCase;
@@ -59,7 +45,7 @@ public final class Main {
         this.o = o;
     }
 
-    public void start() throws IOException {
+    public int start() {
         //creates the temporary directories if it does not exist
         try {
             if (!exists(o.getTmpDirectoryPath())) {
@@ -68,123 +54,90 @@ public final class Main {
             if (!exists(o.getTmpBinDirectoryPath())) {
                 createDirectory(o.getTmpBinDirectoryPath());
             }
-        } catch (IOException e) {
-            System.out.println("[MAIN    ] Error: unable to create temporary directories, does the base directory exist?");
-            System.out.println("[MAIN    ] Message: " + e);
-            System.exit(1);
-        }
 
-        //creates the coverage data structure
-        final CoverageSet coverageSet = new CoverageSet();
+            //creates the coverage data structure
+            final CoverageSet coverageSet = new CoverageSet();
 
-        //creates the communication queues between the performers
-        final QueueInputOutputBuffer<JBSEResult> pathConditionBuffer = new QueueInputOutputBuffer<>();
-        final QueueInputOutputBuffer<EvosuiteResult> testCaseBuffer = new QueueInputOutputBuffer<>();
+            //creates the communication queues between the performers
+            final QueueInputOutputBuffer<JBSEResult> pathConditionBuffer = new QueueInputOutputBuffer<>();
+            final QueueInputOutputBuffer<EvosuiteResult> testCaseBuffer = new QueueInputOutputBuffer<>();
 
-        //creates and wires together the components of the architecture
-        final PerformerJBSE performerJBSE = new PerformerJBSE(this.o, testCaseBuffer, pathConditionBuffer, coverageSet);
-        final PerformerEvosuite performerEvosuite = new PerformerEvosuite(this.o, pathConditionBuffer, testCaseBuffer);
-        final TerminationManager terminationManager = new TerminationManager(this.o.getGlobalTimeBudgetDuration(), this.o.getGlobalTimeBudgetUnit(), performerJBSE, performerEvosuite);
+            //creates and wires together the components of the architecture
+            final PerformerJBSE performerJBSE = new PerformerJBSE(this.o, testCaseBuffer, pathConditionBuffer, coverageSet);
+            final PerformerEvosuite performerEvosuite = new PerformerEvosuite(this.o, pathConditionBuffer, testCaseBuffer);
+            final TerminationManager terminationManager = new TerminationManager(this.o.getGlobalTimeBudgetDuration(), this.o.getGlobalTimeBudgetUnit(), performerJBSE, performerEvosuite);
 
-        //seeds the initial test cases
-        if (this.o.getTargetMethod() == null || this.o.getInitialTestCase() == null) {
-            //the target is a whole class, or is a single method but
-            //there is no initial test case: EvoSuite should start
-            final ArrayList<JBSEResult> seed = generateSeedForPerformerEvosuite();
-            performerEvosuite.seed(seed);
-        } else {
-            //the target is a single method and there is one
-            //initial test case: JBSE should start
-            final ArrayList<EvosuiteResult> seed = generateSeedForPerformerJBSE();
-            performerJBSE.seed(seed);
-        }
-
-        //starts everything
-        System.out.println("[MAIN    ] This is " + Util.getName() + ", version " + Util.getVersion() + ", " + '\u00a9' + " 2017-2020 " + Util.getVendor());
-        final DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss");
-        System.out.println("[MAIN    ] Starting at " + dtf.format(LocalDateTime.now()) + ", target is " + (this.o.getTargetMethod() == null ? ("class " + this.o.getTargetClass()) : ("method " + this.o.getTargetMethod().get(0) + ":" + this.o.getTargetMethod().get(1) + ":" + this.o.getTargetMethod().get(2))));
-        performerJBSE.start();
-        performerEvosuite.start();
-        terminationManager.start();
-
-        //waits end and prints a final message
-        terminationManager.waitTermination();
-        System.out.println("[MAIN    ] Ending at " + dtf.format(LocalDateTime.now()));
-    }
-
-    private ArrayList<JBSEResult> generateSeedForPerformerEvosuite() {
-        //this is the "no initial test case" situation
-        try {
-            final ArrayList<JBSEResult> retVal = new ArrayList<>();
-            final List<List<String>> targetMethods;
-            if (this.o.getTargetMethod() == null) {
-                //this.o indicates a target class
-                targetMethods = getVisibleTargetMethods(this.o);
+            //seeds the initial test cases
+            if (this.o.getTargetMethod() == null || this.o.getInitialTestCase() == null) {
+                //the target is a class, or is a method but
+                //there is no initial test case: EvoSuite should start
+                final ArrayList<JBSEResult> seed = generateSeedForPerformerEvosuite();
+                performerEvosuite.seed(seed);
             } else {
-                //this.o indicates a single target method
-                targetMethods = getUniqueTargetMethod(this.o);
+                //the target is a single method and there is one
+                //initial test case: JBSE should start
+                final ArrayList<EvosuiteResult> seed = generateSeedForPerformerJBSE();
+                performerJBSE.seed(seed);
             }
-            for (List<String> targetMethod : targetMethods) {
-                retVal.add(new JBSEResult(this.o, targetMethod));
-            }
-            return retVal;
-        } catch (ClassNotFoundException | WrongClassNameException | BadClassFileVersionException | ClassFileNotFoundException | IncompatibleClassFileException | 
-        ClassFileNotAccessibleException | ClassFileIllFormedException | MethodNotFoundException | MethodCodeNotFoundException e) {
-            System.out.println("[MAIN    ] Error: The target class or target method has wrong name, or version, or does not exist, or has unaccessible hierarchy, or is ill-formed, or the target method is abstract");
-            System.out.println("[MAIN    ] Message: " + e);
-            System.exit(1);
-        } catch (MalformedURLException e) {
-            System.out.println("[MAIN    ] Error: A path in the specified classpath does not exist or is ill-formed");
-            System.out.println("[MAIN    ] Message: " + e);
-            System.exit(1);
+
+            //starts everything
+            System.out.println("[MAIN    ] This is " + Util.getName() + ", version " + Util.getVersion() + ", " + '\u00a9' + " 2017-2020 " + Util.getVendor());
+            final DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss");
+            System.out.println("[MAIN    ] Starting at " + dtf.format(LocalDateTime.now()) + ", target is " + (this.o.getTargetMethod() == null ? ("class " + this.o.getTargetClass()) : ("method " + this.o.getTargetMethod().get(0) + ":" + this.o.getTargetMethod().get(1) + ":" + this.o.getTargetMethod().get(2))));
+            performerJBSE.start();
+            performerEvosuite.start();
+            terminationManager.start();
+
+            //waits end and prints a final message
+            terminationManager.waitTermination();
+            System.out.println("[MAIN    ] Ending at " + dtf.format(LocalDateTime.now()));
+            return 0;
         } catch (IOException e) {
-            System.out.println("[MAIN    ] Error: I/O exception while accessing the classpath");
-            System.out.println("[MAIN    ] Message: " + e);
-            System.exit(1);
+            System.err.println("[MAIN    ] Error: Unexpected I/O error");
+            System.err.println("[MAIN    ] Message: " + e);
+            return 1;
+        } catch (PerformerEvosuiteInitException e) {
+            System.err.println("[MAIN    ] Error: Unable to create the Evosuite performer");
+            System.err.println("[MAIN    ] Message: " + e);
+            return 1;
         } catch (SecurityException e) {
-            System.out.println("[MAIN    ] Error: The security manager did not allow to get the system class loader");
-            System.out.println("[MAIN    ] Message: " + e);
-            System.exit(1);
-        } catch (CannotAssumeSymbolicObjectException e) {
-            System.out.println("[MAIN    ] Error: Cannot execute symbolically a method of class java.lang.Class or java.lang.ClassLoader");
-            System.out.println("[MAIN    ] Message: " + e);
-            System.exit(1);
-        } catch (InvalidInputException e) {
-            System.out.println("[MAIN    ] Unexpected internal error: Invalid parameter");
-            System.out.println("[MAIN    ] Message: " + e);
-            System.exit(2);
-        } catch (PleaseLoadClassException e) {
-            System.out.println("[MAIN    ] Unexpected internal error: Class loading failed");
-            System.out.println("[MAIN    ] Message: " + e);
-            System.exit(2);
-        } catch (HeapMemoryExhaustedException e) {
-            System.out.println("[MAIN    ] Unexpected internal error: Heap memory exhausted");
-            System.out.println("[MAIN    ] Message: " + e);
-            System.exit(2);
-        } catch (InvalidClassFileFactoryClassException e) {
-            System.out.println("[MAIN    ] Unexpected internal error: Wrong class file factory");
-            System.out.println("[MAIN    ] Message: " + e);
-            System.exit(2);
+            System.err.println("[MAIN    ] Error: The security manager did not allow to get the system class loader");
+            System.err.println("[MAIN    ] Message: " + e);
+            return 1;
+        } catch (NoJavaCompilerException e) {
+            System.err.println("[MAIN    ] Error: Failed to find a system Java compiler. Did you install a JDK?");
+            return 1;
+        } catch (JavaCompilerIOException e) {
+            System.err.println("[MAIN    ] Error: Unexpected I/O error while creating test case compilation log file");
+            System.err.println("[MAIN    ] Message: " + e);
+            return 2;
         }
-        return null; //to keep the compiler happy
     }
 
-    private ArrayList<EvosuiteResult> generateSeedForPerformerJBSE() {
+    private ArrayList<JBSEResult> generateSeedForPerformerEvosuite() throws SecurityException {
+        //this is the "no initial test case" situation
+        final ArrayList<JBSEResult> retVal = new ArrayList<>();
+        if (this.o.getTargetMethod() == null) {
+            retVal.add(new JBSEResult(this.o.getTargetClass()));
+        } else {
+            retVal.add(new JBSEResult(this.o.getTargetMethod()));
+        }
+        return retVal;
+    }
+
+    private ArrayList<EvosuiteResult> generateSeedForPerformerJBSE() throws NoJavaCompilerException, JavaCompilerIOException {
         final TestCase tc = new TestCase(this.o);
         final String classpathCompilationTest = String.join(File.pathSeparator, stream(this.o.getClassesPath()).map(Object::toString).toArray(String[]::new));
         final Path javacLogFilePath = this.o.getTmpDirectoryPath().resolve("javac-log-test-0.txt");
         final String[] javacParametersTestCase = { "-cp", classpathCompilationTest, "-d", this.o.getTmpBinDirectoryPath().toString(), tc.getSourcePath().toString() };
         final JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
         if (compiler == null) {
-            System.out.println("[MAIN    ] Failed to find a system Java compiler. Did you install a JDK?");
-            System.exit(1);
+            throw new NoJavaCompilerException();
         }
         try (final OutputStream w = new BufferedOutputStream(Files.newOutputStream(javacLogFilePath))) {
             compiler.run(null, w, w, javacParametersTestCase);
         } catch (IOException e) {
-            System.out.println("[MAIN    ] Unexpected I/O error while creating test case compilation log file " + javacLogFilePath.toString());
-            System.out.println("[MAIN    ] Message: " + e);
-            System.exit(2);
+            throw new JavaCompilerIOException(javacLogFilePath.toString(), e);
         }
         final ArrayList<EvosuiteResult> retVal = new ArrayList<>();
         retVal.add(new EvosuiteResult(this.o.getTargetMethod(), tc, 0));
@@ -193,7 +146,7 @@ public final class Main {
 
     //Here starts the static part of the class, for managing the command line
 
-    public static void main(String[] args) throws IOException {		
+    public static void main(String[] args) {		
         //parses options from the command line and exits if the command line
         //is ill-formed
         final Options o = new Options();
@@ -214,7 +167,8 @@ public final class Main {
 
         //runs
         final Main m = new Main(o);
-        m.start();
+        final int exitCode = m.start();
+        System.exit(exitCode);
     }
 
     private static String[] processArgs(final String[] args) {

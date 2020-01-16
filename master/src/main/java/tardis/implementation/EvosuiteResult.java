@@ -17,10 +17,10 @@ public class EvosuiteResult {
         this.startDepth = startDepth;
     }
 
-    public EvosuiteResult(JBSEResult jr, TestCase tc, int startDepth) {
-        this.targetMethodClassName = jr.getTargetClassName();
-        this.targetMethodDescriptor = jr.getTargetMethodDescriptor();
-        this.targetMethodName = jr.getTargetMethodName();
+    public EvosuiteResult(String targetMethodClassName, String targetMethodDescriptor, String targetMethodName, TestCase tc, int startDepth) {
+        this.targetMethodClassName = targetMethodClassName;
+        this.targetMethodDescriptor = targetMethodDescriptor;
+        this.targetMethodName = targetMethodName;
         this.tc = new TestCase(tc);
         this.startDepth = startDepth;
     }

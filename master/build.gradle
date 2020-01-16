@@ -5,6 +5,7 @@ plugins {
 
 dependencies {
     implementation 'args4j:args4j:2.32'
+    implementation 'com.github.javaparser:javaparser-symbol-solver-core:3.15.2'
     implementation files("${System.getProperty('java.home')}/../lib/tools.jar")
     implementation project(':sushi-lib')
     implementation project(':jbse')
@@ -15,6 +16,7 @@ shadowJar {
     exclude 'tools.jar'
     relocate 'javassist', 'tardis.javassist'
     relocate 'jbse', 'tardis.jbse'
+    relocate 'com.github.javaparser', 'tardis.com.github.javaparser'
     relocate 'org.jacoco', 'tardis.org.jacoco'
     relocate 'org.objectweb', 'tardis.org.objectweb'
     relocate 'org.kohsuke', 'tardis.org.kohsuke'
