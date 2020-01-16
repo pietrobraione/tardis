@@ -6,11 +6,16 @@ import static tardis.implementation.Util.shorten;
 import static tardis.implementation.Util.stream;
 import static tardis.implementation.Util.stringifyPathCondition;
 
+import java.io.BufferedOutputStream;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -22,13 +27,6 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-import java.nio.file.Files;
-
-import java.io.BufferedOutputStream;
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.File;
-
 import javax.tools.JavaCompiler;
 import javax.tools.ToolProvider;
 
@@ -58,7 +56,6 @@ import tardis.framework.InputBuffer;
 import tardis.framework.OutputBuffer;
 import tardis.framework.Performer;
 
-
 class RenamerVisitor extends ModifierVisitor<Void> {
     private final String from, to;
     
@@ -83,7 +80,6 @@ class RenamerVisitor extends ModifierVisitor<Void> {
         return super.visit(n, arg);
     }
 }
-
 
 public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
     private final List<List<String>> visibleTargetMethods;
