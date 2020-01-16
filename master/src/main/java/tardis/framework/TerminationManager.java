@@ -11,11 +11,37 @@ import java.util.concurrent.TimeUnit;
  *
  */
 public final class TerminationManager {
+    /**
+     * The maximum duration of the operativity of the {@link #performers}, 
+     * i.e., the timeout.
+     */
     private final long duration;
+    
+    /**
+     * The {@link TimeUnit} for {@link #duration}.
+     */
     private final TimeUnit timeUnit;
+    
+    /**
+     * The {@link Performer}s monitored by this {@link TerminationManager}.
+     */
     private final Performer<?,?>[] performers;
+    
+    /**
+     * The {@link Thread} that waits for {@link #duration} and then stops
+     * the {@link #performers} by interrupting {@link #terminationDetector}.
+     */
     private final Thread timeoutDetector;
+    
+    /**
+     * The {@link Thread} that periodically polls the {@link #performers}
+     * to determine whether they are at the fixpoint, and finally stops them.
+     */
     private final Thread terminationDetector;
+    
+    /**
+     * Set to {@code true} by {@link #timeoutDetector} upon timeout.
+     */
     private volatile boolean timedOut;
 
     /**
@@ -41,7 +67,10 @@ public final class TerminationManager {
                 this.timeUnit.sleep(this.duration);
                 this.timedOut = true;
             } catch (InterruptedException e) {
-                //just terminates
+                //this should never happen, but 
+                //in the case we behave as it were
+                //a timeout, just for safety
+                this.timedOut = true;
             }
         });
         this.terminationDetector = new Thread(() -> {
@@ -50,7 +79,8 @@ public final class TerminationManager {
                     TimeUnit.SECONDS.sleep(1);
                 } catch (InterruptedException e) {
                     //this should never happen,
-                    //in the case we fall through
+                    //in the case falling through 
+                    //is ok
                 }
 
                 //exits upon timeout
@@ -78,18 +108,33 @@ public final class TerminationManager {
         });
     }
 
+    /**
+     * Pauses all the performers.
+     */
     private void pauseAll() {
         Arrays.stream(this.performers).forEach(Performer::pause);
     }
 
+    /**
+     * Resumes all the performers.
+     */
     private void resumeAll() {
         Arrays.stream(this.performers).forEach(Performer::resume);
     }
 
+    /**
+     * Stops all the performers.
+     */
     private void stopAll() {
         Arrays.stream(this.performers).forEach(Performer::stop);
     }
 
+    /**
+     * Checks whether all the performers are idle.
+     * 
+     * @return {@code true} iff {@code p.}{@link Performer#isIdle() isIdle}{@code () == true} for
+     *         all {@code p in }{@link #performers}.
+     */
     private boolean allIdle() {
         return Arrays.stream(this.performers).map(Performer::isIdle).reduce(Boolean.TRUE, (a, b) -> a && b);
     }
