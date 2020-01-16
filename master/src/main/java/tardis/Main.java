@@ -107,6 +107,10 @@ public final class Main {
         } catch (NoJavaCompilerException e) {
             System.err.println("[MAIN    ] Error: Failed to find a system Java compiler. Did you install a JDK?");
             return 1;
+        } catch (InterruptedException e) {
+            System.err.println("[MAIN    ] Error: Unexpected interruption when waiting for termination of application");
+            System.err.println("[MAIN    ] Message: " + e);
+            return 1;
         } catch (JavaCompilerIOException e) {
             System.err.println("[MAIN    ] Error: Unexpected I/O error while creating test case compilation log file");
             System.err.println("[MAIN    ] Message: " + e);

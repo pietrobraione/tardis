@@ -18,6 +18,7 @@ public abstract class Performer<I,O> {
     private final Condition conditionNotPaused;
     private final Condition conditionPaused;
     private volatile boolean paused;
+    private volatile boolean stopped;
     private ArrayList<I> seed;	
     private ArrayList<I> items;
 
@@ -44,12 +45,13 @@ public abstract class Performer<I,O> {
                     } 
                 }
             }
-            this.threadPool.shutdown();
+            this.threadPool.shutdownNow();
         });
         this.lockPause = new ReentrantLock();
         this.conditionNotPaused = this.lockPause.newCondition();
         this.conditionPaused = this.lockPause.newCondition();
         this.paused = false;
+        this.stopped = false;
         this.seed = null;
         this.items = null;
     }
@@ -84,8 +86,9 @@ public abstract class Performer<I,O> {
      */
     final void stop() {
         this.paused = false;
+        this.stopped = true;
         this.mainThread.interrupt();
-        this.threadPool.shutdownNow();
+        this.threadPool.shutdownNow(); //pleonastic
     }
 
     /**
@@ -94,17 +97,31 @@ public abstract class Performer<I,O> {
      */
     final void pause() {
         this.paused = true;
+        
+        //if this performer is stopped, there is
+        //nothing else to do
+        if (this.stopped) {
+            return;
+        }
+        
+        //if mainThread is waiting, interrupts it so it will go 
+        //in pause state and signal conditionPaused; guarded by 
+        //lockPause so the next await() will not lose the signal 
+        //from mainThread
         final ReentrantLock lock = this.lockPause;
         lock.lock();
         try {
-            this.mainThread.interrupt(); //if mainThread is waiting, interrupt it so it will go in pause state and signal conditionPaused; guarded by lockPause so the next await() will not lose the signal from mainThread
+            this.mainThread.interrupt(); 
             this.conditionPaused.await(); //waits until mainThread pauses 
         } catch (InterruptedException e) {
             //this should never happen
-            e.printStackTrace(); //TODO handle
+            stop();
+            throw new AssertionError(e);
         } finally {
             lock.unlock();
         }
+        
+        //pauses the thread pool
         this.threadPool.pause();
     }
 
@@ -133,7 +150,7 @@ public abstract class Performer<I,O> {
      * empty.
      */
     final boolean isIdle() {
-        return this.in.isEmpty() && this.items.isEmpty() && this.threadPool.isIdle();
+        return this.stopped || (this.in.isEmpty() && this.items.isEmpty() && this.threadPool.isIdle());
     }
 
     private void submitSeedIfPresent() {

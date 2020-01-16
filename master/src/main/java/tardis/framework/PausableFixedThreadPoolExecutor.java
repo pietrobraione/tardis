@@ -34,11 +34,12 @@ public class PausableFixedThreadPoolExecutor extends ThreadPoolExecutor {
         lock.lock();
         try {
             while (this.paused) {
-                this.conditionNotPaused.await();
+                try {
+                    this.conditionNotPaused.await();
+                } catch (InterruptedException e) {
+                    //this should never happen, should ever happen it is safe to fall through
+                }
             }
-        } catch (InterruptedException e) {
-            //this should never happen
-            e.printStackTrace(); //TODO handle
         } finally {
             lock.unlock();
         }
