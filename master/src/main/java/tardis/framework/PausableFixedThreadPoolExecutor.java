@@ -7,14 +7,43 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
+/**
+ * A {@link ThreadPoolExecutor} that can be paused.
+ * 
+ * @author Pietro Braione
+ */
 public class PausableFixedThreadPoolExecutor extends ThreadPoolExecutor {
+    /**
+     * Counts how many threads are active, i.e., are executing something.
+     */
     private final AtomicInteger activeThreads = new AtomicInteger(0);
+    
+    /**
+     * A {@link ReentrantLock} to synchronize the threads of 
+     * this {@link PausableFixedThreadPoolExecutor}
+     * with the thread issuing a {@link #pause()}.
+     */
     private final ReentrantLock lockPause = new ReentrantLock();
+    
+    /**
+     * A {@link Condition} associated to {@link #lockPause} 
+     * that is notified whenever this {@link PausableFixedThreadPoolExecutor}  
+     * is resumed from a pause.
+     */
     private final Condition conditionNotPaused = this.lockPause.newCondition();
+    
+    /**
+     * Set to {@code true} whenever this {@link PausableFixedThreadPoolExecutor} 
+     * is paused.
+     */
     private volatile boolean paused = false;
 
-    //constructor
-
+    /**
+     * Constructor.
+     * 
+     * @param nThreads the number of threads in the pool.
+     * {@link IllegalArgumentException} if {@code nThreads <= 0}.
+     */
     public PausableFixedThreadPoolExecutor(int nThreads) {
         //stolen from Executors.newFixedThreadPool
         super(nThreads, nThreads, 

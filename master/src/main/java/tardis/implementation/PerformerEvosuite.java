@@ -83,6 +83,7 @@ class RenamerVisitor extends ModifierVisitor<Void> {
 
 public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
     private final List<List<String>> visibleTargetMethods;
+    private final JavaCompiler compiler;
     private final String classesPath;
     private final Path tmpPath;
     private final Path tmpBinPath;
@@ -93,8 +94,7 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
     private final long timeBudgetSeconds;
     private final boolean evosuiteNoDependency;
     private final boolean useMOSA;
-    private final TestIdentifier testIdentifier;
-    private final JavaCompiler compiler;
+    private int testCount;
 
     public PerformerEvosuite(Options o, InputBuffer<JBSEResult> in, OutputBuffer<EvosuiteResult> out) throws PerformerEvosuiteInitException {
         super(in, out, o.getNumOfThreads(), (o.getUseMOSA() ? o.getNumMOSATargets() : 1), o.getTimeoutMOSATaskCreationDuration(), o.getTimeoutMOSATaskCreationUnit());
@@ -102,6 +102,10 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
             this.visibleTargetMethods = getVisibleTargetMethods(o);
         } catch (ClassNotFoundException | MalformedURLException | SecurityException e) {
             throw new PerformerEvosuiteInitException(e);
+        }
+        this.compiler = ToolProvider.getSystemJavaCompiler();
+        if (this.compiler == null) {
+            throw new PerformerEvosuiteInitException("Failed to find a system Java compiler. Did you install a JDK?");
         }
         this.classesPath = String.join(File.pathSeparator, stream(o.getClassesPath()).map(Object::toString).toArray(String[]::new)); 
         this.tmpPath = o.getTmpDirectoryPath();
@@ -113,17 +117,13 @@ public class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
         this.timeBudgetSeconds = o.getEvosuiteTimeBudgetUnit().toSeconds(o.getEvosuiteTimeBudgetDuration());
         this.evosuiteNoDependency = o.getEvosuiteNoDependency();
         this.useMOSA = o.getUseMOSA();
-        this.testIdentifier = new TestIdentifier(o.getInitialTestCase() == null ? 0 : 1);
-        this.compiler = ToolProvider.getSystemJavaCompiler();
-        if (this.compiler == null) {
-            throw new PerformerEvosuiteInitException("Failed to find a system Java compiler. Did you install a JDK?");
-        }
+        this.testCount = (o.getInitialTestCase() == null ? 0 : 1);
     }
 
     @Override
     protected Runnable makeJob(List<JBSEResult> items) {
-        final int testCountInitial = this.testIdentifier.getTestCount();
-        this.testIdentifier.testCountAdd(items.size());
+        final int testCountInitial = this.testCount;
+        this.testCount += items.size();
         final Runnable job = (items.get(0).isSeed() && !items.get(0).hasTargetMethod() ? 
                               () -> generateTestsAndScheduleJBSESeed(testCountInitial, items.get(0)) :
                               () -> generateTestsAndScheduleJBSE(testCountInitial, items));

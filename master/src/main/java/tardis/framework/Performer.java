@@ -6,29 +6,128 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
+/**
+ * A performer encapsulates a set of concurrent threads. Each thread repeatedly reads 
+ * input items from a common {@link InputBuffer}, elaborates each of them, possibly 
+ * producing (one or more) output items. The output items are put then in a common 
+ * {@link OutputBuffer}.
+ * 
+ * @author Pietro Braione
+ *
+ * @param <I> The type of the items that are read from the {@link InputBuffer}.
+ * @param <O> The type of the items that are put in the {@link OutputBuffer}.
+ */
 public abstract class Performer<I,O> {
+    /**
+     * The {@link InputBuffer} from which this 
+     * {@link Performer} will read the input items.
+     */
     private final InputBuffer<I> in;
+    
+    /**
+     * The {@link OutputBuffer} where this {@link Performer} 
+     * will put the output items.
+     */
     private final OutputBuffer<O> out;
+    
+    /**
+     * The pausable thread pool of all the threads
+     * that this {@link Performer} encapsulates.
+     */
     private final PausableFixedThreadPoolExecutor threadPool;
+    
+    /**
+     * The maximum number of input items that are passed as a batch
+     * to {@link #makeJob(List) makeJob}.
+     */
     private final int numInputs;
+    
+    /**
+     * The maximum duration of the time this {@link Performer} will wait for 
+     * the arrival of an input item. 
+     */
     private final long timeoutDuration;
-    private final TimeUnit timeoutUnit;
+    
+    /**
+     * The {@link TimeUnit} for {@code timeoutDuration}.
+     */
+    private final TimeUnit timeoutTimeUnit;
+    
+    /**
+     * The main {@link Thread}, that takes batches of input items from {@link #in}
+     * and dispatches them to {@link #threadPool}.
+     */
     private final Thread mainThread;
+    
+    /**
+     * A {@link ReentrantLock} that is used to synchronize
+     * {@link #mainThread} upon pause. 
+     */
     private final ReentrantLock lockPause;
+    
+    /**
+     * A {@link Condition} associated to {@link #lockPause} 
+     * that is notified whenever this {@link Performer} is 
+     * resumed from a pause.
+     */
     private final Condition conditionNotPaused;
+    
+    /**
+     * A {@link Condition} associated to {@link #lockPause} 
+     * that is notified whenever this {@link Performer} is 
+     * paused.
+     */
     private final Condition conditionPaused;
+    
+    /**
+     * Set to {@code true} whenever this {@link Performer} is paused.
+     */
     private volatile boolean paused;
+    
+    /**
+     * Set to {@code true} whenever this {@link Performer} is stopped.
+     */
     private volatile boolean stopped;
-    private ArrayList<I> seed;	
+    
+    /**
+     * A seed, i.e., a batch of input items set by 
+     * {@link #seed(List) seed} to start the {@link Performer}.
+     */
+    private ArrayList<I> seed;
+    
+    /**
+     * The batch of input items that is progressively built
+     * by {@link InputBuffer#poll(long, TimeUnit) poll}ing {@link #in}. 
+     */
     private ArrayList<I> items;
 
-    public Performer(InputBuffer<I> in, OutputBuffer<O> out, int numOfThreads, int numInputs, long timeoutDuration, TimeUnit timeoutUnit) {
+    /**
+     * Constructor.
+     * 
+     * @param in The {@link InputBuffer} from which this {@link Performer} will read the input items. 
+     * @param out The {@link OutputBuffer} where this {@link Performer} will put the output items.
+     * @param numOfThreads The number of concurrent threads that this {@link Performer} encapsulates.
+     * @param numInputs An {@code int}, the maximum number of input items that are passed as a batch
+     *        to {@link #makeJob(List) makeJob}.
+     * @param timeoutDuration The maximum duration of the time this {@link Performer} will wait for 
+     *        the arrival of an input item.  
+     * @param timeoutTimeUnit The {@link TimeUnit} for {@code timeoutDuration}. 
+     * @throws NullPointerException if {@code in == null || out == null || timeoutUnit == null}.
+     * @throws IllegalArgumentException if {@code numOfThreads <= 0 || numInputs <= 0 || timeoutDuration < 0}.
+     */
+    public Performer(InputBuffer<I> in, OutputBuffer<O> out, int numOfThreads, int numInputs, long timeoutDuration, TimeUnit timeoutTimeUnit) {
+        if (in == null || out == null || timeoutTimeUnit == null) {
+            throw new NullPointerException("Invalid null parameter in performer constructor.");
+        }
+        if (numOfThreads <= 0 || numInputs <= 0 || timeoutDuration < 0) {
+            throw new IllegalArgumentException("Invalid negative parameter in performer constructor.");
+        }
         this.in = in;
         this.out = out;
         this.threadPool = new PausableFixedThreadPoolExecutor(numOfThreads);
         this.numInputs = numInputs;
         this.timeoutDuration = timeoutDuration;
-        this.timeoutUnit = timeoutUnit;
+        this.timeoutTimeUnit = timeoutTimeUnit;
         this.mainThread = new Thread(() -> {
             submitSeedIfPresent();
             while (true) {
@@ -56,18 +155,36 @@ public abstract class Performer<I,O> {
         this.items = null;
     }
 
+    /**
+     * Makes a {@link Runnable} job to be executed by a thread encapsulated by 
+     * this performer.
+     * 
+     * @param items a {@link List}{@code <I>}, a batch of input items whose minimum
+     *        size is 1 and whose maximum size is the {@code numInputs} parameter
+     *        passed upon construction (with the possible exception of the seed items, 
+     *        that are not split according to {@code numInputs} but are always passed 
+     *        as a unique batch).
+     * @return a {@link Runnable} that elaborates {@code items}, possibly putting
+     *         some output items in the output buffer.
+     */
     protected abstract Runnable makeJob(List<I> items);
 
+    /**
+     * Gets the {@link OutputBuffer} of this {@link Performer}. Meant
+     * to be used in the subclasses to implement {@link #makeJob(List)}.
+     * 
+     * @return an {@link OutputBuffer}.
+     */
     protected final OutputBuffer<O> getOutputBuffer() {
         return this.out;
     }
 
     /**
-     * Seeds the performer with a set of initial items,
+     * Seeds the {@link Performer} with a set of initial items,
      * that are executed immediately as the performer 
      * is started. Should be invoked before {@link #start()}.
      * 
-     * @param seed an {@link ArrayList}{@code <I>} containing
+     * @param seed a {@link List}{@code <I>} containing
      *        the items that seed the performer.
      */
     public final void seed(List<I> seed) {
@@ -82,7 +199,7 @@ public abstract class Performer<I,O> {
     }
 
     /**
-     * Stops the performer. Should be invoked after {@link #start()}.
+     * Stops the performer. Shall be invoked after {@link #start()}.
      */
     final void stop() {
         this.paused = false;
@@ -126,7 +243,7 @@ public abstract class Performer<I,O> {
     }
 
     /**
-     * Resumes the performer after a {@link #pause()}.
+     * Resumes this performer from a {@link #pause()}.
      */
     final void resume() {
         this.threadPool.resume();
@@ -153,6 +270,10 @@ public abstract class Performer<I,O> {
         return this.stopped || (this.in.isEmpty() && this.items.isEmpty() && this.threadPool.isIdle());
     }
 
+    /**
+     * To be invoked by the main thread. Submits the seed to 
+     * the thread pool, if present.
+     */
     private void submitSeedIfPresent() {
         if (this.seed == null) {
             return;
@@ -196,7 +317,7 @@ public abstract class Performer<I,O> {
         if (this.items == null) {
             this.items = new ArrayList<>();
         }
-        final I item = this.in.poll(this.timeoutDuration, this.timeoutUnit);
+        final I item = this.in.poll(this.timeoutDuration, this.timeoutTimeUnit);
         if (item != null) {
             this.items.add(item);
         }

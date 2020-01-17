@@ -23,8 +23,12 @@ import jbse.bc.Classpath;
 import sushi.configure.SignatureHandler;
 import sushi.configure.Visibility;
 import sushi.configure.MultiPathOptionHandlerPatched;
-import tardis.implementation.MultiSignatureOptionHandler;
 
+/**
+ * The configuration options for TARDIS.
+ * 
+ * @author Pietro Braione
+ */
 public final class Options implements Cloneable {
     @Option(name = "-help",
             usage = "Prints usage and exits")

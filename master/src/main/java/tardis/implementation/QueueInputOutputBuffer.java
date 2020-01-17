@@ -6,17 +6,25 @@ import java.util.concurrent.TimeUnit;
 import tardis.framework.InputBuffer;
 import tardis.framework.OutputBuffer;
 
+/**
+ * An {@link InputBuffer} and {@link OutputBuffer} whose implementation is based on 
+ * a {@link LinkedBlockingQueue}.
+ * 
+ * @author Pietro Braione
+ *
+ * @param <E> the type of the items stored in the buffer.
+ */
 public class QueueInputOutputBuffer<E> implements InputBuffer<E>, OutputBuffer<E> {
     private final LinkedBlockingQueue<E> queue = new LinkedBlockingQueue<>();
 
     @Override
-    public boolean add(E e) {
-        return this.queue.add(e);
+    public boolean add(E item) {
+        return this.queue.add(item);
     }
 
     @Override
-    public E poll(long timeout, TimeUnit unit) throws InterruptedException {
-        return this.queue.poll(timeout, unit);
+    public E poll(long timeoutDuration, TimeUnit timeoutTimeUnit) throws InterruptedException {
+        return this.queue.poll(timeoutDuration, timeoutTimeUnit);
     }
 
     @Override

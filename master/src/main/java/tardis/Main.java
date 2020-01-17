@@ -29,7 +29,6 @@ import tardis.framework.TerminationManager;
 import tardis.implementation.CoverageSet;
 import tardis.implementation.EvosuiteResult;
 import tardis.implementation.JBSEResult;
-import tardis.implementation.JavaCompilerIOException;
 import tardis.implementation.NoJavaCompilerException;
 import tardis.implementation.PerformerEvosuite;
 import tardis.implementation.PerformerEvosuiteInitException;
@@ -38,16 +37,35 @@ import tardis.implementation.QueueInputOutputBuffer;
 import tardis.implementation.TestCase;
 import tardis.implementation.Util;
 
+/**
+ * TARDIS main class.
+ * 
+ * @author Pietro Braione
+ */
 public final class Main {
+    /**
+     * The configuration {@link Options}.
+     */
     private final Options o;
 
+    /**
+     * Constructor.
+     * 
+     * @param o The configuration {@link Options}.
+     */
     public Main(Options o) {
         this.o = o;
     }
 
+    /**
+     * Runs TARDIS.
+     * 
+     * @return An {@code int} exit code, {@code 0} meaning successful exit, {@code 1} meaning 
+     *         exit due to an error, {@code 2} meaning exit due to an internal error.
+     */
     public int start() {
-        //creates the temporary directories if it does not exist
         try {
+            //creates the temporary directories if they do not exist
             if (!exists(o.getTmpDirectoryPath())) {
                 createDirectory(o.getTmpDirectoryPath());
             }
@@ -55,16 +73,16 @@ public final class Main {
                 createDirectory(o.getTmpBinDirectoryPath());
             }
 
-            //creates the coverage data structure
+            //creates the coverage set data structure
             final CoverageSet coverageSet = new CoverageSet();
 
-            //creates the communication queues between the performers
+            //creates the communication buffers between the performers
             final QueueInputOutputBuffer<JBSEResult> pathConditionBuffer = new QueueInputOutputBuffer<>();
             final QueueInputOutputBuffer<EvosuiteResult> testCaseBuffer = new QueueInputOutputBuffer<>();
 
             //creates and wires together the components of the architecture
-            final PerformerJBSE performerJBSE = new PerformerJBSE(this.o, testCaseBuffer, pathConditionBuffer, coverageSet);
             final PerformerEvosuite performerEvosuite = new PerformerEvosuite(this.o, pathConditionBuffer, testCaseBuffer);
+            final PerformerJBSE performerJBSE = new PerformerJBSE(this.o, testCaseBuffer, pathConditionBuffer, coverageSet);
             final TerminationManager terminationManager = new TerminationManager(this.o.getGlobalTimeBudgetDuration(), this.o.getGlobalTimeBudgetUnit(), performerJBSE, performerEvosuite);
 
             //seeds the initial test cases
@@ -74,7 +92,7 @@ public final class Main {
                 final ArrayList<JBSEResult> seed = generateSeedForPerformerEvosuite();
                 performerEvosuite.seed(seed);
             } else {
-                //the target is a single method and there is one
+                //the target is a method and there is one
                 //initial test case: JBSE should start
                 final ArrayList<EvosuiteResult> seed = generateSeedForPerformerJBSE();
                 performerJBSE.seed(seed);
@@ -108,11 +126,19 @@ public final class Main {
             System.err.println("[MAIN    ] Error: Failed to find a system Java compiler. Did you install a JDK?");
             return 1;
         } catch (InterruptedException e) {
-            System.err.println("[MAIN    ] Error: Unexpected interruption when waiting for termination of application");
+            System.err.println("[MAIN    ] Internal error: Unexpected interruption when waiting for termination of application");
             System.err.println("[MAIN    ] Message: " + e);
-            return 1;
-        } catch (JavaCompilerIOException e) {
-            System.err.println("[MAIN    ] Error: Unexpected I/O error while creating test case compilation log file");
+            return 2;
+        } catch (NullPointerException e) {
+            System.err.println("[MAIN    ] Internal error: Unexpected null value");
+            System.err.println("[MAIN    ] Message: " + e);
+            return 2;
+        } catch (IllegalArgumentException e) {
+            System.err.println("[MAIN    ] Internal error: Unexpected illegal argument");
+            System.err.println("[MAIN    ] Message: " + e);
+            return 2;
+        } catch (JavaCompilerException e) {
+            System.err.println("[MAIN    ] Internal error: Unexpected I/O error while creating test case compilation log file");
             System.err.println("[MAIN    ] Message: " + e);
             return 2;
         }
@@ -129,7 +155,7 @@ public final class Main {
         return retVal;
     }
 
-    private ArrayList<EvosuiteResult> generateSeedForPerformerJBSE() throws NoJavaCompilerException, JavaCompilerIOException {
+    private ArrayList<EvosuiteResult> generateSeedForPerformerJBSE() throws NoJavaCompilerException, JavaCompilerException {
         final TestCase tc = new TestCase(this.o);
         final String classpathCompilationTest = String.join(File.pathSeparator, stream(this.o.getClassesPath()).map(Object::toString).toArray(String[]::new));
         final Path javacLogFilePath = this.o.getTmpDirectoryPath().resolve("javac-log-test-0.txt");
@@ -141,7 +167,7 @@ public final class Main {
         try (final OutputStream w = new BufferedOutputStream(Files.newOutputStream(javacLogFilePath))) {
             compiler.run(null, w, w, javacParametersTestCase);
         } catch (IOException e) {
-            throw new JavaCompilerIOException(javacLogFilePath.toString(), e);
+            throw new JavaCompilerException(javacLogFilePath.toString(), e);
         }
         final ArrayList<EvosuiteResult> retVal = new ArrayList<>();
         retVal.add(new EvosuiteResult(this.o.getTargetMethod(), tc, 0));
@@ -202,7 +228,6 @@ public final class Main {
     private static void printUsage(final CmdLineParser parser) {
         System.err.println("Usage: java " + Main.class.getName() + " <options>");
         System.err.println("where <options> are:");
-        // print the list of available options
         parser.printUsage(System.err);
     }
 }

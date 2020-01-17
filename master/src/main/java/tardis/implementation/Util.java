@@ -30,7 +30,13 @@ import jbse.val.Symbolic;
 import sushi.configure.Visibility;
 import tardis.Options;
 
-public class Util {
+/**
+ * Utility class gathering a number of common
+ * static definitions.
+ * 
+ * @author Pietro Braione.
+ */
+public final class Util {
     /**
      * Returns the name of this application, as resulting
      * from the containing jar file.
@@ -115,6 +121,12 @@ public class Util {
 
     }
 
+    /**
+     * Checks whether a bytecode is an invoke* bytecode.
+     * 
+     * @param currentBytecode a {@code byte}.
+     * @return {@code true} iff {@code currentBytecode} is an invoke*.
+     */
     static boolean bytecodeInvoke(byte currentBytecode) {
         return (currentBytecode == Opcodes.OP_INVOKEVIRTUAL ||
         currentBytecode == Opcodes.OP_INVOKESTATIC ||
@@ -124,6 +136,12 @@ public class Util {
         currentBytecode == Opcodes.OP_INVOKEHANDLE);
     }
 
+    /**
+     * Checks whether a bytecode is branching.
+     * 
+     * @param currentBytecode a {@code byte}.
+     * @return {@code true} iff {@code currentBytecode} is branching.
+     */
     static boolean bytecodeBranch(byte currentBytecode) {
         return (bytecodeJump(currentBytecode) ||
         bytecodeInvoke(currentBytecode) ||
@@ -159,12 +177,21 @@ public class Util {
         currentBytecode == Opcodes.OP_MULTIANEWARRAY);
     }
 
+    /**
+     * Checks whether a bytecode is a load constant bytecode.
+     * 
+     * @param currentBytecode a {@code byte}.
+     * @return {@code true} iff {@code currentBytecode} is a load constant bytecode.
+     */
     static boolean bytecodeLoadConstant(byte currentBytecode) {
         return (currentBytecode == Opcodes.OP_LDC ||
         currentBytecode == Opcodes.OP_LDC_W ||
         currentBytecode == Opcodes.OP_LDC2_W);
     }
 
+    /**
+     * Methods that are excluded from being test generation targets.
+     */
     private final static Set<String> EXCLUDED;
 
     static {
@@ -236,6 +263,17 @@ public class Util {
         return methods;
     }
 
+
+    /**
+     * Returns a classloader to load the classes on a classpath.
+     * 
+     * @param classpath A {@link List}{@code <}{@link Path}{@code >}.
+     * @return a {@link ClassLoader} that is able to load the classes
+     *         found in {@code classpath}.
+     * @throws MalformedURLException if some path in {@code classpath} 
+     *         is malformed.
+     * @throws SecurityException if a security violation arises.
+     */
     public static ClassLoader getInternalClassloader(List<Path> classpath) throws MalformedURLException, SecurityException {
         final ClassLoader systemClassLoader = ClassLoader.getSystemClassLoader();
         final ClassLoader classLoader;
@@ -265,6 +303,16 @@ public class Util {
         return classLoader;
     }
 
+    /**
+     * Converts a canonical primitive type name to the
+     * corresponding internal primitive type name.
+     * 
+     * @param s a {@link String}.
+     * @return If {@code s} is a canonical primitive type
+     *         name, returns the corresponding internal primitive
+     *         type name; otherwise, returns {@code s}.
+     * @throws NullPointerException if {@code s == null}.
+     */
     private static final String convertPrimitiveTypes(String s) {
         if (s.equals("boolean")) {
             return "Z";
@@ -289,6 +337,16 @@ public class Util {
         }
     }
 
+    /**
+     * Adds a reference mark to its parameter
+     * 
+     * @param s a {@link String}.
+     * @return If {@code s} is an internal primitive type
+     *         name, or {@code s}
+     *         starts by {@code '['}, returns {@code s}; 
+     *         otherwise, returns {@code "L" + s + ";"}. 
+     * @throws NullPointerException if {@code s == null}.
+     */
     private static final String addReferenceMark(String s) {
         if (s.equals("Z") ||
         s.equals("B") ||
@@ -306,7 +364,15 @@ public class Util {
         }
     }
 
-    public static final String stringifyPathCondition(Collection<Clause> pathCondition) {
+    /**
+     * Converts a path condition to a {@link String}.
+     * 
+     * @param pathCondition a sequence (more precisely, an {@link Iterable})
+     *        of {@link Clause}s.
+     * @return a {@link String} representation of {@code pathCondition}.
+     * @throws NullPointerException if {@code pathCondition == null}.
+     */
+    public static final String stringifyPathCondition(Iterable<Clause> pathCondition) {
         final StringBuilder retVal = new StringBuilder();
         boolean first = true;
         for (Clause c : pathCondition) {
@@ -339,4 +405,9 @@ public class Util {
         }
         return retVal.toString();
     }
+    
+    /**
+     * Do not instantiate!
+     */
+    private Util() { }
 }

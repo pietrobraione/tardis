@@ -1,4 +1,4 @@
-package tardis.implementation;
+package tardis;
 
 import java.util.Arrays;
 import java.util.List;
@@ -13,9 +13,29 @@ import org.kohsuke.args4j.spi.OneArgumentOptionHandler;
 import org.kohsuke.args4j.spi.Parameters;
 import org.kohsuke.args4j.spi.Setter;
 
-public class MultiSignatureOptionHandler extends DelimitedOptionHandler<List<String>> {
+/**
+ * A {@link DelimitedOptionHandler} for lists of method signatures.
+ * 
+ * @author Pietro Braione
+ */
+final class MultiSignatureOptionHandler extends DelimitedOptionHandler<List<String>> {
+    /**
+     * Character used as separator within a signature.
+     */
     private static final String SIGNATURE_SEPARATOR = ":";
+    
+    /**
+     * Character used to separate different signatures.
+     */
     private static final String LIST_SEPARATOR = ";";
+    
+    /**
+     * Constructor.
+     * 
+     * @param parser A {@link CmdLineParser}.
+     * @param option An {@link OptionDef}.
+     * @param setter A {@link Setter}.
+     */
     public MultiSignatureOptionHandler(CmdLineParser parser, OptionDef option, Setter<? super List<String>> setter) {
         super(parser, option, setter, LIST_SEPARATOR, new OneArgumentOptionHandler<List<String>>(parser, option, setter) {
             @Override

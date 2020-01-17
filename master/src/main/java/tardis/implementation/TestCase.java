@@ -4,10 +4,33 @@ import java.nio.file.Path;
 
 import tardis.Options;
 
+/**
+ * A test case, i.e., a test method in a given test class.
+ * It is immutable.
+ * 
+ * @author Pietro Braione
+ */
 public class TestCase {
+    /**
+     * The name of the class of the test method.
+     */
     private final String className;
+    
+    /**
+     * The descriptor of the parameters of the 
+     * test method.
+     */
     private final String methodDescriptor;
+    
+    /**
+     * The name of the test method.
+     */
     private final String methodName;
+    
+    /**
+     * The {@link Path} of the source file of the 
+     * test class.
+     */
     private final Path sourcePath;
 
     /**
@@ -38,33 +61,44 @@ public class TestCase {
         this.className = className;
         this.methodDescriptor = methodDescriptor;
         this.methodName = methodName;
-        this.sourcePath = sourceDir.resolve(className + ".java");
+        this.sourcePath = sourceDir.resolve(this.className + ".java");
     }
 
     /**
-     * Copy constructor.
+     * Returns the test class name.
      * 
-     * @param otherTc a {@link TestCase}.
+     * @return {@link String}, the name of the class of the test method.
      */
-    public TestCase(TestCase otherTc) {
-        this.className = otherTc.getClassName();
-        this.methodDescriptor = otherTc.getMethodDescriptor();
-        this.methodName = otherTc.getMethodName();
-        this.sourcePath = otherTc.getSourcePath();
-    }
-
-    public String getClassName(){
+    public String getClassName() {
         return this.className;
     }
 
-    public String getMethodDescriptor(){
+    /**
+     * Returns the test method descriptor.
+     * 
+     * @return a {@link String}, the descriptor of the 
+     *         parameters of the test method.
+     */
+    public String getMethodDescriptor() {
         return this.methodDescriptor;
     }
 
-    public String getMethodName(){
+    /**
+     * Returns the test method name.
+     * 
+     * @return a {@link String}, the name of the test method.
+     */
+    public String getMethodName() {
         return this.methodName;
     }
 
+    /**
+     * Returns the source file of 
+     * the test class.
+     * 
+     * @return The {@link Path} of the 
+     *         source file of the test class.
+     */
     public Path getSourcePath() {
         return this.sourcePath;
     }
