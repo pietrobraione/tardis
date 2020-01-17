@@ -35,7 +35,6 @@ import tardis.implementation.PerformerEvosuiteInitException;
 import tardis.implementation.PerformerJBSE;
 import tardis.implementation.QueueInputOutputBuffer;
 import tardis.implementation.TestCase;
-import tardis.implementation.Util;
 
 /**
  * TARDIS main class.
@@ -99,7 +98,7 @@ public final class Main {
             }
 
             //starts everything
-            System.out.println("[MAIN    ] This is " + Util.getName() + ", version " + Util.getVersion() + ", " + '\u00a9' + " 2017-2020 " + Util.getVendor());
+            System.out.println("[MAIN    ] This is " + getName() + ", version " + getVersion() + ", " + '\u00a9' + " 2017-2020 " + getVendor());
             final DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss");
             System.out.println("[MAIN    ] Starting at " + dtf.format(LocalDateTime.now()) + ", target is " + (this.o.getTargetMethod() == null ? ("class " + this.o.getTargetClass()) : ("method " + this.o.getTargetMethod().get(0) + ":" + this.o.getTargetMethod().get(1) + ":" + this.o.getTargetMethod().get(2))));
             performerJBSE.start();
@@ -144,6 +143,11 @@ public final class Main {
         }
     }
 
+    /**
+     * Generates a seed for the Evosuite performer, 
+     * @return
+     * @throws SecurityException
+     */
     private ArrayList<JBSEResult> generateSeedForPerformerEvosuite() throws SecurityException {
         //this is the "no initial test case" situation
         final ArrayList<JBSEResult> retVal = new ArrayList<>();
@@ -173,6 +177,40 @@ public final class Main {
         retVal.add(new EvosuiteResult(this.o.getTargetMethod(), tc, 0));
         return retVal;
     }
+    
+    /**
+     * Returns the name of this application, as resulting
+     * from the containing jar file.
+     * 
+     * @return a {@link String} or {@code null} if this 
+     *         class is not packaged in a jar file.
+     */
+    public static String getName() {
+        return Main.class.getPackage().getImplementationTitle();
+    }
+
+    /**
+     * Returns the vendor of this application, as resulting
+     * from the containing jar file.
+     * 
+     * @return a {@link String} or {@code null} if this 
+     *         class is not packaged in a jar file.
+     */
+    public static String getVendor() {
+        return Main.class.getPackage().getImplementationVendor();
+    }
+
+    /**
+     * Returns the version of this application, as resulting
+     * from the containing jar file.
+     * 
+     * @return a {@link String} or {@code null} if this 
+     *         class is not packaged in a jar file.
+     */
+    public static String getVersion() {
+        return Main.class.getPackage().getImplementationVersion();
+    }
+
 
     //Here starts the static part of the class, for managing the command line
 
@@ -201,6 +239,13 @@ public final class Main {
         System.exit(exitCode);
     }
 
+    /**
+     * Processes the command line arguments so they
+     * can be parsed by the command line parser.
+     * 
+     * @param args the {@link String}{@code []} from the command line.
+     * @return a processed {@link String}{@code []}.
+     */
     private static String[] processArgs(final String[] args) {
         final Pattern argPattern = Pattern.compile("(-[a-zA-Z_-]+)=(.*)");
         final Pattern quotesPattern = Pattern.compile("^['\"](.*)['\"]$");
@@ -225,6 +270,11 @@ public final class Main {
         return processedArgs.toArray(new String[0]);
     }
 
+    /**
+     * Prints usage on the standard error.
+     * 
+     * @param parser a {@link CmdLineParser}.
+     */
     private static void printUsage(final CmdLineParser parser) {
         System.err.println("Usage: java " + Main.class.getName() + " <options>");
         System.err.println("where <options> are:");

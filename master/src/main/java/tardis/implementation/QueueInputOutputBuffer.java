@@ -14,7 +14,7 @@ import tardis.framework.OutputBuffer;
  *
  * @param <E> the type of the items stored in the buffer.
  */
-public class QueueInputOutputBuffer<E> implements InputBuffer<E>, OutputBuffer<E> {
+public final class QueueInputOutputBuffer<E> implements InputBuffer<E>, OutputBuffer<E> {
     private final LinkedBlockingQueue<E> queue = new LinkedBlockingQueue<>();
 
     @Override

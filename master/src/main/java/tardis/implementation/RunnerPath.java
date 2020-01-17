@@ -61,7 +61,7 @@ import jbse.val.ReferenceSymbolic;
 import jbse.val.Value;
 import tardis.Options;
 
-public class RunnerPath implements AutoCloseable {
+final class RunnerPath implements AutoCloseable {
     private static final String SWITCH_CHAR = System.getProperty("os.name").toLowerCase().contains("windows") ? "/" : "-";
 
     private final String[] classpath;

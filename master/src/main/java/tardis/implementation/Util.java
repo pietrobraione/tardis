@@ -38,39 +38,6 @@ import tardis.Options;
  */
 public final class Util {
     /**
-     * Returns the name of this application, as resulting
-     * from the containing jar file.
-     * 
-     * @return a {@link String} or {@code null} if this 
-     *         class is not packaged in a jar file.
-     */
-    public static String getName() {
-        return Util.class.getPackage().getImplementationTitle();
-    }
-
-    /**
-     * Returns the vendor of this application, as resulting
-     * from the containing jar file.
-     * 
-     * @return a {@link String} or {@code null} if this 
-     *         class is not packaged in a jar file.
-     */
-    public static String getVendor() {
-        return Util.class.getPackage().getImplementationVendor();
-    }
-
-    /**
-     * Returns the version of this application, as resulting
-     * from the containing jar file.
-     * 
-     * @return a {@link String} or {@code null} if this 
-     *         class is not packaged in a jar file.
-     */
-    public static String getVersion() {
-        return Util.class.getPackage().getImplementationVersion();
-    }
-
-    /**
      * Converts an iterable to a stream.
      * See <a href="https://stackoverflow.com/a/23177907/450589">https://stackoverflow.com/a/23177907/450589</a>.
      * @param it an {@link Iterable}{@code <T>}.
@@ -216,7 +183,7 @@ public final class Util {
      * @throws SecurityException 
      * @throws MalformedURLException if some path in {@code o.}{@link Options#getClassesPath() getClassesPath()} does not exist.
      */
-    public static List<List<String>> getVisibleTargetMethods(Options o) 
+    static List<List<String>> getVisibleTargetMethods(Options o) 
     throws ClassNotFoundException, MalformedURLException, SecurityException {
         final String className = o.getTargetClass();
         final boolean onlyPublic = (o.getVisibility() == Visibility.PUBLIC);
@@ -245,26 +212,6 @@ public final class Util {
     }
 
     /**
-     * Returns the target method of the target class.
-     * 
-     * @param o an {@link Options} object. It must be {@code o.}{@link Options#getTargetMethod() getTargeMethod()}{@code  != null}.
-     * @return a {@link List}{@code <}{@link List}{@code <}{@link String}{@code >>} containing exactly one element,
-     *         derived from {@code o.}{@link Options#getTargeMethod() getTargeMethod()}. The element (a {@link List}{@code <}{@link String}{@code >})
-     *         has three elements and is a method signature.
-     * @throws NullPointerException if {@code o.}{@link Options#getTargetMethod() getTargeMethod()}{@code  == null}.
-     */
-    public static List<List<String>> getUniqueTargetMethod(Options o) {
-        final ArrayList<String> targetMethod = new ArrayList<>();
-        targetMethod.add(o.getTargetMethod().get(0));
-        targetMethod.add(o.getTargetMethod().get(1));
-        targetMethod.add(o.getTargetMethod().get(2));
-        final List<List<String>> methods = new ArrayList<>();
-        methods.add(targetMethod);
-        return methods;
-    }
-
-
-    /**
      * Returns a classloader to load the classes on a classpath.
      * 
      * @param classpath A {@link List}{@code <}{@link Path}{@code >}.
@@ -274,7 +221,7 @@ public final class Util {
      *         is malformed.
      * @throws SecurityException if a security violation arises.
      */
-    public static ClassLoader getInternalClassloader(List<Path> classpath) throws MalformedURLException, SecurityException {
+    private static ClassLoader getInternalClassloader(List<Path> classpath) throws MalformedURLException, SecurityException {
         final ClassLoader systemClassLoader = ClassLoader.getSystemClassLoader();
         final ClassLoader classLoader;
         if (classpath == null || classpath.size() == 0) {
@@ -372,7 +319,7 @@ public final class Util {
      * @return a {@link String} representation of {@code pathCondition}.
      * @throws NullPointerException if {@code pathCondition == null}.
      */
-    public static final String stringifyPathCondition(Iterable<Clause> pathCondition) {
+    static final String stringifyPathCondition(Iterable<Clause> pathCondition) {
         final StringBuilder retVal = new StringBuilder();
         boolean first = true;
         for (Clause c : pathCondition) {

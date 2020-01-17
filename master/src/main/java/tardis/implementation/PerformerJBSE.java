@@ -139,7 +139,7 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
                     if (this.treePath.containsPath(currentPC)) {
                         continue;
                     }
-                    final JBSEResult output = new JBSEResult(item, initialState, preState, newState, atJump, (atJump ? targetBranches.get(i) : null), stringLiterals, currentDepth);
+                    final JBSEResult output = new JBSEResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), initialState, preState, newState, atJump, (atJump ? targetBranches.get(i) : null), stringLiterals, currentDepth);
                     this.getOutputBuffer().add(output);
                     this.treePath.insertPath(currentPC);
                     System.out.println("[JBSE    ] From test case " + tc.getClassName() + " generated path condition " + stringifyPathCondition(shorten(currentPC)) + (atJump ? (" aimed at branch " + targetBranches.get(i)) : ""));

@@ -12,7 +12,7 @@ import jbse.mem.Clause;
  * 
  * @author Pietro Braione
  */
-public final class TreePath {
+final class TreePath {
     /**
      * A node in the {@link TreePath}.
      * 

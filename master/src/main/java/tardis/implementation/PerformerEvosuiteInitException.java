@@ -6,7 +6,7 @@ package tardis.implementation;
  * 
  * @author Pietro Braione
  */
-public class PerformerEvosuiteInitException extends Exception {
+public final class PerformerEvosuiteInitException extends Exception {
     /**
      * The serial version UID of the {@link PerformerEvosuiteInitException} objects.
      */

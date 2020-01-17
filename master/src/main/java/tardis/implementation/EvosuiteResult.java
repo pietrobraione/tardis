@@ -5,7 +5,7 @@ import java.util.List;
 /**
  * A work item produced by the Evosuite performer and 
  * consumed by the JBSE performer. It encapsulates a 
- * {@link TestCase}.
+ * {@link TestCase}. It is immutable.
  * 
  * @author Pietro Braione
  */
