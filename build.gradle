@@ -2,11 +2,11 @@ allprojects {
     apply plugin: 'java'
     apply plugin: 'maven'
     group = 'tardis'
-    version = '0.1.0-SNAPSHOT'
+    version = '0.2.0-SNAPSHOT'
 
     repositories {
         maven {
-            url = 'http://repo.maven.apache.org/maven2'
+            url = 'https://repo.maven.apache.org/maven2'
         }
     }
 
