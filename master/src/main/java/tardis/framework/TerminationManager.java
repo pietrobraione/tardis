@@ -29,7 +29,7 @@ public final class TerminationManager {
     
     /**
      * The {@link Thread} that waits for {@link #timeoutDuration} and then stops
-     * the {@link #performers} by interrupting {@link #terminationDetector}.
+     * the {@link #performers} by interrupting {@link #detectorTermination}.
      */
     private final Thread detectorTimeout;
     
@@ -37,7 +37,7 @@ public final class TerminationManager {
      * The {@link Thread} that periodically polls the {@link #performers}
      * to determine whether they are at the fixpoint, and finally stops them.
      */
-    private final Thread terminationDetector;
+    private final Thread detectorTermination;
     
     /**
      * Set to {@code true} by {@link #detectorTimeout} upon timeout.
@@ -73,7 +73,7 @@ public final class TerminationManager {
                 this.timedOut = true;
             }
         });
-        this.terminationDetector = new Thread(() -> {
+        this.detectorTermination = new Thread(() -> {
             while (true) {
                 try {
                     TimeUnit.SECONDS.sleep(1);
@@ -144,7 +144,7 @@ public final class TerminationManager {
      */
     public void start() {
         this.detectorTimeout.start();
-        this.terminationDetector.start();
+        this.detectorTermination.start();
     }
 
     /**
@@ -156,6 +156,6 @@ public final class TerminationManager {
      *         has interrupted the invoking thread.
      */
     public void waitTermination() throws InterruptedException {
-        this.terminationDetector.join();
+        this.detectorTermination.join();
     }
 }
