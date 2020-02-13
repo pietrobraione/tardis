@@ -171,41 +171,50 @@ public final class Util {
     }	
 
     /**
-     * Returns the externally callable methods of the target class.
+     * Returns the target methods.
      * 
      * @param o an {@link Options} object.
-     * @return a {@link List}{@code <}{@link List}{@code <}{@link String}{@code >>} of the methods
-     *         of the class {@code o.}{@link Options#getTargetClass() getTargetClass()} that are not private, nor synthetic, nor one of the 
-     *         {@code equals}, {@code hashCode}, {@code toString}, {@code clone}, {@code immutableEnumSet}.
-     *         If {@code onlyPublic == true} only the public methods are returned. Each {@link List}{@code <}{@link String}{@code >}
-     *         has three elements and is a method signature.
+     * @return a {@link List}{@code <}{@link List}{@code <}{@link String}{@code >>}, where each 
+     *         {@link List}{@code <}{@link String}{@code >} that is a member of the return value
+     *         has three elements and is a method signature. If 
+     *         {@code o.}{@link Options#getTargetClass() getTargetClass}{@code () == null}, 
+     *         the return value contains as its only element {@code o.}{@link Options#getTargetMethod()}, otherwise
+     *         the return value contains the methods
+     *         of {@code o.}{@link Options#getTargetClass() getTargetClass()} that are not private, nor synthetic, 
+     *         nor {@code equals}, or {@code hashCode}, or {@code toString}, or {@code clone}, or {@code immutableEnumSet}
+     *         methods (if {@code o.}{@link Options#getVisibility() getVisibility}{@code () == }{@link Visibility#PUBLIC}, 
+     *         only the signatures public methods are returned, otherwise all the signatures of the methods with 
+     *         nonprivate visibility are returned). 
      * @throws ClassNotFoundException if the class is not in {@code o.}{@link Options#getClassesPath() getClassesPath()}.
-     * @throws SecurityException 
+     * @throws SecurityException if a security violation arises.
      * @throws MalformedURLException if some path in {@code o.}{@link Options#getClassesPath() getClassesPath()} does not exist.
      */
-    static List<List<String>> getVisibleTargetMethods(Options o) 
+    static List<List<String>> getTargetMethods(Options o) 
     throws ClassNotFoundException, MalformedURLException, SecurityException {
         final String className = o.getTargetClass();
-        final boolean onlyPublic = (o.getVisibility() == Visibility.PUBLIC);
-        final ClassLoader ic = getInternalClassloader(o.getClassesPath());
-        final Class<?> clazz = ic.loadClass(className.replace('/', '.'));
         final List<List<String>> methods = new ArrayList<>();
-        for (Method m : clazz.getDeclaredMethods()) {
-            if (!EXCLUDED.contains(m.getName()) &&
-            ((onlyPublic && (m.getModifiers() & Modifier.PUBLIC) != 0) || (m.getModifiers() & Modifier.PRIVATE) == 0) &&
-            !m.isSynthetic()) {
-                final List<String> methodSignature = new ArrayList<>(3);
-                methodSignature.add(className);
-                methodSignature.add("(" +
-                Arrays.stream(m.getParameterTypes())
-                .map(c -> c.getName())
-                .map(s -> s.replace('.', '/'))
-                .map(Util::convertPrimitiveTypes)
-                .map(Util::addReferenceMark)
-                .collect(Collectors.joining()) +
-                ")" + addReferenceMark(convertPrimitiveTypes(m.getReturnType().getName().replace('.', '/'))));
-                methodSignature.add(m.getName());
-                methods.add(methodSignature);
+        if (className == null) {
+            methods.add(o.getTargetMethod());
+        } else {
+            final boolean onlyPublic = (o.getVisibility() == Visibility.PUBLIC);
+            final ClassLoader ic = getInternalClassloader(o.getClassesPath());
+            final Class<?> clazz = ic.loadClass(className.replace('/', '.'));
+            for (Method m : clazz.getDeclaredMethods()) {
+                if (!EXCLUDED.contains(m.getName()) &&
+                    ((onlyPublic && (m.getModifiers() & Modifier.PUBLIC) != 0) || (m.getModifiers() & Modifier.PRIVATE) == 0) &&
+                    !m.isSynthetic()) {
+                    final List<String> methodSignature = new ArrayList<>(3);
+                    methodSignature.add(className);
+                    methodSignature.add("(" + Arrays.stream(m.getParameterTypes())
+                                                    .map(c -> c.getName())
+                                                    .map(s -> s.replace('.', '/'))
+                                                    .map(Util::convertPrimitiveTypes)
+                                                    .map(Util::addReferenceMark)
+                                                    .collect(Collectors.joining()) +
+                                        ")" + addReferenceMark(convertPrimitiveTypes(m.getReturnType().getName().replace('.', '/'))));
+                    methodSignature.add(m.getName());
+                    methods.add(methodSignature);
+                }
             }
         }
         return methods;

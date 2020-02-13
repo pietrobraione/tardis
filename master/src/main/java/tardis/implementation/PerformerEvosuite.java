@@ -1,7 +1,9 @@
 package tardis.implementation;
 
+import static jbse.bc.ClassLoaders.CLASSLOADER_APP;
 import static jbse.common.Type.splitParametersDescriptors;
-import static tardis.implementation.Util.getVisibleTargetMethods;
+
+import static tardis.implementation.Util.getTargetMethods;
 import static tardis.implementation.Util.shorten;
 import static tardis.implementation.Util.stream;
 import static tardis.implementation.Util.stringifyPathCondition;
@@ -17,7 +19,9 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -47,9 +51,28 @@ import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.visitor.ModifierVisitor;
 import com.github.javaparser.ast.visitor.Visitable;
 
+import jbse.bc.ClassFile;
+import jbse.bc.ClassFileFactoryJavassist;
+import jbse.bc.Classpath;
+import jbse.bc.Signature;
+import jbse.bc.exc.BadClassFileVersionException;
+import jbse.bc.exc.ClassFileIllFormedException;
+import jbse.bc.exc.ClassFileNotAccessibleException;
+import jbse.bc.exc.ClassFileNotFoundException;
+import jbse.bc.exc.IncompatibleClassFileException;
+import jbse.bc.exc.InvalidClassFileFactoryClassException;
+import jbse.bc.exc.MethodCodeNotFoundException;
+import jbse.bc.exc.MethodNotFoundException;
+import jbse.bc.exc.PleaseLoadClassException;
+import jbse.bc.exc.WrongClassNameException;
+import jbse.common.exc.InvalidInputException;
 import jbse.mem.Clause;
 import jbse.mem.State;
+import jbse.mem.exc.CannotAssumeSymbolicObjectException;
 import jbse.mem.exc.FrozenStateException;
+import jbse.mem.exc.HeapMemoryExhaustedException;
+import jbse.val.HistoryPoint;
+import jbse.val.SymbolFactory;
 import sushi.formatters.StateFormatterSushiPathCondition;
 import tardis.Options;
 import tardis.framework.InputBuffer;
@@ -67,7 +90,8 @@ import tardis.framework.Performer;
 public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
     private final List<List<String>> visibleTargetMethods;
     private final JavaCompiler compiler;
-    private final String classesPath;
+    private final List<Path> classesPath;
+    private final String classesPathString;
     private final Path tmpPath;
     private final Path tmpBinPath;
     private final Path tmpWrapPath;
@@ -77,12 +101,15 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
     private final long timeBudgetSeconds;
     private final boolean evosuiteNoDependency;
     private final boolean useMOSA;
+    private final String classpathEvosuite;
+    private final String classpathCompilationTest;
+    private final String classpathCompilationWrapper;
     private int testCount;
 
     public PerformerEvosuite(Options o, InputBuffer<JBSEResult> in, OutputBuffer<EvosuiteResult> out) throws PerformerEvosuiteInitException {
         super(in, out, o.getNumOfThreads(), (o.getUseMOSA() ? o.getNumMOSATargets() : 1), o.getTimeoutMOSATaskCreationDuration(), o.getTimeoutMOSATaskCreationUnit());
         try {
-            this.visibleTargetMethods = getVisibleTargetMethods(o);
+            this.visibleTargetMethods = getTargetMethods(o);
         } catch (ClassNotFoundException | MalformedURLException | SecurityException e) {
             throw new PerformerEvosuiteInitException(e);
         }
@@ -90,7 +117,8 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         if (this.compiler == null) {
             throw new PerformerEvosuiteInitException("Failed to find a system Java compiler. Did you install a JDK?");
         }
-        this.classesPath = String.join(File.pathSeparator, stream(o.getClassesPath()).map(Object::toString).toArray(String[]::new)); 
+        this.classesPath = o.getClassesPath();
+        this.classesPathString = String.join(File.pathSeparator, stream(o.getClassesPath()).map(Object::toString).toArray(String[]::new)); 
         this.tmpPath = o.getTmpDirectoryPath();
         this.tmpWrapPath = o.getTmpWrappersDirectoryPath();
         this.tmpBinPath = o.getTmpBinDirectoryPath();
@@ -100,6 +128,9 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         this.timeBudgetSeconds = o.getEvosuiteTimeBudgetUnit().toSeconds(o.getEvosuiteTimeBudgetDuration());
         this.evosuiteNoDependency = o.getEvosuiteNoDependency();
         this.useMOSA = o.getUseMOSA();
+        this.classpathEvosuite = this.classesPathString + File.pathSeparator + this.sushiLibPath.toString() + (this.useMOSA ? "" : (File.pathSeparator + this.tmpBinPath.toString()));
+        this.classpathCompilationTest = this.tmpBinPath.toString() + File.pathSeparator + this.classesPathString + File.pathSeparator + this.sushiLibPath.toString() + File.pathSeparator + this.evosuitePath.toString();
+        this.classpathCompilationWrapper = this.classesPathString + File.pathSeparator + this.sushiLibPath.toString();
         this.testCount = (o.getInitialTestCase() == null ? 0 : 1);
     }
 
@@ -107,7 +138,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
     protected Runnable makeJob(List<JBSEResult> items) {
         final int testCountInitial = this.testCount;
         this.testCount += items.size();
-        final Runnable job = (items.get(0).isSeed() && !items.get(0).hasTargetMethod() ? 
+        final Runnable job = (items.get(0).isSeed() ? 
                               () -> generateTestsAndScheduleJBSESeed(testCountInitial, items.get(0)) :
                               () -> generateTestsAndScheduleJBSE(testCountInitial, items));
         return job;
@@ -124,44 +155,78 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
      *              {@code item.}{@link JBSEResult#isSeed() isSeed}{@code () == true && item.}{@link JBSEResult#hasTargetMethod() hasTargetMethod}{@code () == false}.
      */
     private void generateTestsAndScheduleJBSESeed(int testCountInitial, JBSEResult item) {
-        //builds the EvoSuite command line
-        final List<String> evosuiteCommand = buildEvoSuiteCommandSeed(item); 
-
-        //launches EvoSuite
-        final Path evosuiteLogFilePath = this.tmpPath.resolve("evosuite-log-seed.txt");
-        final Process processEvosuite;
-        try {
-            processEvosuite = launchProcess(evosuiteCommand, evosuiteLogFilePath);
-            System.out.println("[EVOSUITE] Launched EvoSuite seed process, command line: " + evosuiteCommand.stream().reduce("", (s1, s2) -> { return s1 + " " + s2; }));
-        } catch (IOException e) {
-            System.out.println("[EVOSUITE] Unexpected I/O error while running EvoSuite seed: " + e);
-            return; //TODO throw an exception?
-        }
-
-        //waits for EvoSuite to end
-        try {
-            processEvosuite.waitFor();
-        } catch (InterruptedException e) {
-            //this performer was shut down: kills the EvoSuite job
-            //and return
-            processEvosuite.destroy();
-            return;
-        }
-
-        //splits output
-        final List<JBSEResult> splitItems;
-        try {
-            splitItems = splitEvosuiteSeed(testCountInitial, item);
-        } catch (IOException e) {
-            System.out.println("[EVOSUITE] Unexpected I/O error while splitting EvoSuite seed: " + e);
-            return; //TODO throw an exception?
-        }
+        final boolean isTargetAMethod = (item.getTargetClassName() == null);
         
-        //schedules JBSE
-        int testCount = testCountInitial;
-        for (JBSEResult splitItem : splitItems) {
-            checkTestCompileAndScheduleJBSE(testCount, splitItem);
-            ++testCount;
+        if (isTargetAMethod) {
+            //builds the EvoSuite wrapper
+            emitAndCompileEvoSuiteWrapperSeed(testCountInitial, item);
+            
+            //builds the EvoSuite command line
+            final List<String> evosuiteCommand = buildEvoSuiteCommand(testCountInitial, Collections.singletonList(item));
+
+            //launches EvoSuite
+            final Path evosuiteLogFilePath = this.tmpPath.resolve("evosuite-log-" + testCountInitial + ".txt");
+            final Process processEvosuite;
+            try {
+                processEvosuite = launchProcess(evosuiteCommand, evosuiteLogFilePath);
+                System.out.println("[EVOSUITE] Launched EvoSuite seed process, command line: " + evosuiteCommand.stream().reduce("", (s1, s2) -> { return s1 + " " + s2; }));
+            } catch (IOException e) {
+                System.out.println("[EVOSUITE] Unexpected I/O error while running EvoSuite: " + e);
+                return; //TODO throw an exception?
+            }
+
+            //waits for EvoSuite to end
+            try {
+                processEvosuite.waitFor();
+            } catch (InterruptedException e) {
+                //this performer was shut down: kills the EvoSuite job
+                //and return
+                processEvosuite.destroy();
+                return;
+            }
+
+            //schedules JBSE
+            checkTestCompileAndScheduleJBSE(testCountInitial, item);
+        } else {
+            //builds the EvoSuite command line
+            final List<String> evosuiteCommand = buildEvoSuiteCommandSeed(item); 
+
+            //launches EvoSuite
+            final Path evosuiteLogFilePath = this.tmpPath.resolve("evosuite-log-seed.txt");
+            final Process processEvosuite;
+            try {
+                processEvosuite = launchProcess(evosuiteCommand, evosuiteLogFilePath);
+                System.out.println("[EVOSUITE] Launched EvoSuite seed process, command line: " + evosuiteCommand.stream().reduce("", (s1, s2) -> { return s1 + " " + s2; }));
+            } catch (IOException e) {
+                System.out.println("[EVOSUITE] Unexpected I/O error while running EvoSuite seed: " + e);
+                return; //TODO throw an exception?
+            }
+
+            //waits for EvoSuite to end
+            try {
+                processEvosuite.waitFor();
+            } catch (InterruptedException e) {
+                //this performer was shut down: kills the EvoSuite job
+                //and return
+                processEvosuite.destroy();
+                return;
+            }
+
+            //splits output
+            final List<JBSEResult> splitItems;
+            try {
+                splitItems = splitEvosuiteSeed(testCountInitial, item);
+            } catch (IOException e) {
+                System.out.println("[EVOSUITE] Unexpected I/O error while splitting EvoSuite seed: " + e);
+                return; //TODO throw an exception?
+            }
+
+            //schedules JBSE
+            int testCount = testCountInitial;
+            for (JBSEResult splitItem : splitItems) {
+                checkTestCompileAndScheduleJBSE(testCount, splitItem);
+                ++testCount;
+            }
         }
     }
     
@@ -273,7 +338,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         try {
             initialCurrentClassName = initialState.getStack().get(0).getCurrentClass().getClassName();
         } catch (FrozenStateException e) {
-            System.out.println("[EVOSUITE] Unexpected error while creating EvoSuite wrapper directory: The initial state is frozen.");
+            System.out.println("[EVOSUITE] Unexpected internal error while creating EvoSuite wrapper directory: The initial state is frozen.");
             fmt.cleanup();
             return null; //TODO throw an exception
         }
@@ -291,13 +356,49 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
             w.write(fmt.emit());
         } catch (IOException e) {
             System.out.println("[EVOSUITE] Unexpected I/O error while creating EvoSuite wrapper " + wrapperFilePath.toString() + ": " + e);
-            //TODO throw an exception
+            fmt.cleanup();
+            return null; //TODO throw an exception
         }
         fmt.cleanup();
 
         return wrapperFilePath;
     }
+    
+    /**
+     * Emits and compiles a dummy EvoSuite wrapper that causes the generation
+     * of a single test case for exactly one method.
+     * 
+     * @param testCount an {@code int}, the number used to identify the generated 
+     *        test.
+     * @param items the seed {@link JBSEResult}.
+     */
+    private void emitAndCompileEvoSuiteWrapperSeed(int testCount, JBSEResult item) {
+        try {
+            final Classpath cp = new Classpath(Paths.get(System.getProperty("java.home", "")), 
+                                               new ArrayList<>(Arrays.stream(System.getProperty("java.ext.dirs", "").split(File.pathSeparator))
+                                               .map(s -> Paths.get(s)).collect(Collectors.toList())), 
+                                               this.classesPath);
+            final State s = new State(true, HistoryPoint.startingPreInitial(true), 1_000, 100_000, cp, ClassFileFactoryJavassist.class, new HashMap<>(), new SymbolFactory());
+            final ClassFile cf = s.getClassHierarchy().loadCreateClass(CLASSLOADER_APP, item.getTargetMethodClassName(), true);
+            s.pushFrameSymbolic(cf, new Signature(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName()));
+            final Path wrapperFilePath = emitEvoSuiteWrapper(testCount, s, s.clone(), Collections.emptyMap());
+            final Path javacLogFilePath = this.tmpPath.resolve("javac-log-wrapper-" + testCount + ".txt");
+            final String[] javacParameters = { "-cp", this.classpathCompilationWrapper, "-d", this.tmpBinPath.toString(), wrapperFilePath.toString() };
+            try (final OutputStream w = new BufferedOutputStream(Files.newOutputStream(javacLogFilePath))) {
+                this.compiler.run(null, w, w, javacParameters);
+            } catch (IOException e) {
+                System.out.println("[EVOSUITE] Unexpected I/O error while creating seed EvoSuite wrapper compilation log file " + javacLogFilePath.toString() + ": " + e);
+                //TODO throw an exception
+            }
+        } catch (IOException | InvalidClassFileFactoryClassException | InvalidInputException | ClassFileNotFoundException | ClassFileIllFormedException | 
+                 ClassFileNotAccessibleException | IncompatibleClassFileException | PleaseLoadClassException | BadClassFileVersionException | 
+                 WrongClassNameException | CannotAssumeSymbolicObjectException | MethodNotFoundException | MethodCodeNotFoundException | HeapMemoryExhaustedException e) {
+            System.out.println("[EVOSUITE] Unexpected error while creating seed EvoSuite wrapper: " + e);
+            return; //TODO throw an exception
+        }
 
+    }
+    
     /**
      * Emits and compiles all the EvoSuite wrappers.
      * 
@@ -307,7 +408,6 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
      * @param items a {@link List}{@code <}{@link JBSEResult}{@code >}, results of symbolic execution.
      */
     private void emitAndCompileEvoSuiteWrappers(int testCountInitial, List<JBSEResult> items) {
-        final String classpathCompilationWrapper = this.classesPath + File.pathSeparator + this.sushiLibPath.toString();
         int i = testCountInitial;
         for (JBSEResult item : items) {
             final State initialState = item.getInitialState();
@@ -315,11 +415,11 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
             final Map<Long, String> stringLiterals = item.getStringLiterals();
             final Path wrapperFilePath = emitEvoSuiteWrapper(i, initialState, finalState, stringLiterals);
             final Path javacLogFilePath = this.tmpPath.resolve("javac-log-wrapper-" + i + ".txt");
-            final String[] javacParameters = { "-cp", classpathCompilationWrapper, "-d", this.tmpBinPath.toString(), wrapperFilePath.toString() };
+            final String[] javacParameters = { "-cp", this.classpathCompilationWrapper, "-d", this.tmpBinPath.toString(), wrapperFilePath.toString() };
             try (final OutputStream w = new BufferedOutputStream(Files.newOutputStream(javacLogFilePath))) {
                 this.compiler.run(null, w, w, javacParameters);
             } catch (IOException e) {
-                System.out.println("[EVOSUITE] Unexpected I/O error while creating wrapper compilation log file " + javacLogFilePath.toString() + ": " + e);
+                System.out.println("[EVOSUITE] Unexpected I/O error while creating EvoSuite wrapper compilation log file " + javacLogFilePath.toString() + ": " + e);
                 //TODO throw an exception
             }
             ++i;
@@ -338,8 +438,8 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
      *         suitable to be passed to a {@link ProcessBuilder}.
      */
     private List<String> buildEvoSuiteCommandSeed(JBSEResult item) {
-        final String targetClass = item.getTargetClassName().replace('/', '.');
-        final String classpathEvosuite = this.classesPath + File.pathSeparator + this.sushiLibPath.toString() + (this.useMOSA ? "" : (File.pathSeparator + this.tmpBinPath.toString()));
+        final boolean isTargetAMethod = (item.getTargetClassName() == null);
+        final String targetClass = (isTargetAMethod ? item.getTargetMethodClassName() : item.getTargetClassName()).replace('/', '.');
         final List<String> retVal = new ArrayList<String>();
         retVal.add("java");
         retVal.add("-Xmx4G");
@@ -349,7 +449,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         retVal.add(targetClass);
         retVal.add("-mem");
         retVal.add("2048");
-        retVal.add("-DCP=" + classpathEvosuite); 
+        retVal.add("-DCP=" + this.classpathEvosuite); 
         retVal.add("-Dassertions=false");
         retVal.add("-Dglobal_timeout=" + this.timeBudgetSeconds);
         retVal.add("-Dreport_dir=" + this.tmpPath.toString());
@@ -399,7 +499,6 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         final String targetClass = items.get(0).getTargetMethodClassName().replace('/', '.');
         final String targetMethodDescriptor = items.get(0).getTargetMethodDescriptor();
         final String targetMethodName = items.get(0).getTargetMethodName();
-        final String classpathEvosuite = this.classesPath + File.pathSeparator + this.sushiLibPath.toString() + (this.useMOSA ? "" : (File.pathSeparator + this.tmpBinPath.toString()));
         final List<String> retVal = new ArrayList<String>();
         retVal.add("java");
         retVal.add("-Xmx4G");
@@ -409,7 +508,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         retVal.add(targetClass);
         retVal.add("-mem");
         retVal.add("2048");
-        retVal.add("-DCP=" + classpathEvosuite); 
+        retVal.add("-DCP=" + this.classpathEvosuite); 
         retVal.add("-Dassertions=false");
         retVal.add("-Dglobal_timeout=" + this.timeBudgetSeconds);
         retVal.add("-Dreport_dir=" + this.tmpPath.toString());
@@ -845,12 +944,11 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         }
 
         //compiles the generated test
-        final String classpathCompilationTest = this.tmpBinPath.toString() + File.pathSeparator + this.classesPath + File.pathSeparator + this.sushiLibPath.toString() + File.pathSeparator + this.evosuitePath.toString();
         final Path javacLogFilePath = this.tmpPath.resolve("javac-log-test-" +  testCount + ".txt");
-        final String[] javacParametersTestCase = { "-cp", classpathCompilationTest, "-d", this.tmpBinPath.toString(), testCase.toString() };
+        final String[] javacParametersTestCase = { "-cp", this.classpathCompilationTest, "-d", this.tmpBinPath.toString(), testCase.toString() };
         try (final OutputStream w = new BufferedOutputStream(Files.newOutputStream(javacLogFilePath))) {
             if (testCaseScaff != null) {
-                final String[] javacParametersTestScaff = { "-cp", classpathCompilationTest, "-d", this.tmpBinPath.toString(), testCaseScaff.toString() };
+                final String[] javacParametersTestScaff = { "-cp", this.classpathCompilationTest, "-d", this.tmpBinPath.toString(), testCaseScaff.toString() };
                 this.compiler.run(null, w, w, javacParametersTestScaff);
             }
             this.compiler.run(null, w, w, javacParametersTestCase);
