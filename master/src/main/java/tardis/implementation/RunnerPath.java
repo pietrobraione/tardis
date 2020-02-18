@@ -34,6 +34,7 @@ import jbse.dec.exc.DecisionException;
 import jbse.jvm.Runner;
 import jbse.jvm.RunnerBuilder;
 import jbse.jvm.RunnerParameters;
+import jbse.jvm.EngineParameters.BreadthMode;
 import jbse.jvm.EngineParameters.StateIdentificationMode;
 import jbse.jvm.Runner.Actions;
 import jbse.jvm.exc.CannotBacktrackException;
@@ -90,7 +91,8 @@ final class RunnerPath implements AutoCloseable {
         this.targetMethodName = item.getTargetMethodName();
         this.testCase = item.getTestCase();
 
-        //builds the template parameters object for the guided (symbolic) execution
+        //builds the template parameters object for the guided (symbolic) 
+        //and the guiding (concrete) executions
         this.commonParamsGuided = new RunnerParameters();
         this.commonParamsGuiding = new RunnerParameters();
         fillCommonParams(o, item, initialState);
@@ -100,12 +102,14 @@ final class RunnerPath implements AutoCloseable {
     }
     
     private void fillCommonParams(Options o, EvosuiteResult item, State initialState) {
+        //builds the template parameters object for the guided (symbolic) execution
         if (initialState == null) {
             this.commonParamsGuided.addUserClasspath(this.classpath);
             this.commonParamsGuided.setMethodSignature(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName());
         } else {
             this.commonParamsGuided.setStartingState(initialState);
         }
+        this.commonParamsGuided.setBreadthMode(BreadthMode.ALL_DECISIONS_SYMBOLIC);
         if (o.getHeapScope() != null) {
             for (Map.Entry<String, Integer> e : o.getHeapScope().entrySet()) {
                 this.commonParamsGuided.setHeapScope(e.getKey(), e.getValue());
