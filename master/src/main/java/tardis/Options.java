@@ -241,6 +241,9 @@ public final class Options implements Cloneable {
     }
 
     public void setThrottleFactorJBSE(float throttleFactorJBSE) {
+        if (throttleFactorJBSE < 0.0f || throttleFactorJBSE > 1.0f) {
+            return;
+        }
         this.throttleFactorJBSE = throttleFactorJBSE;
     }
 
@@ -249,6 +252,9 @@ public final class Options implements Cloneable {
     }
 
     public void setThrottleFactorEvosuite(float throttleFactorEvosuite) {
+        if (throttleFactorEvosuite < 0.0f || throttleFactorEvosuite > 1.0f) {
+            return;
+        }
         this.throttleFactorEvosuite = throttleFactorEvosuite;
     }
 
