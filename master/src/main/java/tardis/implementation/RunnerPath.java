@@ -256,11 +256,11 @@ final class RunnerPath implements AutoCloseable {
         }
 
         @Override
-        public boolean atTraceEnd() {
+        public boolean atPathEnd() {
             if (this.testDepth < 0) { //running a test up to the end
                 return true;
             } else {
-                return super.atTraceEnd();
+                return super.atPathEnd();
             }
         }
     }
@@ -351,7 +351,7 @@ final class RunnerPath implements AutoCloseable {
                         throw new RuntimeException(e); //TODO better exception!
                     }
                 } //else, do nothing
-                getEngine().stopCurrentTrace();
+                getEngine().stopCurrentPath();
             }
             
             return super.atStepPost();
@@ -371,7 +371,7 @@ final class RunnerPath implements AutoCloseable {
                         throw new RuntimeException(e); //TODO better exception!
                     }
                 } //else, do nothing
-                getEngine().stopCurrentTrace();            
+                getEngine().stopCurrentPath();            
                 return super.atBacktrackPost(bp);
             } else {
                 //we are at a lesser depth than testDepth + 1: no

@@ -64,6 +64,7 @@ import jbse.bc.exc.InvalidClassFileFactoryClassException;
 import jbse.bc.exc.MethodCodeNotFoundException;
 import jbse.bc.exc.MethodNotFoundException;
 import jbse.bc.exc.PleaseLoadClassException;
+import jbse.bc.exc.RenameUnsupportedException;
 import jbse.bc.exc.WrongClassNameException;
 import jbse.common.exc.InvalidInputException;
 import jbse.mem.Clause;
@@ -90,6 +91,7 @@ import tardis.framework.Performer;
 public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
     private final List<List<String>> visibleTargetMethods;
     private final JavaCompiler compiler;
+    private final Path jbseLibraryPath;
     private final List<Path> classesPath;
     private final String classesPathString;
     private final Path tmpPath;
@@ -107,7 +109,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
     private int testCount;
 
     public PerformerEvosuite(Options o, InputBuffer<JBSEResult> in, OutputBuffer<EvosuiteResult> out) throws PerformerEvosuiteInitException {
-        super(in, out, o.getNumOfThreads(), (o.getUseMOSA() ? o.getNumMOSATargets() : 1), o.getTimeoutMOSATaskCreationDuration(), o.getTimeoutMOSATaskCreationUnit());
+        super(in, out, o.getNumOfThreads(), (o.getUseMOSA() ? o.getNumMOSATargets() : 1), o.getThrottleFactorEvosuite(), o.getTimeoutMOSATaskCreationDuration(), o.getTimeoutMOSATaskCreationUnit());
         try {
             this.visibleTargetMethods = getTargetMethods(o);
         } catch (ClassNotFoundException | MalformedURLException | SecurityException e) {
@@ -117,6 +119,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         if (this.compiler == null) {
             throw new PerformerEvosuiteInitException("Failed to find a system Java compiler. Did you install a JDK?");
         }
+        this.jbseLibraryPath = o.getJBSELibraryPath();
         this.classesPath = o.getClassesPath();
         this.classesPathString = String.join(File.pathSeparator, stream(o.getClassesPath()).map(Object::toString).toArray(String[]::new)); 
         this.tmpPath = o.getTmpDirectoryPath();
@@ -336,7 +339,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
 
         final String initialCurrentClassName;
         try {
-            initialCurrentClassName = initialState.getStack().get(0).getCurrentClass().getClassName();
+            initialCurrentClassName = initialState.getStack().get(0).getMethodClass().getClassName();
         } catch (FrozenStateException e) {
             System.out.println("[EVOSUITE] Unexpected internal error while creating EvoSuite wrapper directory: The initial state is frozen.");
             fmt.cleanup();
@@ -374,11 +377,12 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
      */
     private void emitAndCompileEvoSuiteWrapperSeed(int testCount, JBSEResult item) {
         try {
-            final Classpath cp = new Classpath(Paths.get(System.getProperty("java.home", "")), 
+            final Classpath cp = new Classpath(this.jbseLibraryPath,
+                                               Paths.get(System.getProperty("java.home", "")), 
                                                new ArrayList<>(Arrays.stream(System.getProperty("java.ext.dirs", "").split(File.pathSeparator))
                                                .map(s -> Paths.get(s)).collect(Collectors.toList())), 
                                                this.classesPath);
-            final State s = new State(true, HistoryPoint.startingPreInitial(true), 1_000, 100_000, cp, ClassFileFactoryJavassist.class, new HashMap<>(), new SymbolFactory());
+            final State s = new State(true, HistoryPoint.startingPreInitial(true), 1_000, 100_000, cp, ClassFileFactoryJavassist.class, new HashMap<>(), new HashMap<>(), new SymbolFactory());
             final ClassFile cf = s.getClassHierarchy().loadCreateClass(CLASSLOADER_APP, item.getTargetMethodClassName(), true);
             s.pushFrameSymbolic(cf, new Signature(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName()));
             final Path wrapperFilePath = emitEvoSuiteWrapper(testCount, s, s.clone(), Collections.emptyMap());
@@ -392,7 +396,8 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
             }
         } catch (IOException | InvalidClassFileFactoryClassException | InvalidInputException | ClassFileNotFoundException | ClassFileIllFormedException | 
                  ClassFileNotAccessibleException | IncompatibleClassFileException | PleaseLoadClassException | BadClassFileVersionException | 
-                 WrongClassNameException | CannotAssumeSymbolicObjectException | MethodNotFoundException | MethodCodeNotFoundException | HeapMemoryExhaustedException e) {
+                 WrongClassNameException | CannotAssumeSymbolicObjectException | MethodNotFoundException | MethodCodeNotFoundException | 
+                 HeapMemoryExhaustedException | RenameUnsupportedException e) {
             System.out.println("[EVOSUITE] Unexpected error while creating seed EvoSuite wrapper: " + e);
             return; //TODO throw an exception
         }

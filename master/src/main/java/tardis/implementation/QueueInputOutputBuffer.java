@@ -28,7 +28,7 @@ public final class QueueInputOutputBuffer<E> implements InputBuffer<E>, OutputBu
     }
 
     @Override
-    public boolean isEmpty() {
-        return this.queue.isEmpty();
+    public int size() {
+        return this.queue.size();
     }
 }

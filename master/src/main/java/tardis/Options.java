@@ -65,6 +65,16 @@ public final class Options implements Cloneable {
             usage = "The number of threads in the thread pool")
     private int numOfThreads;
 
+    @Option(name = "-throttle_factor_jbse",
+            usage = "The throttle factor for the JBSE thread pool",
+            handler = PercentageOptionHandler.class)
+    private float throttleFactorJBSE = 0.0f;
+
+    @Option(name = "-throttle_factor_evosuite",
+            usage = "The throttle factor for the EvoSuite thread pool",
+            handler = PercentageOptionHandler.class)
+    private float throttleFactorEvosuite = 0.0f;
+
     @Option(name = "-classes",
             usage = "The classpath of the project to analyze",
             handler = MultiPathOptionHandlerPatched.class)
@@ -95,7 +105,7 @@ public final class Options implements Cloneable {
     private Path jbsePath = Paths.get(".", "lib", "jbse.jar");
 
     @Option(name = "-evosuite",
-            usage = "Path to Evosuite or MOSA",
+            usage = "Path to EvoSuite or MOSA",
             handler = PathOptionHandler.class)
     private Path evosuitePath = Paths.get(".", "lib", "evosuite.jar");
 
@@ -113,7 +123,7 @@ public final class Options implements Cloneable {
     private TimeUnit evosuiteTimeBudgetUnit = TimeUnit.SECONDS;
 
     @Option(name = "-evosuite_no_dependency",
-            usage = "Whether the generated tests should have no dependency on the Evosuite runtime")
+            usage = "Whether the generated tests should have no dependency on the EvoSuite runtime")
     private boolean evosuiteNoDependency = false;
 
     @Option(name = "-global_time_budget_duration",
@@ -226,6 +236,22 @@ public final class Options implements Cloneable {
         this.maxDepth = maxdepth;
     }
 
+    public float getThrottleFactorJBSE() {
+        return this.throttleFactorJBSE;
+    }
+
+    public void setThrottleFactorJBSE(float throttleFactorJBSE) {
+        this.throttleFactorJBSE = throttleFactorJBSE;
+    }
+
+    public float getThrottleFactorEvosuite() {
+        return this.throttleFactorEvosuite;
+    }
+
+    public void setThrottleFactorEvosuite(float throttleFactorEvosuite) {
+        this.throttleFactorEvosuite = throttleFactorEvosuite;
+    }
+
     public int getNumOfThreads() {
         return this.numOfThreads;
     }
@@ -319,9 +345,8 @@ public final class Options implements Cloneable {
             new ArrayList<>(Arrays.stream(System.getProperty("java.ext.dirs").split(File.pathSeparator))
             .map(s -> Paths.get(s)).collect(Collectors.toList()));
         final ArrayList<Path> userClasspath = new ArrayList<>();
-        userClasspath.add(getJBSELibraryPath());
         userClasspath.addAll(getClassesPath());
-        return new Classpath(Paths.get(System.getProperty("java.home")), extClasspath, userClasspath);
+        return new Classpath(getJBSELibraryPath(), Paths.get(System.getProperty("java.home")), extClasspath, userClasspath);
     }
 
     public int getEvosuiteTimeBudgetDuration() {

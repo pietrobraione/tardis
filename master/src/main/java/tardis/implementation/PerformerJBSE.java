@@ -35,7 +35,7 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
     private final HashMap<String, State> initialStateCache = new HashMap<>();
 
     public PerformerJBSE(Options o, InputBuffer<EvosuiteResult> in, OutputBuffer<JBSEResult> out, CoverageSet coverageSet) {
-        super(in, out, o.getNumOfThreads(), 1, o.getGlobalTimeBudgetDuration(), o.getGlobalTimeBudgetUnit());
+        super(in, out, o.getNumOfThreads(), 1, o.getThrottleFactorJBSE(), o.getGlobalTimeBudgetDuration(), o.getGlobalTimeBudgetUnit());
         this.o = o.clone();
         this.maxDepth = o.getMaxDepth();
         this.coverageSet = coverageSet;

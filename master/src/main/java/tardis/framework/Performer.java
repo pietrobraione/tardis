@@ -43,6 +43,17 @@ public abstract class Performer<I,O> {
     private final int numInputs;
     
     /**
+     * The throttle factor; it must be between 0 and 1.
+     * When 0, a batch is taken from {@link #in} and
+     * passed to {@link #makeJob(List) makeJob} whenever
+     * there are sufficient items. When 1, it is also 
+     * required that at least one worker in {@link #threadPool}
+     * is available. Intermediate values yield different 
+     * degrees of throttling. 
+     */
+    private final float throttleFactor;
+    
+    /**
      * The maximum duration of the time this {@link Performer} will wait for 
      * the arrival of an input item. 
      */
@@ -109,13 +120,17 @@ public abstract class Performer<I,O> {
      * @param numOfThreads The number of concurrent threads that this {@link Performer} encapsulates.
      * @param numInputs An {@code int}, the maximum number of input items that are passed as a batch
      *        to {@link #makeJob(List) makeJob}.
+     * @param throttleFactor The throttle factor; it must be between 0 and 1. When 0, a batch is 
+     *        taken from {@code in} and passed to {@link #makeJob(List) makeJob} whenever
+     *        there are sufficient items. When 1, it is also required that at least one worker 
+     *        is available. Intermediate values yield different degrees of throttling. 
      * @param timeoutDuration The maximum duration of the time this {@link Performer} will wait for 
      *        the arrival of an input item.  
      * @param timeoutTimeUnit The {@link TimeUnit} for {@code timeoutDuration}. 
      * @throws NullPointerException if {@code in == null || out == null || timeoutUnit == null}.
      * @throws IllegalArgumentException if {@code numOfThreads <= 0 || numInputs <= 0 || timeoutDuration < 0}.
      */
-    public Performer(InputBuffer<I> in, OutputBuffer<O> out, int numOfThreads, int numInputs, long timeoutDuration, TimeUnit timeoutTimeUnit) {
+    public Performer(InputBuffer<I> in, OutputBuffer<O> out, int numOfThreads, int numInputs, float throttleFactor, long timeoutDuration, TimeUnit timeoutTimeUnit) {
         if (in == null || out == null || timeoutTimeUnit == null) {
             throw new NullPointerException("Invalid null parameter in performer constructor.");
         }
@@ -126,6 +141,7 @@ public abstract class Performer<I,O> {
         this.out = out;
         this.threadPool = new PausableFixedThreadPoolExecutor(numOfThreads);
         this.numInputs = numInputs;
+        this.throttleFactor = throttleFactor;
         this.timeoutDuration = timeoutDuration;
         this.timeoutTimeUnit = timeoutTimeUnit;
         this.mainThread = new Thread(() -> {
@@ -267,7 +283,7 @@ public abstract class Performer<I,O> {
      * empty.
      */
     final boolean isIdle() {
-        return this.stopped || (this.in.isEmpty() && this.items.isEmpty() && this.threadPool.isIdle());
+        return this.stopped || (this.in.size() == 0 && this.items.isEmpty() && this.threadPool.isIdle());
     }
 
     /**
@@ -317,10 +333,20 @@ public abstract class Performer<I,O> {
         if (this.items == null) {
             this.items = new ArrayList<>();
         }
+        
+        //throttles
+        if (this.items.size() == 0 && this.threadPool.getActiveCount() == this.threadPool.getCorePoolSize() && 
+            this.throttleFactor > 0 && this.in.size() < 1 / this.throttleFactor) {
+            return;
+        }
+            
+        //polls
         final I item = this.in.poll(this.timeoutDuration, this.timeoutTimeUnit);
         if (item != null) {
             this.items.add(item);
         }
+        
+        //submits job
         if ((item == null && this.items.size() > 0) || this.items.size() == this.numInputs) {
             final Runnable job = makeJob(this.items);
             this.threadPool.execute(job);
