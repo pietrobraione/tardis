@@ -3,10 +3,17 @@ plugins {
     id 'com.github.johnrengelman.shadow' version '4.0.3'
 }
 
+repositories {
+    flatDir {
+    	dirs "${System.getProperty('java.home')}/../lib", "${project(':jbse').projectDir.toString()}/libs"
+    }
+}
+
 dependencies {
     implementation 'args4j:args4j:2.32'
     implementation 'com.github.javaparser:javaparser-core:3.15.9'
-    implementation files("${System.getProperty('java.home')}/../lib/tools.jar")
+    implementation name: 'javassist'
+    implementation name: 'tools'
     implementation project(':sushi-lib')
     implementation project(':jbse')
 }
