@@ -144,7 +144,7 @@ public final class Options implements Cloneable {
 
     @Option(name = "-num_mosa_targets",
             usage = "Maximum number of target passed to a MOSA job")
-    private int numMOSATargets = 1;
+    private int numMOSATargets = 5;
 
     @Option(name = "-use_mosa",
             usage = "Set to true if you want to use MOSA, false for ordinary EvoSuite")

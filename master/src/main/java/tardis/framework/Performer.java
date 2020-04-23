@@ -283,7 +283,7 @@ public abstract class Performer<I,O> {
      * empty.
      */
     final boolean isIdle() {
-        return this.stopped || (this.in.size() == 0 && this.items.isEmpty() && this.threadPool.isIdle());
+        return this.stopped || (this.in.isEmpty() && this.items.isEmpty() && this.threadPool.isIdle());
     }
 
     /**
@@ -336,7 +336,7 @@ public abstract class Performer<I,O> {
         
         //throttles
         if (this.items.size() == 0 && this.threadPool.getActiveCount() == this.threadPool.getCorePoolSize() && 
-            this.throttleFactor > 0 && this.in.size() < 1 / this.throttleFactor) {
+            this.throttleFactor > 0 && this.threadPool.getTaskCount() >= 1 / this.throttleFactor) {
             return;
         }
             

@@ -25,10 +25,9 @@ public interface InputBuffer<I> {
     I poll(long timeoutDuration, TimeUnit timeoutTimeUnit) throws InterruptedException;
     
     /**
-     * Gets the number of items contained in 
-     * this buffer.
+     * Checks whether this buffer is empty. 
      * 
-     * @return a nonnegative {@code int}.  
+     * @return {@code true} iff it is empty.  
      */
-    int size();
+    boolean isEmpty();
 }
