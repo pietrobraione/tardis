@@ -107,7 +107,9 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
     private final String classpathCompilationTest;
     private final String classpathCompilationWrapper;
     private int testCount;
+    private volatile boolean stopForSeeding;
 
+    
     public PerformerEvosuite(Options o, InputBuffer<JBSEResult> in, OutputBuffer<EvosuiteResult> out) throws PerformerEvosuiteInitException {
         super(in, out, o.getNumOfThreads(), (o.getUseMOSA() ? o.getNumMOSATargets() : 1), o.getThrottleFactorEvosuite(), o.getTimeoutMOSATaskCreationDuration(), o.getTimeoutMOSATaskCreationUnit());
         try {
@@ -135,13 +137,20 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         this.classpathCompilationTest = this.tmpBinPath.toString() + File.pathSeparator + this.classesPathString + File.pathSeparator + this.sushiLibPath.toString() + File.pathSeparator + this.evosuitePath.toString();
         this.classpathCompilationWrapper = this.classesPathString + File.pathSeparator + this.sushiLibPath.toString();
         this.testCount = (o.getInitialTestCase() == null ? 0 : 1);
+        this.stopForSeeding = false;
     }
 
     @Override
     protected Runnable makeJob(List<JBSEResult> items) {
+        while (this.stopForSeeding) ; //ugly spinlocking
         final int testCountInitial = this.testCount;
-        this.testCount += items.size();
-        final Runnable job = (items.get(0).isSeed() ? 
+        final boolean isSeed = (items.size() == 1 && items.get(0).isSeed()); 
+        if (isSeed) {
+            this.stopForSeeding = true;
+        } else {
+            this.testCount += items.size();
+        }
+        final Runnable job = (isSeed ? 
                               () -> generateTestsAndScheduleJBSESeed(testCountInitial, items.get(0)) :
                               () -> generateTestsAndScheduleJBSE(testCountInitial, items));
         return job;
@@ -230,6 +239,12 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
                 checkTestCompileAndScheduleJBSE(testCount, splitItem);
                 ++testCount;
             }
+            
+            //updates the counter
+            this.testCount = testCount;
+            
+            //unlocks
+            this.stopForSeeding = false;
         }
     }
     
