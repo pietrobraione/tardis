@@ -78,7 +78,7 @@ final class RunnerPath implements AutoCloseable {
     public RunnerPath(Options o, EvosuiteResult item, State initialState) 
     throws DecisionException, CannotBuildEngineException, InitializationException, InvalidClassFileFactoryClassException, 
     NonexistingObservedVariablesException, ClasspathException, ContradictionException, CannotBacktrackException, 
-    CannotManageStateException, ThreadStackEmptyException, EngineStuckException, FailureException {
+    CannotManageStateException, ThreadStackEmptyException, EngineStuckException, FailureException, NoTargetHitException {
         final ArrayList<String> _classpath = new ArrayList<>();
         _classpath.add(o.getJBSELibraryPath().toString());
         _classpath.add(o.getEvosuitePath().toString());
@@ -99,6 +99,9 @@ final class RunnerPath implements AutoCloseable {
 
         //calculates the number of hits
         this.numberOfHits = countNumberOfInvocations(this.targetMethodClassName, this.targetMethodDescriptor, this.targetMethodName);
+        if (this.numberOfHits == 0) {
+            throw new NoTargetHitException();
+        }
     }
     
     private void fillCommonParams(Options o, EvosuiteResult item, State initialState) {
@@ -408,7 +411,13 @@ final class RunnerPath implements AutoCloseable {
     FailureException {
         return runProgram(-1).get(0); //depth -1 == never stop guidance
     }
-
+    
+    private Runner runnerPreFrontier = null;
+    private ActionsRunnerPreFrontier actionsRunnerPreFrontier = null;
+    private Runner runnerPostFrontier = null;
+    private ActionsRunnerPostFrontier actionsRunnerPostFrontier = null;
+    private State preState = null;
+    
     /**
      * Performs symbolic execution of the target method guided by a test case 
      * up to some depth, then peeks the states on the next branch.  
@@ -432,13 +441,6 @@ final class RunnerPath implements AutoCloseable {
      * @throws EngineStuckException
      * @throws FailureException
      */
-    
-    private Runner runnerPreFrontier = null;
-    private ActionsRunnerPreFrontier actionsRunnerPreFrontier = null;
-    private Runner runnerPostFrontier = null;
-    private ActionsRunnerPostFrontier actionsRunnerPostFrontier = null;
-    private State preState = null;
-    
     public List<State> runProgram(int testDepth)
     throws DecisionException, CannotBuildEngineException, InitializationException, 
     InvalidClassFileFactoryClassException, NonexistingObservedVariablesException, 
@@ -462,9 +464,13 @@ final class RunnerPath implements AutoCloseable {
         } else {
             //steps to all the post-frontier states and gathers them
             makeRunnerPostFrontier();
-            this.actionsRunnerPostFrontier.setTestDepth(testDepth);
-            this.runnerPostFrontier.run();
-            return this.actionsRunnerPostFrontier.stateList;
+            if (this.preState.isStuck()) {
+                return new ArrayList<>();
+            } else {
+                this.actionsRunnerPostFrontier.setTestDepth(testDepth);
+                this.runnerPostFrontier.run();
+                return this.actionsRunnerPostFrontier.stateList;
+            }
         }
     }
     
@@ -492,18 +498,23 @@ final class RunnerPath implements AutoCloseable {
         final RunnerParameters pSymbolic = this.commonParamsGuided.clone();
         completeParametersSymbolic(pSymbolic);
         
-        //gets the pre-frontier state and sets as the initial
+        //gets the pre-frontier state and sets it as the initial
         //state of the post-frontier runner
         this.preState = this.runnerPreFrontier.getEngine().getCurrentState().clone();
-        pSymbolic.setStartingState(this.preState);
-        
-        //builds the actions
-        this.actionsRunnerPostFrontier = new ActionsRunnerPostFrontier(this.actionsRunnerPreFrontier.stringLiterals);
-        pSymbolic.setActions(this.actionsRunnerPostFrontier);
+        if (this.preState.isStuck()) {
+            //degenerate case: execution ended before or at the pre-frontier
+            this.runnerPostFrontier = null;
+        } else { 
+            pSymbolic.setStartingState(this.preState);
 
-        //builds the runner
-        final RunnerBuilder rb = new RunnerBuilder();
-        this.runnerPostFrontier = rb.build(pSymbolic);
+            //builds the actions
+            this.actionsRunnerPostFrontier = new ActionsRunnerPostFrontier(this.actionsRunnerPreFrontier.stringLiterals);
+            pSymbolic.setActions(this.actionsRunnerPostFrontier);
+
+            //builds the runner
+            final RunnerBuilder rb = new RunnerBuilder();
+            this.runnerPostFrontier = rb.build(pSymbolic);
+        }
     }
 
     private void completeParametersConcrete(RunnerParameters pConcrete) throws DecisionException {
@@ -597,7 +608,7 @@ final class RunnerPath implements AutoCloseable {
         private final String methodClassName, methodDescriptor, methodName;
         private int methodCallCounter = 0;
         private boolean atInvocation = false;
-        private int preInvocationStackSize = 0;
+        private int preStackSize = 0;
 
 
         public ActionsCounter(String methodClassName, String methodDescriptor, String methodName) {
@@ -619,7 +630,7 @@ final class RunnerPath implements AutoCloseable {
                         sig = currentState.getCurrentClass().getMethodSignature(UW);
                     }
                     this.atInvocation = (this.methodDescriptor.equals(sig.getDescriptor()) && this.methodName.equals(sig.getName())); //we do not check sig.getClassName() because it is the pre-resolution classname 
-                    this.preInvocationStackSize = currentState.getStackSize();
+                    this.preStackSize = currentState.getStackSize();
                     //Note that being at at invocation bytecode does not mean that the method
                     //will be invoked at the next step: E.g., a class could be initialized
                     //before the execution of the bytecode. In such case, the execution of the
@@ -645,7 +656,7 @@ final class RunnerPath implements AutoCloseable {
                     final State currentState = getEngine().getCurrentState();
                     final Signature sig = currentState.getCurrentMethodSignature();
                     if (this.methodClassName.equals(sig.getClassName()) && this.methodDescriptor.equals(sig.getDescriptor()) && 
-                    this.methodName.equals(sig.getName()) && currentState.getStackSize() == this.preInvocationStackSize + 1) {
+                    this.methodName.equals(sig.getName()) && currentState.getStackSize() == this.preStackSize + 1) {
                         ++this.methodCallCounter;
                     }
                 }
@@ -657,6 +668,7 @@ final class RunnerPath implements AutoCloseable {
         }    
     }
 
+    //TODO do not count recursive invocations
     private int countNumberOfInvocations(String methodClassName, String methodDescriptor, String methodName)
     throws CannotBuildEngineException, DecisionException, InitializationException, InvalidClassFileFactoryClassException, 
     NonexistingObservedVariablesException, ClasspathException, ContradictionException, CannotBacktrackException, 

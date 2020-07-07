@@ -101,8 +101,9 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
         if (this.maxDepth <= 0) {
             return;
         }
-        //runs the test case up to the final state, and takes the final state's path condition
         try (final RunnerPath rp = new RunnerPath(this.o, item, possiblyGetInitialStateCached(item))) {
+            //runs the test case up to the final state, and takes the initial state, 
+            //the coverage set, and the final state's path condition
             final State tcFinalState = rp.runProgram();
             final State initialState = rp.getInitialState();
             possiblySetInitialStateCached(item, initialState);
@@ -149,6 +150,9 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             if (noPathConditionGenerated) {
                 System.out.println("[JBSE    ] From test case " + tc.getClassName() + " no path condition generated");
             }
+        } catch (NoTargetHitException e) {
+            //prints some feedback
+            System.out.println("[JBSE    ] Run test case " + item.getTestCase().getClassName() + ", does not reach the target method " + item.getTargetMethodClassName() + ":" + item.getTargetMethodDescriptor() + ":" + item.getTargetMethodName());
         }
     }
 }
