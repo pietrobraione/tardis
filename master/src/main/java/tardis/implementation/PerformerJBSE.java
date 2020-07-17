@@ -105,46 +105,61 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             //runs the test case up to the final state, and takes the initial state, 
             //the coverage set, and the final state's path condition
             final State tcFinalState = rp.runProgram();
-            final State initialState = rp.getInitialState();
-            possiblySetInitialStateCached(item, initialState);
-            this.coverageSet.addAll(rp.getCoverage());
             final Collection<Clause> tcFinalPC = tcFinalState.getPathCondition();
-            this.treePath.insertPath(tcFinalPC);
 
             //prints some feedback
             final TestCase tc = item.getTestCase();
             System.out.println("[JBSE    ] Run test case " + tc.getClassName() + ", path condition " + stringifyPathCondition(shorten(tcFinalPC)));
+            
+            //skips the test case if its path was already covered,
+            //otherwise records its path
+            synchronized (this.treePath) {
+                if (this.treePath.containsPath(tcFinalPC, true)) {
+                    System.out.println("[JBSE    ] Test case " + tc.getClassName() + " redundant, skipped");
+                    return;
+                }
+                this.treePath.insertPath(tcFinalPC, true);
+            }
+            
+            //possibly caches the initial state
+            final State initialState = rp.getInitialState();
+            possiblySetInitialStateCached(item, initialState);
+            
+            //records coverage and prints feedback about it
+            this.coverageSet.addAll(rp.getCoverage());
             final int coverage = this.coverageSet.size();
             System.out.println("[JBSE    ] Current coverage: " + coverage + " branch" + (coverage == 1 ? "" : "es"));
             final int tcFinalDepth = tcFinalState.getDepth();
 
             //reruns the test case, and generates all the modified path conditions
             boolean noPathConditionGenerated = true;
-            for (int currentDepth = startDepth; currentDepth < Math.min(this.maxDepth, tcFinalDepth); ++currentDepth) {
-                //runs the program
-                final List<State> newStates = rp.runProgram(currentDepth);
+            synchronized (this.treePath) {
+                for (int currentDepth = startDepth; currentDepth < Math.min(this.maxDepth, tcFinalDepth); ++currentDepth) {
+                    //runs the program
+                    final List<State> newStates = rp.runProgram(currentDepth);
 
-                //checks shutdown of the performer
-                if (Thread.interrupted()) {
-                    return;
-                }
-
-                //creates all the output jobs
-                final State preState = rp.getPreState();
-                final boolean atJump = rp.getAtJump();
-                final List<String> targetBranches = rp.getTargetBranches(); 
-                final Map<Long, String> stringLiterals = rp.getStringLiterals();
-                for (int i = 0; i < newStates.size(); ++i) {
-                    final State newState = newStates.get(i);
-                    final Collection<Clause> currentPC = newState.getPathCondition();
-                    if (this.treePath.containsPath(currentPC)) {
-                        continue;
+                    //checks shutdown of the performer
+                    if (Thread.interrupted()) {
+                        return;
                     }
-                    final JBSEResult output = new JBSEResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), initialState, preState, newState, atJump, (atJump ? targetBranches.get(i) : null), stringLiterals, currentDepth);
-                    this.getOutputBuffer().add(output);
-                    this.treePath.insertPath(currentPC);
-                    System.out.println("[JBSE    ] From test case " + tc.getClassName() + " generated path condition " + stringifyPathCondition(shorten(currentPC)) + (atJump ? (" aimed at branch " + targetBranches.get(i)) : ""));
-                    noPathConditionGenerated = false;
+
+                    //creates all the output jobs
+                    final State preState = rp.getPreState();
+                    final boolean atJump = rp.getAtJump();
+                    final List<String> targetBranches = rp.getTargetBranches(); 
+                    final Map<Long, String> stringLiterals = rp.getStringLiterals();
+                    for (int i = 0; i < newStates.size(); ++i) {
+                        final State newState = newStates.get(i);
+                        final Collection<Clause> currentPC = newState.getPathCondition();
+                        if (this.treePath.containsPath(currentPC, false)) {
+                            continue;
+                        }
+                        final JBSEResult output = new JBSEResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), initialState, preState, newState, atJump, (atJump ? targetBranches.get(i) : null), stringLiterals, currentDepth);
+                        this.getOutputBuffer().add(output);
+                        this.treePath.insertPath(currentPC, false);
+                        System.out.println("[JBSE    ] From test case " + tc.getClassName() + " generated path condition " + stringifyPathCondition(shorten(currentPC)) + (atJump ? (" aimed at branch " + targetBranches.get(i)) : ""));
+                        noPathConditionGenerated = false;
+                    }
                 }
             }
             if (noPathConditionGenerated) {

@@ -13,6 +13,8 @@ import jbse.mem.Clause;
  * @author Pietro Braione
  */
 final class TreePath {
+    enum NodeStatus { ATTEMPTED, COVERED };
+    
     /**
      * A node in the {@link TreePath}.
      * 
@@ -20,6 +22,7 @@ final class TreePath {
      */
     private final class Node {
         private final Clause clause;
+        private NodeStatus status = NodeStatus.ATTEMPTED;
         private final List<Node> children = new ArrayList<>();
 
         /**
@@ -84,19 +87,24 @@ final class TreePath {
      * 
      * @return a {@link Node}.
      */
-    public Node getRoot() {
+    public synchronized Node getRoot() {
         return this.root;
     }
 
     /**
      * Inserts a path in this {@link TreePath}.
      * 
-     * @param path A sequence (more precisely, an {@link Iterable}) 
+     * @param path a sequence (more precisely, an {@link Iterable}) 
      *        of {@link Clause}s. The first in the sequence is the closer
      *        to the root, the last is the leaf.
+     * @oaram covered a {@code boolean}, {@code true} iff the path is
+     *        covered by a test. 
      */
-    public void insertPath(Iterable<Clause> path) {
+    public synchronized void insertPath(Iterable<Clause> path, boolean covered) {
         Node currentInTree = this.root;
+        if (covered) {
+            currentInTree.status = NodeStatus.COVERED;
+        }
 
         for (Clause currentInPath : path) {
             final Node possibleChild = currentInTree.findChild(currentInPath);
@@ -104,6 +112,9 @@ final class TreePath {
                 currentInTree = currentInTree.addChild(currentInPath);
             } else {
                 currentInTree = possibleChild;
+            }
+            if (covered) {
+                currentInTree.status = NodeStatus.COVERED;
             }
         }
     }
@@ -113,11 +124,16 @@ final class TreePath {
      * @param path A sequence (more precisely, an {@link Iterable}) 
      *        of {@link Clause}s. The first in the sequence is the closer
      *        to the root, the last is the leaf.
+     * @oaram covered a {@code boolean}, {@code true} iff the path must be
+     *        covered by a test. 
      * @return {@code true} iff the {@code path} was inserted by means
      *         of one or more calls to {@link #insertPath(Iterable) insertPath}.
      */
-    public boolean containsPath(Iterable<Clause> path) {
+    public synchronized boolean containsPath(Iterable<Clause> path, boolean covered) {
         Node currentInTree = this.root;
+        if (covered && currentInTree.status != NodeStatus.COVERED) {
+            return false;
+        }
 
         for (Clause currentInPath : path) {
             final Node child = currentInTree.findChild(currentInPath);
@@ -125,6 +141,9 @@ final class TreePath {
                 return false;
             }
             currentInTree = child;
+            if (covered && currentInTree.status != NodeStatus.COVERED) {
+                return false;
+            }
         }
         return true;
     }
