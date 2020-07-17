@@ -146,6 +146,9 @@ final class RunnerPath implements AutoCloseable {
 
         //4- set the guiding method (to be executed concretely)
         this.commonParamsGuiding.setMethodSignature(this.testCase.getClassName(), this.testCase.getMethodDescriptor(), this.testCase.getMethodName());
+        
+        //5- set the guiding execution to execute the static initializer
+        this.commonParamsGuiding.addClassInvariantAfterInitializationPattern(".*");
     }
 
     /**
@@ -522,31 +525,7 @@ final class RunnerPath implements AutoCloseable {
     }
 
     private void completeParametersSymbolic(RunnerParameters pSymbolic) throws DecisionException {
-        //sets the calculator
-        final CalculatorRewriting calc = new CalculatorRewriting();
-        calc.addRewriter(new RewriterOperationOnSimplex());
-        pSymbolic.setCalculator(calc);
-
-        //sets the decision procedures
-        final ArrayList<String> z3CommandLine = new ArrayList<>();
-        z3CommandLine.add(this.z3Path);
-        z3CommandLine.add(SWITCH_CHAR + "smt2");
-        z3CommandLine.add(SWITCH_CHAR + "in");
-        z3CommandLine.add(SWITCH_CHAR + "t:10");
-        final ClassInitRulesRepo initRules = new ClassInitRulesRepo();
-        try {
-            final DecisionProcedureAlgorithms dec = 
-                                        new DecisionProcedureAlgorithms(
-                                            new DecisionProcedureClassInit(
-                                                new DecisionProcedureLICS( //useless?
-                                                    new DecisionProcedureSMTLIB2_AUFNIRA(
-                                                        new DecisionProcedureAlwSat(calc), z3CommandLine), 
-                                                    new LICSRulesRepo()), initRules));
-            pSymbolic.setDecisionProcedure(dec);
-        } catch (InvalidInputException e) {
-            //this should never happen
-            throw new AssertionError(e);
-        }
+        completeParameters(pSymbolic, null);
     }
 
     private void completeParameters(RunnerParameters pGuided, RunnerParameters pGuiding) throws DecisionException {
@@ -575,7 +554,6 @@ final class RunnerPath implements AutoCloseable {
             if (pGuiding == null) {
                 //nothing
             } else {
-                initRules.addNotInitializedClassPattern(".*");
                 final DecisionProcedureAlgorithms decGuiding = 
                     new DecisionProcedureAlgorithms(
                         new DecisionProcedureClassInit(
@@ -585,18 +563,21 @@ final class RunnerPath implements AutoCloseable {
             if (pGuided == null) {
                 //nothing
             } else {
-                final Signature stopSignature = (pGuided.getMethodSignature() == null ? pGuided.getStartingState().getRootMethodSignature() : pGuided.getMethodSignature());
-                final DecisionProcedureGuidanceJDI decGuided = 
-                    new DecisionProcedureGuidanceJDI(
-                        new DecisionProcedureAlgorithms(
-                            new DecisionProcedureClassInit(
-                                new DecisionProcedureLICS( //useless?
-                                    new DecisionProcedureSMTLIB2_AUFNIRA(
-                                        new DecisionProcedureAlwSat(calc), z3CommandLine), 
-                                    new LICSRulesRepo()), 
-                                initRules)), 
-                        calc, pGuiding, stopSignature, this.numberOfHits);
-                pGuided.setDecisionProcedure(decGuided);
+                final DecisionProcedureAlgorithms decAlgo = 
+                    new DecisionProcedureAlgorithms(
+                        new DecisionProcedureClassInit(
+                            new DecisionProcedureLICS( //useless?
+                                new DecisionProcedureSMTLIB2_AUFNIRA(
+                                    new DecisionProcedureAlwSat(calc), z3CommandLine), 
+                                new LICSRulesRepo()), initRules)); 
+                if (pGuiding == null) {
+                    pGuided.setDecisionProcedure(decAlgo);
+                } else {
+                    final Signature stopSignature = (pGuided.getMethodSignature() == null ? pGuided.getStartingState().getRootMethodSignature() : pGuided.getMethodSignature());
+                    final DecisionProcedureGuidanceJDI decGuided = 
+                        new DecisionProcedureGuidanceJDI(decAlgo, calc, pGuiding, stopSignature, this.numberOfHits);
+                    pGuided.setDecisionProcedure(decGuided);
+                }
             }
         } catch (InvalidInputException | ThreadStackEmptyException e) {
             //this should never happen
