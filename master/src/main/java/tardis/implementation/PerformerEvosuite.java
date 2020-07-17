@@ -167,82 +167,85 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
      *              {@code item.}{@link JBSEResult#isSeed() isSeed}{@code () == true && item.}{@link JBSEResult#hasTargetMethod() hasTargetMethod}{@code () == false}.
      */
     private void generateTestsAndScheduleJBSESeed(int testCountInitial, JBSEResult item) {
-        final boolean isTargetAMethod = (item.getTargetClassName() == null);
-        
-        if (isTargetAMethod) {
-            //builds the EvoSuite wrapper
-            emitAndCompileEvoSuiteWrapperSeed(testCountInitial, item);
-            
-            //builds the EvoSuite command line
-            final List<String> evosuiteCommand = buildEvoSuiteCommand(testCountInitial, Collections.singletonList(item));
+        try {
+            final boolean isTargetAMethod = (item.getTargetClassName() == null);
 
-            //launches EvoSuite
-            final Path evosuiteLogFilePath = this.tmpPath.resolve("evosuite-log-" + testCountInitial + ".txt");
-            final Process processEvosuite;
-            try {
-                processEvosuite = launchProcess(evosuiteCommand, evosuiteLogFilePath);
-                System.out.println("[EVOSUITE] Launched EvoSuite seed process, command line: " + evosuiteCommand.stream().reduce("", (s1, s2) -> { return s1 + " " + s2; }));
-            } catch (IOException e) {
-                System.out.println("[EVOSUITE] Unexpected I/O error while running EvoSuite: " + e);
-                return; //TODO throw an exception?
+            if (isTargetAMethod) {
+                //builds the EvoSuite wrapper
+                emitAndCompileEvoSuiteWrapperSeed(testCountInitial, item);
+
+                //builds the EvoSuite command line
+                final List<String> evosuiteCommand = buildEvoSuiteCommand(testCountInitial, Collections.singletonList(item));
+
+                //launches EvoSuite
+                final Path evosuiteLogFilePath = this.tmpPath.resolve("evosuite-log-" + testCountInitial + ".txt");
+                final Process processEvosuite;
+                try {
+                    processEvosuite = launchProcess(evosuiteCommand, evosuiteLogFilePath);
+                    System.out.println("[EVOSUITE] Launched EvoSuite seed process, command line: " + evosuiteCommand.stream().reduce("", (s1, s2) -> { return s1 + " " + s2; }));
+                } catch (IOException e) {
+                    System.out.println("[EVOSUITE] Unexpected I/O error while running EvoSuite: " + e);
+                    return; //TODO throw an exception?
+                }
+
+                //waits for EvoSuite to end
+                try {
+                    processEvosuite.waitFor();
+                } catch (InterruptedException e) {
+                    //this performer was shut down: kills the EvoSuite job
+                    //and return
+                    processEvosuite.destroy();
+                    return;
+                }
+
+                //schedules JBSE
+                checkTestCompileAndScheduleJBSE(testCountInitial, item);
+            } else {
+                //builds the EvoSuite command line
+                final List<String> evosuiteCommand = buildEvoSuiteCommandSeed(item); 
+
+                //launches EvoSuite
+                final Path evosuiteLogFilePath = this.tmpPath.resolve("evosuite-log-seed.txt");
+                final Process processEvosuite;
+                try {
+                    processEvosuite = launchProcess(evosuiteCommand, evosuiteLogFilePath);
+                    System.out.println("[EVOSUITE] Launched EvoSuite seed process, command line: " + evosuiteCommand.stream().reduce("", (s1, s2) -> { return s1 + " " + s2; }));
+                } catch (IOException e) {
+                    System.out.println("[EVOSUITE] Unexpected I/O error while running EvoSuite seed: " + e);
+                    return; //TODO throw an exception?
+                }
+
+                //waits for EvoSuite to end
+                try {
+                    processEvosuite.waitFor();
+                } catch (InterruptedException e) {
+                    //this performer was shut down: kills the EvoSuite job
+                    //and return
+                    processEvosuite.destroy();
+                    return;
+                }
+
+                //splits output
+                final List<JBSEResult> splitItems;
+                try {
+                    splitItems = splitEvosuiteSeed(testCountInitial, item);
+                } catch (IOException e) {
+                    System.out.println("[EVOSUITE] Unexpected I/O error while splitting EvoSuite seed: " + e);
+                    return; //TODO throw an exception?
+                }
+
+                //schedules JBSE
+                int testCount = testCountInitial;
+                for (JBSEResult splitItem : splitItems) {
+                    checkTestCompileAndScheduleJBSE(testCount, splitItem);
+                    ++testCount;
+                }
+
+                //updates the counter
+                this.testCount = testCount;
+
             }
-
-            //waits for EvoSuite to end
-            try {
-                processEvosuite.waitFor();
-            } catch (InterruptedException e) {
-                //this performer was shut down: kills the EvoSuite job
-                //and return
-                processEvosuite.destroy();
-                return;
-            }
-
-            //schedules JBSE
-            checkTestCompileAndScheduleJBSE(testCountInitial, item);
-        } else {
-            //builds the EvoSuite command line
-            final List<String> evosuiteCommand = buildEvoSuiteCommandSeed(item); 
-
-            //launches EvoSuite
-            final Path evosuiteLogFilePath = this.tmpPath.resolve("evosuite-log-seed.txt");
-            final Process processEvosuite;
-            try {
-                processEvosuite = launchProcess(evosuiteCommand, evosuiteLogFilePath);
-                System.out.println("[EVOSUITE] Launched EvoSuite seed process, command line: " + evosuiteCommand.stream().reduce("", (s1, s2) -> { return s1 + " " + s2; }));
-            } catch (IOException e) {
-                System.out.println("[EVOSUITE] Unexpected I/O error while running EvoSuite seed: " + e);
-                return; //TODO throw an exception?
-            }
-
-            //waits for EvoSuite to end
-            try {
-                processEvosuite.waitFor();
-            } catch (InterruptedException e) {
-                //this performer was shut down: kills the EvoSuite job
-                //and return
-                processEvosuite.destroy();
-                return;
-            }
-
-            //splits output
-            final List<JBSEResult> splitItems;
-            try {
-                splitItems = splitEvosuiteSeed(testCountInitial, item);
-            } catch (IOException e) {
-                System.out.println("[EVOSUITE] Unexpected I/O error while splitting EvoSuite seed: " + e);
-                return; //TODO throw an exception?
-            }
-
-            //schedules JBSE
-            int testCount = testCountInitial;
-            for (JBSEResult splitItem : splitItems) {
-                checkTestCompileAndScheduleJBSE(testCount, splitItem);
-                ++testCount;
-            }
-            
-            //updates the counter
-            this.testCount = testCount;
-            
+        } finally {
             //unlocks
             this.stopForSeeding = false;
         }
