@@ -52,7 +52,7 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             ClasspathException | CannotBacktrackException | CannotManageStateException |
             ThreadStackEmptyException | ContradictionException | EngineStuckException |
             FailureException e ) {
-                System.out.println("[JBSE    ] Unexpected exception raised while exploring test case " + item.getTestCase().getClassName() + ": " + e.getMessage());
+                System.out.println("[JBSE    ] Unexpected exception raised while exploring test case " + item.getTestCase().getClassName() + ": " + e);
             }
         };
         return job;
