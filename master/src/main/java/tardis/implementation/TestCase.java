@@ -28,22 +28,38 @@ public class TestCase {
     private final String methodName;
     
     /**
+     * The {@link Path} where the package hierarchy
+     * of the test class and scaffolding class starts.
+     */
+    private final Path basePath;
+    
+    /**
      * The {@link Path} of the source file of the 
      * test class.
      */
     private final Path sourcePath;
-
+    
+    /**
+     * The {@link Path} of the source file of the 
+     * scaffolding class, or {@code null} if the
+     * test class has no scaffolding.
+     */
+    private final Path scaffoldingPath;
+    
     /**
      * Constructor. Builds a {@link TestCase} for the 
      * initial test case.
      * 
      * @param o a {@link Options} object.
+     * @param hasScaffolding {@code true} iff this test case has scaffolding.
      */
-    public TestCase(Options o) {
+    public TestCase(Options o, boolean hasScaffolding) {
         this.className = o.getInitialTestCase().get(0);
         this.methodDescriptor = o.getInitialTestCase().get(1);
         this.methodName = o.getInitialTestCase().get(2);
-        this.sourcePath = o.getInitialTestCasePath().resolve(this.className + ".java");
+        this.basePath = o.getInitialTestCasePath();
+        this.sourcePath = this.basePath.resolve(this.className + ".java");
+        this.scaffoldingPath = (hasScaffolding ? this.basePath.resolve(this.className + "_scaffolding.java") : null);
     }
 
     /**
@@ -56,12 +72,15 @@ public class TestCase {
      * @param methodName a {@link String}, the name of the test method.
      * @param sourceDir the {@link Path} of the directory where the source file of the 
      *        test case is found.
+     * @param hasScaffolding {@code true} iff this test case has scaffolding.
      */
-    public TestCase(String className, String methodDescriptor, String methodName, Path sourceDir) {
+    public TestCase(String className, String methodDescriptor, String methodName, Path sourceDir, boolean hasScaffolding) {
         this.className = className;
         this.methodDescriptor = methodDescriptor;
         this.methodName = methodName;
-        this.sourcePath = sourceDir.resolve(this.className + ".java");
+        this.basePath = sourceDir;
+        this.sourcePath = this.basePath.resolve(this.className + ".java");
+        this.scaffoldingPath = (hasScaffolding ? this.basePath.resolve(this.className + "_scaffolding.java") : null);
     }
 
     /**
@@ -91,6 +110,24 @@ public class TestCase {
     public String getMethodName() {
         return this.methodName;
     }
+    
+    /**
+     * Returns the directory where
+     * the package hierarchy of the
+     * test class starts.
+     * 
+     * @return the {@link Path} of the
+     *         directory where the package
+     *         hierarchy of the source file
+     *         of the test (and scaffolding)
+     *         class starts. It is a prefix 
+     *         of {@link #getSourcePath()}
+     *         and {@link #getScaffoldingPath()}
+     *         (the latter when it is not {@code null}).
+     */
+    public Path getBasePath() {
+        return this.basePath;
+    }
 
     /**
      * Returns the source file of 
@@ -101,5 +138,16 @@ public class TestCase {
      */
     public Path getSourcePath() {
         return this.sourcePath;
+    }
+
+    /**
+     * Returns the source file of 
+     * the scaffolding class.
+     * 
+     * @return The {@link Path} of the 
+     *         source file of the scaffolding class.
+     */
+    public Path getScaffoldingPath() {
+        return this.scaffoldingPath;
     }
 }

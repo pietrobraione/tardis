@@ -160,7 +160,7 @@ public final class Main {
     }
 
     private ArrayList<EvosuiteResult> generateSeedForPerformerJBSE() throws NoJavaCompilerException, JavaCompilerException {
-        final TestCase tc = new TestCase(this.o);
+        final TestCase tc = new TestCase(this.o, false);
         final String classpathCompilationTest = String.join(File.pathSeparator, stream(this.o.getClassesPath()).map(Object::toString).toArray(String[]::new));
         final Path javacLogFilePath = this.o.getTmpDirectoryPath().resolve("javac-log-test-0.txt");
         final String[] javacParametersTestCase = { "-cp", classpathCompilationTest, "-d", this.o.getTmpBinDirectoryPath().toString(), tc.getSourcePath().toString() };

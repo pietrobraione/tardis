@@ -22,6 +22,7 @@ import org.kohsuke.args4j.spi.PathOptionHandler;
 import jbse.bc.Classpath;
 import sushi.configure.SignatureHandler;
 import sushi.configure.Visibility;
+import sushi.configure.Coverage;
 import sushi.configure.MultiPathOptionHandlerPatched;
 
 /**
@@ -52,6 +53,10 @@ public final class Options implements Cloneable {
             usage = "For which methods defined in the target class should generate tests: PUBLIC (methods with public visibility), PACKAGE (methods with public, protected and package visibility)")
     private Visibility visibility = Visibility.PUBLIC;
 
+    @Option(name = "-cov",
+            usage = "Coverage: PATHS (all paths), BRANCHES (all branches), UNSAFE (failed assertion, works for only one assertion)")
+    private Coverage coverage = Coverage.BRANCHES;
+    
     @Option(name = "-target_method",
             usage = "Java signature of the target method (the method to test)",
             handler = SignatureHandler.class)
@@ -110,13 +115,13 @@ public final class Options implements Cloneable {
     private Path evosuitePath = Paths.get(".", "lib", "evosuite.jar");
 
     @Option(name = "-sushi_lib",
-            usage = "Path to Sushi library",
+            usage = "Path to SUSHI library",
             handler = PathOptionHandler.class)
     private Path sushiPath = Paths.get(".", "lib", "sushi-lib.jar");
 
     @Option(name = "-evosuite_time_budget_duration",
             usage = "Duration of the time budget for EvoSuite")
-    private int evosuiteTimeBudgetDuration = 180;
+    private long evosuiteTimeBudgetDuration = 180;
 
     @Option(name = "-evosuite_time_budget_unit",
             usage = "Unit of the time budget for EvoSuite: NANOSECONDS, MICROSECONDS, MILLISECONDS, SECONDS, MINUTES, HOURS, DAYS")
@@ -204,6 +209,9 @@ public final class Options implements Cloneable {
     }
 
     public void setTargetClass(String targetClassName) {
+        if (targetClassName == null) {
+            throw new NullPointerException("Attempted to set target class name to null.");
+        }
         this.targetClassName = targetClassName;
         this.targetMethodSignature = null;
     }
@@ -213,8 +221,22 @@ public final class Options implements Cloneable {
     }
 
     public void setVisibility(Visibility visibility) {
+        if (visibility == null) {
+            throw new NullPointerException("Attempted to set visibility to null.");
+        }
         this.visibility = visibility;
     }	
+
+    public Coverage getCoverage() {
+        return this.coverage;
+    }
+
+    public void setCoverage(Coverage coverage) {
+        if (coverage == null) {
+            throw new NullPointerException("Attempted to set coverage to null.");
+        }
+        this.coverage = coverage;
+    }
 
     public List<String> getTargetMethod() {
         return (this.targetMethodSignature == null ? null : Collections.unmodifiableList(this.targetMethodSignature));
@@ -263,6 +285,9 @@ public final class Options implements Cloneable {
     }
 
     public void setNumOfThreads(int numOfThreads) {
+        if (numOfThreads < 1) {
+            return;
+        }
         this.numOfThreads = numOfThreads;
     }
 
@@ -304,6 +329,10 @@ public final class Options implements Cloneable {
 
     public Path getTmpWrappersDirectoryPath() {
         return getTmpDirectoryPath().resolve("wrap");
+    }
+
+    public Path getTmpTestsDirectoryPath() {
+        return getTmpDirectoryPath().resolve("test");
     }
 
     public Path getOutDirectory() {
@@ -355,11 +384,11 @@ public final class Options implements Cloneable {
         return new Classpath(getJBSELibraryPath(), Paths.get(System.getProperty("java.home")), extClasspath, userClasspath);
     }
 
-    public int getEvosuiteTimeBudgetDuration() {
+    public long getEvosuiteTimeBudgetDuration() {
         return this.evosuiteTimeBudgetDuration;
     }
 
-    public void setEvosuiteTimeBudgetDuration(int evosuiteTimeBudgetDuration) {
+    public void setEvosuiteTimeBudgetDuration(long evosuiteTimeBudgetDuration) {
         this.evosuiteTimeBudgetDuration = evosuiteTimeBudgetDuration;
     }
 

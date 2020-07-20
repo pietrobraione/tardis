@@ -2,6 +2,8 @@ package tardis.implementation;
 
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * A data structure that stores the coverage information
@@ -20,9 +22,13 @@ public final class CoverageSet {
      * 
      * @param coverageInfo a {@link Collection}{@code <}{@link String}{@code >}, whose
      *        elements identify a coverage item.
+     * @return the {@link Set} of the elements in {@code coverageInfo} that were not 
+     *         in this coverage set before the invocation of this method.
      */
-    public synchronized void addAll(Collection<? extends String> coverageInfo) {
+    public synchronized Set<String> addAll(Collection<? extends String> coverageInfo) {
+        final Set<String> retVal = coverageInfo.stream().filter(s -> !covers(s)).collect(Collectors.toSet());
         this.coverage.addAll(coverageInfo);
+        return retVal;
     }
 
     /**

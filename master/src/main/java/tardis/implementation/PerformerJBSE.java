@@ -3,10 +3,16 @@ package tardis.implementation;
 import static tardis.implementation.Util.shorten;
 import static tardis.implementation.Util.stringifyPathCondition;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 
 import jbse.algo.exc.CannotManageStateException;
 import jbse.bc.exc.InvalidClassFileFactoryClassException;
@@ -22,6 +28,7 @@ import jbse.mem.Clause;
 import jbse.mem.State;
 import jbse.mem.exc.ContradictionException;
 import jbse.mem.exc.ThreadStackEmptyException;
+import sushi.configure.Coverage;
 import tardis.Options;
 import tardis.framework.InputBuffer;
 import tardis.framework.OutputBuffer;
@@ -33,6 +40,7 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
     private final CoverageSet coverageSet;
     private final TreePath treePath = new TreePath();
     private final HashMap<String, State> initialStateCache = new HashMap<>();
+    private AtomicLong pathCoverage = new AtomicLong(0);
 
     public PerformerJBSE(Options o, InputBuffer<EvosuiteResult> in, OutputBuffer<JBSEResult> out, CoverageSet coverageSet) {
         super(in, out, o.getNumOfThreads(), 1, o.getThrottleFactorJBSE(), o.getGlobalTimeBudgetDuration(), o.getGlobalTimeBudgetUnit());
@@ -125,13 +133,49 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             final State initialState = rp.getInitialState();
             possiblySetInitialStateCached(item, initialState);
             
-            //records coverage and prints feedback about it
-            this.coverageSet.addAll(rp.getCoverage());
-            final int coverage = this.coverageSet.size();
-            System.out.println("[JBSE    ] Current coverage: " + coverage + " branch" + (coverage == 1 ? "" : "es"));
-            final int tcFinalDepth = tcFinalState.getDepth();
+            //records coverage, emits tests. prints feedback
+            final Set<String> newCoveredBranches = this.coverageSet.addAll(rp.getCoverage());
+            final Coverage coverage = this.o.getCoverage();
+            if (coverage == Coverage.PATHS || (coverage == Coverage.BRANCHES && newCoveredBranches.size() > 0)) {
+                //more feedback
+                if (coverage == Coverage.BRANCHES) {
+                    System.out.println("[JBSE    ] Test case " + tc.getClassName() + " covered branch" + (newCoveredBranches.size() == 1 ? " " : "es ") + String.join(", ", newCoveredBranches));
+                }
+                
+                //copies the test in out
+                try {
+                    //gets the source and destination paths of the test source file
+                    final Path source = item.getTestCase().getSourcePath();
+                    final Path destination = this.o.getOutDirectory().resolve(item.getTestCase().getClassName() + ".java");
+                    
+                    //creates the intermediate package directories if they do not exist
+                    final int lastSlash = item.getTestCase().getClassName().lastIndexOf('/');
+                    if (lastSlash != -1) {
+                        final String dirs = item.getTestCase().getClassName().substring(0, lastSlash);
+                        final Path destinationDir = this.o.getOutDirectory().resolve(dirs);
+                        Files.createDirectories(destinationDir);
+                    }
+                    
+                    //copies the test file
+                    Files.copy(source, destination, StandardCopyOption.REPLACE_EXISTING);
+
+                    //possibly copies the scaffolding file
+                    final Path sourceScaffolding = item.getTestCase().getScaffoldingPath();
+                    if (sourceScaffolding != null) {
+                        final Path destinationScaffolding = this.o.getOutDirectory().resolve(item.getTestCase().getClassName() + "_scaffolding.java");
+                        Files.copy(sourceScaffolding, destinationScaffolding, StandardCopyOption.REPLACE_EXISTING);
+                    }
+                    
+                } catch (IOException e) {
+                    System.out.println("[JBSE    ] Error while attempting to copy test case " + tc.getClassName() + " or its scaffolding to its destination directory: " + e);
+                }
+            }
+            final long pathCoverage = this.pathCoverage.incrementAndGet();
+            final int branchCoverage = this.coverageSet.size();
+            System.out.println("[JBSE    ] Current coverage: " + pathCoverage + " path" + (pathCoverage == 1 ? ", " : "s, ") + branchCoverage + " branch" + (branchCoverage == 1 ? "" : "es"));
 
             //reruns the test case, and generates all the modified path conditions
+            final int tcFinalDepth = tcFinalState.getDepth();
             boolean noPathConditionGenerated = true;
             synchronized (this.treePath) {
                 for (int currentDepth = startDepth; currentDepth < Math.min(this.maxDepth, tcFinalDepth); ++currentDepth) {
