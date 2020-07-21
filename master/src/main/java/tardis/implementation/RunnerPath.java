@@ -147,8 +147,9 @@ final class RunnerPath implements AutoCloseable {
         //4- set the guiding method (to be executed concretely)
         this.commonParamsGuiding.setMethodSignature(this.testCase.getClassName(), this.testCase.getMethodDescriptor(), this.testCase.getMethodName());
         
-        //5- set the guiding execution to execute the static initializer
+        //5- set the executions to execute the static initializer
         this.commonParamsGuiding.addClassInvariantAfterInitializationPattern(".*");
+        this.commonParamsGuided.addClassInvariantAfterInitializationPattern(".*");
     }
 
     /**
