@@ -200,6 +200,9 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
 
                 //schedules JBSE
                 checkTestCompileAndScheduleJBSE(testCountInitial, item);
+
+                //updates the counter
+                this.testCount = testCountInitial + 1;
             } else {
                 //builds the EvoSuite command line
                 final List<String> evosuiteCommand = buildEvoSuiteCommandSeed(item); 
@@ -243,7 +246,6 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
 
                 //updates the counter
                 this.testCount = testCount;
-
             }
         } finally {
             //unlocks
@@ -638,8 +640,8 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         //parses the seed compilation unit
         final String testClassName = (item.getTargetClassName() + "_Seed_Test");
         final String scaffClassName = (this.evosuiteNoDependency ? null : testClassName + "_scaffolding");
-        final Path testFile = this.tmpPath.resolve(testClassName + ".java");
-        final Path scaffFile = (this.evosuiteNoDependency ? null : this.tmpPath.resolve(scaffClassName + ".java"));
+        final Path testFile = this.tmpTestPath.resolve(testClassName + ".java");
+        final Path scaffFile = (this.evosuiteNoDependency ? null : this.tmpTestPath.resolve(scaffClassName + ".java"));
         if (!testFile.toFile().exists() || (scaffFile != null && !scaffFile.toFile().exists())) {
             System.out.println("[EVOSUITE] Failed to split the seed test class " + testFile + ": the test class does not seem to exist");
             return null; //TODO throw some exception?
