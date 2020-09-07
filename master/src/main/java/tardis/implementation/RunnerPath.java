@@ -1,6 +1,8 @@
 package tardis.implementation;
 
 import static jbse.algo.Util.valueString;
+import static jbse.bc.Opcodes.OP_INVOKEDYNAMIC;
+import static jbse.bc.Opcodes.OP_INVOKEHANDLE;
 import static jbse.bc.Opcodes.OP_INVOKEINTERFACE;
 import static jbse.bc.Signatures.JAVA_STRING;
 import static jbse.common.Util.byteCat;
@@ -608,7 +610,10 @@ final class RunnerPath implements AutoCloseable {
                     final Signature sig;
                     if (currentState.getInstruction() == OP_INVOKEINTERFACE) {
                         sig = currentState.getCurrentClass().getInterfaceMethodSignature(UW);
-                    } else { //TODO invokedynamic and invokehandle
+                    } else if (currentState.getInstruction() == OP_INVOKEDYNAMIC || currentState.getInstruction() == OP_INVOKEHANDLE) {
+                        //the destination is buried in the method handle, so we suppose that we are at an invocation
+                        sig = new Signature(null, this.methodDescriptor, this.methodName);
+                    } else {
                         sig = currentState.getCurrentClass().getMethodSignature(UW);
                     }
                     this.atInvocation = (this.methodDescriptor.equals(sig.getDescriptor()) && this.methodName.equals(sig.getName())); //we do not check sig.getClassName() because it is the pre-resolution classname 
