@@ -3,7 +3,7 @@ package tardis.implementation;
 import static jbse.bc.ClassLoaders.CLASSLOADER_APP;
 import static jbse.common.Type.splitParametersDescriptors;
 
-import static tardis.implementation.Util.getTargetMethods;
+import static tardis.implementation.Util.getTargets;
 import static tardis.implementation.Util.shorten;
 import static tardis.implementation.Util.stream;
 import static tardis.implementation.Util.stringifyPathCondition;
@@ -44,6 +44,7 @@ import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.Name;
+import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.SimpleName;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
@@ -113,7 +114,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
     public PerformerEvosuite(Options o, InputBuffer<JBSEResult> in, OutputBuffer<EvosuiteResult> out) throws PerformerEvosuiteInitException {
         super(in, out, o.getNumOfThreads(), (o.getUseMOSA() ? o.getNumMOSATargets() : 1), o.getThrottleFactorEvosuite(), o.getTimeoutMOSATaskCreationDuration(), o.getTimeoutMOSATaskCreationUnit());
         try {
-            this.visibleTargetMethods = getTargetMethods(o);
+            this.visibleTargetMethods = getTargets(o);
         } catch (ClassNotFoundException | MalformedURLException | SecurityException e) {
             throw new PerformerEvosuiteInitException(e);
         }
@@ -673,22 +674,29 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
             
             for (ExpressionStmt stmt : stmts) {
                 //finds a method call
-                final MethodCallExpr methodCallExpr;
+                final Expression expr;
                 if (stmt.getExpression().isMethodCallExpr()) {
-                    methodCallExpr = stmt.getExpression().asMethodCallExpr();
+                    expr = stmt.getExpression();
+                } else if (stmt.getExpression().isObjectCreationExpr()) { //unlikely
+                    expr = stmt.getExpression();
                 } else if (stmt.getExpression().isAssignExpr() && stmt.getExpression().asAssignExpr().getValue().isMethodCallExpr()) {
-                    methodCallExpr = stmt.getExpression().asAssignExpr().getValue().asMethodCallExpr();
+                    expr = stmt.getExpression().asAssignExpr().getValue();
+                } else if (stmt.getExpression().isAssignExpr() && stmt.getExpression().asAssignExpr().getValue().isObjectCreationExpr()) {
+                    expr = stmt.getExpression().asAssignExpr().getValue();
                 } else if (stmt.getExpression().isVariableDeclarationExpr() && stmt.getExpression().asVariableDeclarationExpr().getVariable(0).getInitializer().isPresent() &&
                            stmt.getExpression().asVariableDeclarationExpr().getVariable(0).getInitializer().get().isMethodCallExpr()) {
-                    methodCallExpr = stmt.getExpression().asVariableDeclarationExpr().getVariable(0).getInitializer().get().asMethodCallExpr();
+                    expr = stmt.getExpression().asVariableDeclarationExpr().getVariable(0).getInitializer().get();
+                } else if (stmt.getExpression().isVariableDeclarationExpr() && stmt.getExpression().asVariableDeclarationExpr().getVariable(0).getInitializer().isPresent() &&
+                           stmt.getExpression().asVariableDeclarationExpr().getVariable(0).getInitializer().get().isObjectCreationExpr()) {
+                    expr = stmt.getExpression().asVariableDeclarationExpr().getVariable(0).getInitializer().get();
                 } else {
                     continue; //gives up
                 }
                 
-                //determines the invoked method
-                final String methodName = methodCallExpr.getNameAsString();
+                //determines the invoked method/constructor
+                final String methodName = (expr instanceof MethodCallExpr ? ((MethodCallExpr) expr).getNameAsString() : "<init>" );
                 final ArrayList<String> argumentTypes = new ArrayList<>();
-                for (Expression e : methodCallExpr.getArguments()) {
+                for (Expression e : (expr instanceof MethodCallExpr ? ((MethodCallExpr) expr).getArguments() : ((ObjectCreationExpr) expr).getArguments())) {
                     argumentTypes.add(inferType(e, varDecls));
                 }
                 List<String> targetMethod = null;

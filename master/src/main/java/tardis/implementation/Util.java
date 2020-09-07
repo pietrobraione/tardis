@@ -1,6 +1,7 @@
 package tardis.implementation;
 
 import java.io.File;
+import java.lang.reflect.Executable;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.net.MalformedURLException;
@@ -171,7 +172,7 @@ public final class Util {
     }	
 
     /**
-     * Returns the target methods.
+     * Returns the target methods (and constructors).
      * 
      * @param o an {@link Options} object.
      * @return a {@link List}{@code <}{@link List}{@code <}{@link String}{@code >>}, where each 
@@ -189,35 +190,36 @@ public final class Util {
      * @throws SecurityException if a security violation arises.
      * @throws MalformedURLException if some path in {@code o.}{@link Options#getClassesPath() getClassesPath()} does not exist.
      */
-    static List<List<String>> getTargetMethods(Options o) 
+    static List<List<String>> getTargets(Options o) 
     throws ClassNotFoundException, MalformedURLException, SecurityException {
         final String className = o.getTargetClass();
-        final List<List<String>> methods = new ArrayList<>();
+        final List<List<String>> retVal = new ArrayList<>();
         if (className == null) {
-            methods.add(o.getTargetMethod());
+            retVal.add(o.getTargetMethod());
         } else {
             final boolean onlyPublic = (o.getVisibility() == Visibility.PUBLIC);
             final ClassLoader ic = getInternalClassloader(o.getClassesPath());
             final Class<?> clazz = ic.loadClass(className.replace('/', '.'));
-            for (Method m : clazz.getDeclaredMethods()) {
-                if (!EXCLUDED.contains(m.getName()) &&
-                    ((onlyPublic && (m.getModifiers() & Modifier.PUBLIC) != 0) || (m.getModifiers() & Modifier.PRIVATE) == 0) &&
-                    !m.isSynthetic()) {
-                    final List<String> methodSignature = new ArrayList<>(3);
-                    methodSignature.add(className);
-                    methodSignature.add("(" + Arrays.stream(m.getParameterTypes())
+            final List<Executable> targets = Stream.concat(Arrays.stream(clazz.getDeclaredMethods()), Arrays.stream(clazz.getDeclaredConstructors())).collect(Collectors.toList());
+            for (Executable t : targets) {
+                if (!EXCLUDED.contains(t.getName()) &&
+                    ((onlyPublic && (t.getModifiers() & Modifier.PUBLIC) != 0) || (t.getModifiers() & Modifier.PRIVATE) == 0) &&
+                    !t.isSynthetic()) {
+                    final List<String> targetSignature = new ArrayList<>(3);
+                    targetSignature.add(className);
+                    targetSignature.add("(" + Arrays.stream(t.getParameterTypes())
                                                     .map(c -> c.getName())
                                                     .map(s -> s.replace('.', '/'))
                                                     .map(Util::convertPrimitiveTypes)
                                                     .map(Util::addReferenceMark)
                                                     .collect(Collectors.joining()) +
-                                        ")" + addReferenceMark(convertPrimitiveTypes(m.getReturnType().getName().replace('.', '/'))));
-                    methodSignature.add(m.getName());
-                    methods.add(methodSignature);
+                                        ")" + ((t instanceof Method) ? addReferenceMark(convertPrimitiveTypes(((Method) t).getReturnType().getName().replace('.', '/'))) : "V"));
+                    targetSignature.add((t instanceof Method) ? t.getName() : "<init>");
+                    retVal.add(targetSignature);
                 }
             }
         }
-        return methods;
+        return retVal;
     }
 
     /**
