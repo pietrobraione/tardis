@@ -221,44 +221,64 @@ public final class Util {
         }
         return retVal;
     }
-
+    
     /**
-     * Returns a classloader to load the classes on a classpath.
+     * Returns a classloader to load the classes on a classpath, 
+     * creating it if it does not exist.
      * 
      * @param classpath A {@link List}{@code <}{@link Path}{@code >}.
      * @return a {@link ClassLoader} that is able to load the classes
-     *         found in {@code classpath}.
+     *         found in {@code classpath}. If the method is invoked 
+     *         twice, the second time the classloader is not recreated, 
+     *         the {@code classpath} parameter is ignored, and the
+     *         classoader created at the first invocation is returned 
      * @throws MalformedURLException if some path in {@code classpath} 
      *         is malformed.
      * @throws SecurityException if a security violation arises.
      */
+    static ClassLoader internalClassLoader = null; //lazily initialized
     private static ClassLoader getInternalClassloader(List<Path> classpath) throws MalformedURLException, SecurityException {
-        final ClassLoader systemClassLoader = ClassLoader.getSystemClassLoader();
-        final ClassLoader classLoader;
-        if (classpath == null || classpath.size() == 0) {
-            classLoader = systemClassLoader;
-        } else {
-            final List<File> paths = new ArrayList<File>();
-            for (Path path : classpath) {
-                final File newPath = path.toFile();
-                if (!newPath.exists()) {
-                    throw new MalformedURLException("The new path " + newPath + " does not exist");
-                } else {
-                    paths.add(newPath);
+        if (internalClassLoader == null) {
+            final ClassLoader systemClassLoader = ClassLoader.getSystemClassLoader();
+            if (classpath == null || classpath.size() == 0) {
+                internalClassLoader = systemClassLoader;
+            } else {
+                final List<File> paths = new ArrayList<File>();
+                for (Path path : classpath) {
+                    final File newPath = path.toFile();
+                    if (!newPath.exists()) {
+                        throw new MalformedURLException("The new path " + newPath + " does not exist");
+                    } else {
+                        paths.add(newPath);
+                    }
                 }
+    
+                final List<URL> urls = new ArrayList<URL>();
+                if (systemClassLoader instanceof URLClassLoader) {
+                    urls.addAll(Arrays.asList(((URLClassLoader) systemClassLoader).getURLs()));
+                }
+    
+                for (File newPath : paths) {
+                    urls.add(newPath.toURI().toURL());
+                }
+                internalClassLoader = new URLClassLoader(urls.toArray(new URL[0]), Util.class.getClassLoader());
             }
-
-            final List<URL> urls = new ArrayList<URL>();
-            if (systemClassLoader instanceof URLClassLoader) {
-                urls.addAll(Arrays.asList(((URLClassLoader) systemClassLoader).getURLs()));
-            }
-
-            for (File newPath : paths) {
-                urls.add(newPath.toURI().toURL());
-            }
-            classLoader = new URLClassLoader(urls.toArray(new URL[0]), Util.class.getClassLoader());
         }
-        return classLoader;
+        return internalClassLoader;
+    }
+    
+    /**
+     * Returns a classloader to load the classes on a classpath.
+     * 
+     * @return a {@link ClassLoader} that is able to load the classes
+     *         found in the classpath given by the first previous call to
+     *         {@link #getTargets(Options)}. If the method is invoked 
+     *         before {@link #getTargets(Options)} is invoked, it returns
+     *         {@code null}. 
+     * @throws SecurityException if a security violation arises.
+     */
+    static ClassLoader getInternalClassloader() {
+        return internalClassLoader;
     }
 
     /**

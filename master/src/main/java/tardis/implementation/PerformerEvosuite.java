@@ -3,6 +3,7 @@ package tardis.implementation;
 import static jbse.bc.ClassLoaders.CLASSLOADER_APP;
 import static jbse.common.Type.splitParametersDescriptors;
 
+import static tardis.implementation.Util.getInternalClassloader;
 import static tardis.implementation.Util.getTargets;
 import static tardis.implementation.Util.shorten;
 import static tardis.implementation.Util.stream;
@@ -14,6 +15,7 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.lang.reflect.Array;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
@@ -36,6 +38,7 @@ import javax.tools.ToolProvider;
 
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
@@ -663,9 +666,9 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         for (MethodDeclaration testMethodDeclaration : testMethodDeclarations) {
             //builds a map of variable declarations (variable names to
             //class names)
-            final HashMap<String, String> varDecls = new HashMap<>();
+            final HashMap<String, Class<?>> varDecls = new HashMap<>();
             testMethodDeclaration.findAll(VariableDeclarator.class).forEach(vd -> {
-                varDecls.put(vd.getNameAsString(), typePattern(vd.getTypeAsString()));
+                varDecls.put(vd.getNameAsString(), javaTypeToClass(cuTestClass, vd.getTypeAsString()));
             });
             
             //gets all the statements in the method
@@ -695,7 +698,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
                 
                 //determines the invoked method/constructor
                 final String methodName = (expr instanceof MethodCallExpr ? ((MethodCallExpr) expr).getNameAsString() : "<init>" );
-                final ArrayList<String> argumentTypes = new ArrayList<>();
+                final ArrayList<Class<?>> argumentTypes = new ArrayList<>();
                 for (Expression e : (expr instanceof MethodCallExpr ? ((MethodCallExpr) expr).getArguments() : ((ObjectCreationExpr) expr).getArguments())) {
                     argumentTypes.add(inferType(e, varDecls));
                 }
@@ -703,14 +706,14 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
                 visibleTargetMethodsLoop:
                 for (List<String> visibleTargetMethod : this.visibleTargetMethods) {
                     if (visibleTargetMethod.get(2).equals(methodName)) {
-                        String[] visibleTargetMethodArgumentTypes = splitParametersDescriptors(visibleTargetMethod.get(1));
+                        final String[] visibleTargetMethodArgumentTypes = splitParametersDescriptors(visibleTargetMethod.get(1));
                         if (visibleTargetMethodArgumentTypes.length == argumentTypes.size()) {
                             boolean allMatch = true;
                             allMatchLoop:
                             for (int i = 0; i < visibleTargetMethodArgumentTypes.length; ++i) {
-                                final Pattern p = Pattern.compile(argumentTypes.get(i));
-                                final Matcher m = p.matcher(visibleTargetMethodArgumentTypes[i]);
-                                if (!m.matches()) {
+                                final Class<?> argClass = argumentTypes.get(i); 
+                                final Class<?> targetMethodArgClass = classFileTypeToClass(visibleTargetMethodArgumentTypes[i]);
+                                if (argClass != null && targetMethodArgClass != null && !targetMethodArgClass.isAssignableFrom(argClass)) {
                                     allMatch = false;
                                     break allMatchLoop;
                                 }
@@ -807,47 +810,164 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         return retVal;
     }
     
-    private static String typePattern(String type) {
+    private static Class<?> javaTypeToClass(CompilationUnit cu, String type) {
         if ("boolean".equals(type)) {
-            return "Z";
+            return boolean.class;
         } else if ("byte".equals(type)) {
-            return "B";
+            return byte.class;
         } else if ("char".equals(type)) {
-            return "C";
+            return char.class;
         } else if ("double".equals(type)) {
-            return "D";
+            return double.class;
         } else if ("float".equals(type)) {
-            return "F";
+            return float.class;
         } else if ("int".equals(type)) {
-            return "I";
+            return int.class;
         } else if ("long".equals(type)) {
-            return "J";
+            return long.class;
         } else if ("short".equals(type)) {
-            return "S";
+            return short.class;
         } else if (type.endsWith("[]")) {
-            return "\\[" + typePattern(type.substring(0, type.length() - 2));
-        } else {
-            return "L.*" + type.replace(".", "(\\$|/)") + ";";
+            final Class<?> memberType = javaTypeToClass(cu, type.substring(0, type.length() - 2));
+            if (memberType == null) {
+                return null;
+            }
+            return Array.newInstance(memberType, 0).getClass();
+        } else { //class name
+            final ClassLoader ic = getInternalClassloader();
+            final String typeNoGenerics = eraseGenericParameters(type);
+            final ArrayList<String> possiblePackageQualifiers = possiblePackageQualifiers(cu, typeNoGenerics);
+            for (String possiblePackageQualifier : possiblePackageQualifiers) {
+                String typeNameLoop = typeNoGenerics;
+                do {
+                    Class<?> retVal = null;
+                    try {
+                        retVal = Class.forName(possiblePackageQualifier + typeNameLoop);
+                    } catch (ClassNotFoundException e) {
+                        try {
+                            retVal = ic.loadClass(possiblePackageQualifier + typeNameLoop);
+                        } catch (ClassNotFoundException e1) {
+                            retVal = null;
+                        }
+                    }
+                    if (retVal != null) {
+                        return retVal;
+                    }
+                    //tries to replace the last dot with a dollar and reload
+                    final int lastIndexOfDot = typeNameLoop.lastIndexOf('.');
+                    if (lastIndexOfDot == -1) {
+                        //nothing more to try with this package qualifier
+                        break;
+                    }
+                    final StringBuilder newTypeNameLoop = new StringBuilder(typeNameLoop);
+                    newTypeNameLoop.setCharAt(lastIndexOfDot, '$');
+                    typeNameLoop = newTypeNameLoop.toString();
+                } while (true);
+            }
+            return null; //nothing found
         }
     }
     
-    private static String inferType(Expression e, HashMap<String, String> varDecls) {
+    private static String eraseGenericParameters(String type) {
+        final StringBuilder retVal = new StringBuilder();
+        int level = 0;
+        for (int i = 0; i < type.length(); ++i) {
+            final char current = type.charAt(i);
+            if (current == '<') {
+                ++level;
+            } else if (current == '>') {
+                --level;
+            } else if (level == 0) {
+                retVal.append(current);
+            }
+        }
+        return retVal.toString();
+    }
+    
+    private static ArrayList<String> possiblePackageQualifiers(CompilationUnit cu, String type) {
+        final ArrayList<String> retVal = new ArrayList<>();
+        retVal.add(""); //always tries with no package qualifier
+        retVal.add("java.lang."); //always tries with java.lang (for standard classes that are not imported)
+        cu.findAll(ImportDeclaration.class).forEach(id -> {
+            final String idString = id.getNameAsString();
+            if (id.isAsterisk()) {
+                retVal.add(idString + ".");
+            } else {
+                //if type is A.B.C tries first A, then A.B, then A.B.C
+                for (int i = 0; i <= type.length(); ++i) {
+                    if (i == type.length() || type.charAt(i) == '.') {
+                        final String typePrefix = type.substring(0, i);
+                        if (idString.endsWith("." + typePrefix)) {
+                            retVal.add(idString.substring(0, idString.length() - typePrefix.length()));
+                        }
+                    }
+                }
+            } //else, do not add it
+        });
+        return retVal;
+    }
+    
+    private static Class<?> inferType(Expression e, HashMap<String, Class<?>> varDecls) {
         if (e.isBooleanLiteralExpr()) {
-            return "Z";
+            return boolean.class;
         } else if (e.isCharLiteralExpr()) {
-            return "C";
+            return char.class;
         } else if (e.isDoubleLiteralExpr()) {
-            return "D";
+            return double.class;
         } else if (e.isIntegerLiteralExpr()) {
-            return "I";
+            return int.class;
         } else if (e.isLongLiteralExpr()) {
-            return "J";
+            return long.class;
         } else if (e.isArrayAccessExpr()) {
-            return "[" + inferType(e.asArrayAccessExpr().getName(), varDecls);
+            final Class<?> memberType = inferType(e.asArrayAccessExpr().getName(), varDecls);
+            if (memberType == null) {
+                return null;
+            }
+            return Array.newInstance(memberType, 0).getClass();
         } else if (e.isNameExpr() && varDecls.containsKey(e.asNameExpr().getNameAsString())) {
             return varDecls.get(e.asNameExpr().getNameAsString());
         } else {
-            return ".*"; //gives up
+            return null; //gives up
+        }
+    }
+    
+    private static Class<?> classFileTypeToClass(String type) {
+        final ClassLoader ic = getInternalClassloader();
+        final String typeName = internalToBinaryTypeName(type);
+        Class<?> retVal = null;
+        try {
+            retVal = Class.forName(typeName);
+        } catch (ClassNotFoundException e) {
+            try {
+                retVal = ic.loadClass(typeName);
+            } catch (ClassNotFoundException e1) {
+                retVal = null;
+            }
+        }
+        return retVal; 
+    }
+    
+    private static String internalToBinaryTypeName(String type) {
+        if ("B".equals(type)) {
+            return "byte";
+        } else if ("C".equals(type)) {
+            return "char";
+        } else if ("D".equals(type)) {
+            return "double";
+        } else if ("F".equals(type)) {
+            return "float";
+        } else if ("I".equals(type)) {
+            return "int";
+        } else if ("J".equals(type)) {
+            return "long";
+        } else if ("S".equals(type)) {
+            return "short";
+        } else if ("Z".equals(type)) {
+            return "boolean";
+        } else if (type.startsWith("L")){
+            return type.substring(1, type.length() - 1).replace('/', '.');
+        } else { //array, starts with '['
+            return '[' + internalToBinaryTypeName(type.substring(1));
         }
     }
 
