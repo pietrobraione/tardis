@@ -283,7 +283,7 @@ public abstract class Performer<I,O> {
      * empty.
      */
     final boolean isIdle() {
-        return this.stopped || (this.in.isEmpty() && this.items.isEmpty() && this.threadPool.isIdle());
+        return this.stopped || (this.in.isEmpty() && (this.items == null || this.items.isEmpty()) && this.threadPool.isIdle());
     }
 
     /**
