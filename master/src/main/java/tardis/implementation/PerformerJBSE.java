@@ -36,7 +36,6 @@ import tardis.framework.Performer;
 
 public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
     private final Options o;
-    private final int maxDepth;
     private final CoverageSet coverageSet;
     private final TreePath treePath = new TreePath();
     private final HashMap<String, State> initialStateCache = new HashMap<>();
@@ -45,7 +44,6 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
     public PerformerJBSE(Options o, InputBuffer<EvosuiteResult> in, OutputBuffer<JBSEResult> out, CoverageSet coverageSet) {
         super(in, out, o.getNumOfThreads(), 1, o.getThrottleFactorJBSE(), o.getGlobalTimeBudgetDuration(), o.getGlobalTimeBudgetUnit());
         this.o = o.clone();
-        this.maxDepth = o.getMaxDepth();
         this.coverageSet = coverageSet;
     }
 
@@ -106,7 +104,7 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
     ClasspathException, CannotBacktrackException, CannotManageStateException, 
     ThreadStackEmptyException, ContradictionException, EngineStuckException, 
     FailureException {
-        if (this.maxDepth <= 0) {
+        if (this.o.getMaxDepth() <= 0) {
             return;
         }
         try (final RunnerPath rp = new RunnerPath(this.o, item, possiblyGetInitialStateCached(item))) {
@@ -133,7 +131,7 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             final State initialState = rp.getInitialState();
             possiblySetInitialStateCached(item, initialState);
             
-            //records coverage, emits tests. prints feedback
+            //records coverage, emits tests, prints feedback
             final Set<String> newCoveredBranches = this.coverageSet.addAll(rp.getCoverage());
             final Coverage coverage = this.o.getCoverage();
             if (coverage == Coverage.PATHS || (coverage == Coverage.BRANCHES && newCoveredBranches.size() > 0)) {
@@ -175,10 +173,10 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             System.out.println("[JBSE    ] Current coverage: " + pathCoverage + " path" + (pathCoverage == 1 ? ", " : "s, ") + branchCoverage + " branch" + (branchCoverage == 1 ? "" : "es"));
 
             //reruns the test case, and generates all the modified path conditions
-            final int tcFinalDepth = tcFinalState.getDepth();
+            final int tcFinalDepth = Math.min(startDepth + this.o.getMaxTestCaseDepth(), tcFinalState.getDepth());
             boolean noPathConditionGenerated = true;
             synchronized (this.treePath) {
-                for (int currentDepth = startDepth; currentDepth < Math.min(this.maxDepth, tcFinalDepth); ++currentDepth) {
+                for (int currentDepth = startDepth; currentDepth < Math.min(this.o.getMaxDepth(), tcFinalDepth); ++currentDepth) {
                     //runs the program
                     final List<State> newStates = rp.runProgram(currentDepth);
 

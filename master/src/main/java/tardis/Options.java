@@ -63,8 +63,12 @@ public final class Options implements Cloneable {
     private List<String> targetMethodSignature;
 
     @Option(name = "-max_depth",
-            usage = "The maximum depth at which generation of tests is performed")
+            usage = "The maximum depth at which the target program is explored")
     private int maxDepth = 50;
+
+    @Option(name = "-max_tc_depth",
+            usage = "The maximum depth at which each single test path is explored")
+    private int maxTestCaseDepth = 25;
 
     @Option(name = "-num_threads",
             usage = "The number of threads in the thread pool")
@@ -254,8 +258,16 @@ public final class Options implements Cloneable {
         return this.maxDepth;
     }
 
-    public void setMaxDepth(int maxdepth) {
-        this.maxDepth = maxdepth;
+    public void setMaxDepth(int maxDepth) {
+        this.maxDepth = maxDepth;
+    }
+
+    public int getMaxTestCaseDepth() {
+        return this.maxTestCaseDepth;
+    }
+
+    public void setMaxTestCaseDepth(int maxTestCaseDepth) {
+        this.maxTestCaseDepth = maxTestCaseDepth;
     }
 
     public float getThrottleFactorJBSE() {
