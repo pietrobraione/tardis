@@ -482,7 +482,6 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         retVal.add("2048");
         retVal.add("-DCP=" + this.classpathEvosuite); 
         retVal.add("-Dassertions=false");
-        retVal.add("-Dglobal_timeout=" + this.timeBudgetSeconds);
         retVal.add("-Dreport_dir=" + this.tmpPath.toString());
         retVal.add("-Dsearch_budget=" + this.timeBudgetSeconds);
         retVal.add("-Dtest_dir=" + this.tmpTestPath.toString());
@@ -541,7 +540,6 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         retVal.add("2048");
         retVal.add("-DCP=" + this.classpathEvosuite); 
         retVal.add("-Dassertions=false");
-        retVal.add("-Dglobal_timeout=" + this.timeBudgetSeconds);
         retVal.add("-Dreport_dir=" + this.tmpPath.toString());
         retVal.add("-Dsearch_budget=" + this.timeBudgetSeconds);
         retVal.add("-Dtest_dir=" + this.tmpTestPath.toString());
