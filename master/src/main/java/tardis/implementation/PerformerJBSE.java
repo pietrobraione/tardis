@@ -13,6 +13,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import jbse.algo.exc.CannotManageStateException;
 import jbse.bc.exc.InvalidClassFileFactoryClassException;
@@ -42,7 +45,7 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
     private AtomicLong pathCoverage = new AtomicLong(0);
 
     public PerformerJBSE(Options o, InputBuffer<EvosuiteResult> in, OutputBuffer<JBSEResult> out, CoverageSet coverageSet) {
-        super(in, out, o.getNumOfThreads(), 1, o.getThrottleFactorJBSE(), o.getGlobalTimeBudgetDuration(), o.getGlobalTimeBudgetUnit());
+        super(in, out, o.getNumOfThreadsJBSE(), 1, o.getThrottleFactorJBSE(), o.getGlobalTimeBudgetDuration(), o.getGlobalTimeBudgetUnit());
         this.o = o.clone();
         this.coverageSet = coverageSet;
     }
@@ -133,11 +136,12 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             
             //records coverage, emits tests, prints feedback
             final Set<String> newCoveredBranches = this.coverageSet.addAll(rp.getCoverage());
+            final Set<String> newCoveredBranchesTarget = filterTargetBranches(newCoveredBranches);
             final Coverage coverage = this.o.getCoverage();
-            if (coverage == Coverage.PATHS || (coverage == Coverage.BRANCHES && newCoveredBranches.size() > 0)) {
+            if (coverage == Coverage.PATHS || (coverage == Coverage.BRANCHES && newCoveredBranchesTarget.size() > 0)) {
                 //more feedback
                 if (coverage == Coverage.BRANCHES) {
-                    System.out.println("[JBSE    ] Test case " + tc.getClassName() + " covered branch" + (newCoveredBranches.size() == 1 ? " " : "es ") + String.join(", ", newCoveredBranches));
+                    System.out.println("[JBSE    ] Test case " + tc.getClassName() + " covered branch" + (newCoveredBranchesTarget.size() == 1 ? " " : "es ") + String.join(", ", newCoveredBranches));
                 }
                 
                 //copies the test in out
@@ -170,7 +174,8 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             }
             final long pathCoverage = this.pathCoverage.incrementAndGet();
             final int branchCoverage = this.coverageSet.size();
-            System.out.println("[JBSE    ] Current coverage: " + pathCoverage + " path" + (pathCoverage == 1 ? ", " : "s, ") + branchCoverage + " branch" + (branchCoverage == 1 ? "" : "es"));
+            final int branchCoverageTarget = this.coverageSet.size(patternTargetBranches());
+            System.out.println("[JBSE    ] Current coverage: " + pathCoverage + " path" + (pathCoverage == 1 ? ", " : "s, ") + branchCoverage + " branch" + (branchCoverage == 1 ? "" : "es") + " (total), " + branchCoverageTarget + " branch" + (branchCoverage == 1 ? "" : "es") + " (target)");
 
             //reruns the test case, and generates all the modified path conditions
             final int tcFinalDepth = Math.min(startDepth + this.o.getMaxTestCaseDepth(), tcFinalState.getDepth());
@@ -211,6 +216,16 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             //prints some feedback
             System.out.println("[JBSE    ] Run test case " + item.getTestCase().getClassName() + ", does not reach the target method " + item.getTargetMethodClassName() + ":" + item.getTargetMethodDescriptor() + ":" + item.getTargetMethodName());
         }
+    }
+    
+    private String patternTargetBranches() {
+        return (this.o.getTargetClass() == null) ? (this.o.getTargetMethod() + ":.*:.*") : (this.o.getTargetClass() + "(\\$.*)*:.*:.*:.*:.*");
+    }
+    
+    private Set<String> filterTargetBranches(Set<String> newCoveredBranches) {
+        final Pattern p = Pattern.compile(patternTargetBranches()); 
+        final Set<String> retVal = newCoveredBranches.stream().filter(s -> { final Matcher m = p.matcher(s); return m.matches(); }).collect(Collectors.toSet());
+        return retVal;
     }
 }
 

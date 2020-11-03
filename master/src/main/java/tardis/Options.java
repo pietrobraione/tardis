@@ -70,9 +70,13 @@ public final class Options implements Cloneable {
             usage = "The maximum depth at which each single test path is explored")
     private int maxTestCaseDepth = 25;
 
-    @Option(name = "-num_threads",
-            usage = "The number of threads in the thread pool")
-    private int numOfThreads;
+    @Option(name = "-num_threads_jbse",
+            usage = "The number of threads in the JBSE thread pool")
+    private int numOfThreadsJBSE;
+
+    @Option(name = "-num_threads_evosuite",
+    usage = "The number of threads in the EvoSuite thread pool")
+    private int numOfThreadsEvosuite;
 
     @Option(name = "-throttle_factor_jbse",
             usage = "The throttle factor for the JBSE thread pool",
@@ -292,15 +296,26 @@ public final class Options implements Cloneable {
         this.throttleFactorEvosuite = throttleFactorEvosuite;
     }
 
-    public int getNumOfThreads() {
-        return this.numOfThreads;
+    public int getNumOfThreadsJBSE() {
+        return this.numOfThreadsJBSE;
     }
 
-    public void setNumOfThreads(int numOfThreads) {
+    public void setNumOfThreadsJBSE(int numOfThreads) {
         if (numOfThreads < 1) {
             return;
         }
-        this.numOfThreads = numOfThreads;
+        this.numOfThreadsJBSE = numOfThreads;
+    }
+
+    public int getNumOfThreadsEvosuite() {
+        return this.numOfThreadsEvosuite;
+    }
+
+    public void setNumOfThreadsEvosuite(int numOfThreads) {
+        if (numOfThreads < 1) {
+            return;
+        }
+        this.numOfThreadsEvosuite = numOfThreads;
     }
 
     public List<Path> getClassesPath() {

@@ -115,7 +115,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
 
     
     public PerformerEvosuite(Options o, InputBuffer<JBSEResult> in, OutputBuffer<EvosuiteResult> out) throws PerformerEvosuiteInitException {
-        super(in, out, o.getNumOfThreads(), (o.getUseMOSA() ? o.getNumMOSATargets() : 1), o.getThrottleFactorEvosuite(), o.getTimeoutMOSATaskCreationDuration(), o.getTimeoutMOSATaskCreationUnit());
+        super(in, out, o.getNumOfThreadsEvosuite(), (o.getUseMOSA() ? o.getNumMOSATargets() : 1), o.getThrottleFactorEvosuite(), o.getTimeoutMOSATaskCreationDuration(), o.getTimeoutMOSATaskCreationUnit());
         try {
             this.visibleTargetMethods = getTargets(o);
         } catch (ClassNotFoundException | MalformedURLException | SecurityException e) {

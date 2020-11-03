@@ -187,12 +187,18 @@ final class RunnerPath implements AutoCloseable {
             final State currentState = getEngine().getCurrentState();
             if (currentState.phase() != Phase.PRE_INITIAL) {
                 try {
+                    final int currentProgramCounter = currentState.getCurrentProgramCounter();
                     final byte currentInstruction = currentState.getInstruction();
+                    
+                    //if at entry of a method, add the entry point to coverage 
+                    if (currentProgramCounter == 0) {
+                        this.coverage.add(currentState.getCurrentMethodSignature().toString() + ":0:0");
+                    }
 
                     //if at a jump bytecode, saves the start program counter
                     this.atJump = bytecodeJump(currentInstruction);
                     if (this.atJump) {
-                        this.jumpPC = currentState.getCurrentProgramCounter();
+                        this.jumpPC = currentProgramCounter;
                     }
 
                     //if at a load constant bytecode, saves the stack size
