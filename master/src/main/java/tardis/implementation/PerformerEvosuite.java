@@ -115,7 +115,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
 
     
     public PerformerEvosuite(Options o, InputBuffer<JBSEResult> in, OutputBuffer<EvosuiteResult> out) throws PerformerEvosuiteInitException {
-        super(in, out, o.getNumOfThreads(), (o.getUseMOSA() ? o.getNumMOSATargets() : 1), o.getThrottleFactorEvosuite(), o.getTimeoutMOSATaskCreationDuration(), o.getTimeoutMOSATaskCreationUnit());
+        super(in, out, o.getNumOfThreadsEvosuite(), (o.getUseMOSA() ? o.getNumMOSATargets() : 1), o.getThrottleFactorEvosuite(), o.getTimeoutMOSATaskCreationDuration(), o.getTimeoutMOSATaskCreationUnit());
         try {
             this.visibleTargetMethods = getTargets(o);
         } catch (ClassNotFoundException | MalformedURLException | SecurityException e) {
@@ -482,7 +482,6 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         retVal.add("2048");
         retVal.add("-DCP=" + this.classpathEvosuite); 
         retVal.add("-Dassertions=false");
-        retVal.add("-Dglobal_timeout=" + this.timeBudgetSeconds);
         retVal.add("-Dreport_dir=" + this.tmpPath.toString());
         retVal.add("-Dsearch_budget=" + this.timeBudgetSeconds);
         retVal.add("-Dtest_dir=" + this.tmpTestPath.toString());
@@ -541,7 +540,6 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         retVal.add("2048");
         retVal.add("-DCP=" + this.classpathEvosuite); 
         retVal.add("-Dassertions=false");
-        retVal.add("-Dglobal_timeout=" + this.timeBudgetSeconds);
         retVal.add("-Dreport_dir=" + this.tmpPath.toString());
         retVal.add("-Dsearch_budget=" + this.timeBudgetSeconds);
         retVal.add("-Dtest_dir=" + this.tmpTestPath.toString());

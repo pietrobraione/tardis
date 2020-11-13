@@ -3,6 +3,8 @@ package tardis.implementation;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -34,7 +36,7 @@ public final class CoverageSet {
     /**
      * Checks whether an item is covered.
      * 
-     * @param branch The item to be checked.
+     * @param branch the item to be checked.
      * @return {@code true} iff it was previously added as covered 
      *         with {@link #addAll(Collection) addAll}.
      */
@@ -45,10 +47,25 @@ public final class CoverageSet {
     /**
      * Returns the number of covered items.
      * 
-     * @return A positive {@code int}, the total number of items added 
+     * @return a positive {@code int}, the total number of items added 
      *         as covered with {@link #addAll(Collection) addAll}.
      */
     public synchronized int size() {
         return this.coverage.size();
+    }
+
+    /**
+     * Returns the number of covered items matching
+     * a given pattern.
+     * 
+     * @param pattern a {@link String}, a regular expression.
+     * @return a positive {@code int}, the total number of items added 
+     *         as covered with {@link #addAll(Collection) addAll} and
+     *         matching {@code pattern}.
+     */
+    public synchronized int size(String pattern) {
+        final Pattern p = Pattern.compile(pattern); 
+        final Set<String> filtered = this.coverage.stream().filter(s -> { final Matcher m = p.matcher(s); return m.matches(); }).collect(Collectors.toSet());
+        return filtered.size();
     }
 }
