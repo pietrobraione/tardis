@@ -533,11 +533,13 @@ final class RunnerPath implements AutoCloseable {
             //nothing
         } else {
             pGuiding.setCalculator(calc);
+            //pGuiding.setUseHashMapModel(true);
         }
         if (pGuided == null) {
             //nothing
         } else {
             pGuided.setCalculator(calc);
+            //pGuided.setUseHashMapModel(true);
         }
 
         //sets the decision procedures
