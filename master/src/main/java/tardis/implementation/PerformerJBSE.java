@@ -18,6 +18,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import jbse.algo.exc.CannotManageStateException;
+import jbse.base.JAVA_MAP_Utils;
 import jbse.bc.exc.InvalidClassFileFactoryClassException;
 import jbse.common.exc.ClasspathException;
 import jbse.dec.exc.DecisionException;
@@ -197,10 +198,14 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
                     final Map<Long, String> stringLiterals = rp.getStringLiterals();
                     for (int i = 0; i < newStates.size(); ++i) {
                         final State newState = newStates.get(i);
-                        final Collection<Clause> currentPC = newState.getPathCondition();
+                        final List<Clause> currentPC = newState.getPathCondition();
                         if (this.treePath.containsPath(currentPC, false)) {
                             continue;
                         }
+                    	if (!currentPC.isEmpty() && JAVA_MAP_Utils.assumptionViolated(currentPC.get(currentPC.size() - 1))) {
+                    		System.out.println("[JBSE    ] From test case " + tc.getClassName() + " skipping path condition due to violated assumption " + currentPC.get(currentPC.size() - 1) + " on initialMap --- in path condition " + stringifyPathCondition(shorten(currentPC)));
+                    		continue;
+                    	}
                         final JBSEResult output = new JBSEResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), initialState, preState, newState, atJump, (atJump ? targetBranches.get(i) : null), stringLiterals, currentDepth);
                         this.getOutputBuffer().add(output);
                         this.treePath.insertPath(currentPC, false);
