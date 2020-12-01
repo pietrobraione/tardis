@@ -203,8 +203,8 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
                             continue;
                         }
                     	if (!currentPC.isEmpty() && JAVA_MAP_Utils.assumptionViolated(currentPC.get(currentPC.size() - 1))) {
-                    		System.out.println("[JBSE    ] From test case " + tc.getClassName() + " skipping path condition due to violated assumption " + currentPC.get(currentPC.size() - 1) + " on initialMap --- in path condition " + stringifyPathCondition(shorten(currentPC)));
-                    		continue;
+                    	    System.out.println("[JBSE    ] From test case " + tc.getClassName() + " skipping path condition due to violated assumption " + currentPC.get(currentPC.size() - 1) + " on initialMap in path condition " + stringifyPathCondition(shorten(currentPC)));
+                    	    continue;
                     	}
                         final JBSEResult output = new JBSEResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), initialState, preState, newState, atJump, (atJump ? targetBranches.get(i) : null), stringLiterals, currentDepth);
                         this.getOutputBuffer().add(output);

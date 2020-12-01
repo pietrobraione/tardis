@@ -100,7 +100,7 @@ final class RunnerPath implements AutoCloseable {
         _classpath.addAll(o.getClassesPath().stream().map(Object::toString).collect(Collectors.toList()));
         //builds the template parameters object for the guided (symbolic) execution
         if (initialState == null) {
-        	this.commonParamsGuided.setJBSELibPath(o.getJBSELibraryPath());
+            this.commonParamsGuided.setJBSELibPath(o.getJBSELibraryPath());
             this.commonParamsGuided.addUserClasspath(_classpath.toArray(new String[0]));
             this.commonParamsGuided.setMethodSignature(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName());
         } else {
