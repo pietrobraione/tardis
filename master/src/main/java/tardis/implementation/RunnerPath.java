@@ -61,7 +61,6 @@ import tardis.Options;
 final class RunnerPath implements AutoCloseable {
     private static final String SWITCH_CHAR = System.getProperty("os.name").toLowerCase().contains("windows") ? "/" : "-";
 
-    private final String[] classpath;
     private final String z3Path;
     private final String targetMethodClassName;
     private final String targetMethodDescriptor;
@@ -75,12 +74,6 @@ final class RunnerPath implements AutoCloseable {
     throws DecisionException, CannotBuildEngineException, InitializationException, InvalidClassFileFactoryClassException, 
     NonexistingObservedVariablesException, ClasspathException, ContradictionException, CannotBacktrackException, 
     CannotManageStateException, ThreadStackEmptyException, EngineStuckException, FailureException, NoTargetHitException {
-        final ArrayList<String> _classpath = new ArrayList<>();
-        _classpath.add(o.getJBSELibraryPath().toString());
-        _classpath.add(o.getEvosuitePath().toString());
-        _classpath.add(o.getTmpBinDirectoryPath().toString());
-        _classpath.addAll(o.getClassesPath().stream().map(Object::toString).collect(Collectors.toList()));
-        this.classpath = _classpath.toArray(new String[0]);
         this.z3Path = o.getZ3Path().toString();
         this.targetMethodClassName = item.getTargetMethodClassName();
         this.targetMethodDescriptor = item.getTargetMethodDescriptor();
@@ -101,9 +94,14 @@ final class RunnerPath implements AutoCloseable {
     }
     
     private void fillCommonParams(Options o, EvosuiteResult item, State initialState) {
+        final ArrayList<String> _classpath = new ArrayList<>();
+        _classpath.add(o.getEvosuitePath().toString());
+        _classpath.add(o.getTmpBinDirectoryPath().toString());
+        _classpath.addAll(o.getClassesPath().stream().map(Object::toString).collect(Collectors.toList()));
         //builds the template parameters object for the guided (symbolic) execution
         if (initialState == null) {
-            this.commonParamsGuided.addUserClasspath(this.classpath);
+        	this.commonParamsGuided.setJBSELibPath(o.getJBSELibraryPath());
+            this.commonParamsGuided.addUserClasspath(_classpath.toArray(new String[0]));
             this.commonParamsGuided.setMethodSignature(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName());
         } else {
             this.commonParamsGuided.setStartingState(initialState);
@@ -122,7 +120,8 @@ final class RunnerPath implements AutoCloseable {
         }
 
         //builds the template parameters object for the guiding (concrete) execution
-        this.commonParamsGuiding.addUserClasspath(this.classpath);
+        _classpath.add(o.getJBSELibraryPath().toString());
+        this.commonParamsGuiding.addUserClasspath(_classpath.toArray(new String[0]));
         this.commonParamsGuiding.setStateIdentificationMode(StateIdentificationMode.COMPACT);
 
         //more settings to the template parameters objects:
@@ -253,7 +252,7 @@ final class RunnerPath implements AutoCloseable {
                                 final String s = valueString(currentState, r);
                                 final long heapPosition = (r instanceof ReferenceConcrete ? ((ReferenceConcrete) r).getHeapPosition() : currentState.getResolution((ReferenceSymbolic) r));
                                 this.stringLiterals.put(heapPosition, s);
-                            }
+                            } //TODO: constants for Integer, Float, Double, ... containers
                         }					
                     }
                 } catch (FrozenStateException | InvalidNumberOfOperandsException | ThreadStackEmptyException e) {
@@ -544,6 +543,7 @@ final class RunnerPath implements AutoCloseable {
             //nothing
         } else {
             pGuided.setCalculator(calc);
+            pGuided.setUseHashMapModel(true);
         }
 
         //sets the decision procedures
