@@ -1,20 +1,25 @@
 allprojects {
     apply plugin: 'java'
-    apply plugin: 'maven'
     group = 'tardis'
     version = '0.2.0-SNAPSHOT'
 
     repositories {
-        maven {
-            url = 'https://repo.maven.apache.org/maven2'
-        }
+        mavenCentral()
     }
 
     dependencies {
         testImplementation 'junit:junit:4.12'
     }
 
-    sourceCompatibility = '1.8'
+	ext {
+		javaVersion = JavaLanguageVersion.of(8)
+	}
+	
+    java {
+        toolchain {
+            languageVersion = javaVersion
+        }
+    }
 
     tasks.withType(JavaCompile) {
         options.encoding = 'UTF-8'

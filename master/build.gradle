@@ -1,11 +1,13 @@
 plugins {
     id 'application'
-    id 'com.github.johnrengelman.shadow' version '4.0.3'
+    id 'com.github.johnrengelman.shadow' version '6.1.0'
 }
+
+def javaHome = javaToolchains.compilerFor { languageVersion = javaVersion }.get().metadata.installationPath.asFile.toString()
 
 repositories {
     flatDir {
-    	dirs "${System.getProperty('java.home')}/../lib", "${project(':jbse').projectDir.toString()}/libs"
+    	dirs "${javaHome}/lib", "${project(':jbse').projectDir.toString()}/libs"
     }
 }
 
@@ -33,13 +35,14 @@ shadowJar {
 build.dependsOn 'shadowJar'
 
 application {
-    mainClassName = 'tardis.Main'
+	mainClassName='tardis.Main' //deprecated, but still used by the shadow plugin
+	mainClass.set('tardis.Main')
 }
 
 jar {
     manifest {
         attributes 'Implementation-Title': 'TARDIS',
                    'Implementation-Vendor': 'University of Milano-Bicocca',
-                   'Implementation-Version': version
+                   'Implementation-Version': archiveVersion
     }
 }
