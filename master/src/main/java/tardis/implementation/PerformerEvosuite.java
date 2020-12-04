@@ -95,19 +95,10 @@ import tardis.framework.Performer;
 public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
     private final List<List<String>> visibleTargetMethods;
     private final JavaCompiler compiler;
-    private final Path jbseLibraryPath;
-    private final List<Path> classesPath;
-    private final String classesPathString;
-    private final Path tmpPath;
-    private final Path tmpBinPath;
-    private final Path tmpWrapPath;
-    private final Path tmpTestPath;
-    private final Path evosuitePath;
-    private final Path sushiLibPath;
+    private final Options o;
     private final long timeBudgetSeconds;
-    private final boolean evosuiteNoDependency;
-    private final boolean useMOSA;
     private final String classpathEvosuite;
+    private final URL[] classpathTestURLClassLoader;
     private final String classpathCompilationTest;
     private final String classpathCompilationWrapper;
     private int testCount;
@@ -125,23 +116,28 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         if (this.compiler == null) {
             throw new PerformerEvosuiteInitException("Failed to find a system Java compiler. Did you install a JDK?");
         }
-        this.jbseLibraryPath = o.getJBSELibraryPath();
-        this.classesPath = o.getClassesPath();
-        this.classesPathString = String.join(File.pathSeparator, stream(o.getClassesPath()).map(Object::toString).toArray(String[]::new)); 
-        this.tmpPath = o.getTmpDirectoryPath();
-        this.tmpWrapPath = o.getTmpWrappersDirectoryPath();
-        this.tmpTestPath = o.getTmpTestsDirectoryPath();
-        this.tmpBinPath = o.getTmpBinDirectoryPath();
-        this.evosuitePath = o.getEvosuitePath();
-        this.sushiLibPath = o.getSushiLibPath();
+        this.o = o;
         this.timeBudgetSeconds = o.getEvosuiteTimeBudgetUnit().toSeconds(o.getEvosuiteTimeBudgetDuration());
-        this.evosuiteNoDependency = o.getEvosuiteNoDependency();
-        this.useMOSA = o.getUseMOSA();
-        this.classpathEvosuite = this.classesPathString + File.pathSeparator + this.sushiLibPath.toString() + (this.useMOSA ? "" : (File.pathSeparator + this.tmpBinPath.toString()));
-        this.classpathCompilationTest = this.tmpBinPath.toString() + File.pathSeparator + this.classesPathString + File.pathSeparator + this.sushiLibPath.toString() + File.pathSeparator + this.evosuitePath.toString();
-        this.classpathCompilationWrapper = this.classesPathString + File.pathSeparator + this.sushiLibPath.toString();
+        final String classesPathString = String.join(File.pathSeparator, stream(o.getClassesPath()).map(Object::toString).toArray(String[]::new)); 
+        this.classpathEvosuite = classesPathString + File.pathSeparator + this.o.getSushiLibPath().toString() + (this.o.getUseMOSA() ? "" : (File.pathSeparator + this.o.getTmpBinDirectoryPath().toString()));
+        final ArrayList<Path> classpathTestPath = new ArrayList<>(o.getClassesPath());
+        classpathTestPath.add(this.o.getSushiLibPath());
+        classpathTestPath.add(this.o.getTmpBinDirectoryPath());
+        classpathTestPath.add(this.o.getEvosuitePath());
+        this.classpathTestURLClassLoader = stream(classpathTestPath).map(PerformerEvosuite::toURL).toArray(URL[]::new);
+        this.classpathCompilationTest = this.o.getTmpBinDirectoryPath().toString() + File.pathSeparator + classesPathString + File.pathSeparator + this.o.getSushiLibPath().toString() + File.pathSeparator + this.o.getEvosuitePath().toString();
+        this.classpathCompilationWrapper = classesPathString + File.pathSeparator + this.o.getSushiLibPath().toString();
         this.testCount = (o.getInitialTestCase() == null ? 0 : 1);
         this.stopForSeeding = false;
+    }
+    
+    private static URL toURL(Path path) {
+        try {
+            return path.toUri().toURL();
+        } catch (MalformedURLException e) {
+            System.out.println("[EVOSUITE] Unexpected error while converting " + path.toString() + " to URL: " + e);
+            throw new RuntimeException(e);
+        }                   
     }
 
     @Override
@@ -182,7 +178,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
                 final List<String> evosuiteCommand = buildEvoSuiteCommand(testCountInitial, Collections.singletonList(item));
 
                 //launches EvoSuite
-                final Path evosuiteLogFilePath = this.tmpPath.resolve("evosuite-log-" + testCountInitial + ".txt");
+                final Path evosuiteLogFilePath = this.o.getTmpDirectoryPath().resolve("evosuite-log-" + testCountInitial + ".txt");
                 final Process processEvosuite;
                 try {
                     processEvosuite = launchProcess(evosuiteCommand, evosuiteLogFilePath);
@@ -212,7 +208,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
                 final List<String> evosuiteCommand = buildEvoSuiteCommandSeed(item); 
 
                 //launches EvoSuite
-                final Path evosuiteLogFilePath = this.tmpPath.resolve("evosuite-log-seed.txt");
+                final Path evosuiteLogFilePath = this.o.getTmpDirectoryPath().resolve("evosuite-log-seed.txt");
                 final Process processEvosuite;
                 try {
                     processEvosuite = launchProcess(evosuiteCommand, evosuiteLogFilePath);
@@ -268,7 +264,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
      * @param items a {@link List}{@code <}{@link JBSEResult}{@code >}, results of symbolic execution.
      */
     private void generateTestsAndScheduleJBSE(int testCountInitial, List<JBSEResult> items) {
-        if (!this.useMOSA && items.size() != 1) {
+        if (!this.o.getUseMOSA() && items.size() != 1) {
             System.out.println("[EVOSUITE] Unexpected internal error: MOSA is not used but the number of targets passed to EvoSuite is different from 1");
             return; //TODO throw an exception?
         }
@@ -291,7 +287,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
             final List<String> evosuiteCommand = buildEvoSuiteCommand(testCount, subItems); 
 
             //launches EvoSuite
-            final Path evosuiteLogFilePath = this.tmpPath.resolve("evosuite-log-" + testCount + ".txt");
+            final Path evosuiteLogFilePath = this.o.getTmpDirectoryPath().resolve("evosuite-log-" + testCount + ".txt");
             final Process processEvosuite;
             try {
                 processEvosuite = launchProcess(evosuiteCommand, evosuiteLogFilePath);
@@ -372,7 +368,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         
         final int lastSlash = initialCurrentClassName.lastIndexOf('/');
         final String initialCurrentClassPackageName = (lastSlash == -1 ? "" : initialCurrentClassName.substring(0, lastSlash));
-        final Path wrapperDirectoryPath = this.tmpWrapPath.resolve(initialCurrentClassPackageName);
+        final Path wrapperDirectoryPath = this.o.getTmpWrappersDirectoryPath().resolve(initialCurrentClassPackageName);
         try {
             Files.createDirectories(wrapperDirectoryPath);
         } catch (IOException e) {
@@ -403,17 +399,17 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
      */
     private void emitAndCompileEvoSuiteWrapperSeed(int testCount, JBSEResult item) {
         try {
-            final Classpath cp = new Classpath(this.jbseLibraryPath,
+            final Classpath cp = new Classpath(this.o.getJBSELibraryPath(),
                                                Paths.get(System.getProperty("java.home", "")), 
                                                new ArrayList<>(Arrays.stream(System.getProperty("java.ext.dirs", "").split(File.pathSeparator))
                                                .map(s -> Paths.get(s)).collect(Collectors.toList())), 
-                                               this.classesPath);
+                                               this.o.getClassesPath());
             final State s = new State(true, HistoryPoint.startingPreInitial(true), 1_000, 100_000, cp, ClassFileFactoryJavassist.class, new HashMap<>(), new HashMap<>(), new SymbolFactory());
             final ClassFile cf = s.getClassHierarchy().loadCreateClass(CLASSLOADER_APP, item.getTargetMethodClassName(), true);
             s.pushFrameSymbolic(cf, new Signature(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName()));
             final Path wrapperFilePath = emitEvoSuiteWrapper(testCount, s, s.clone(), Collections.emptyMap());
-            final Path javacLogFilePath = this.tmpPath.resolve("javac-log-wrapper-" + testCount + ".txt");
-            final String[] javacParameters = { "-cp", this.classpathCompilationWrapper, "-d", this.tmpBinPath.toString(), wrapperFilePath.toString() };
+            final Path javacLogFilePath = this.o.getTmpDirectoryPath().resolve("javac-log-wrapper-" + testCount + ".txt");
+            final String[] javacParameters = { "-cp", this.classpathCompilationWrapper, "-d", this.o.getTmpBinDirectoryPath().toString(), wrapperFilePath.toString() };
             try (final OutputStream w = new BufferedOutputStream(Files.newOutputStream(javacLogFilePath))) {
                 this.compiler.run(null, w, w, javacParameters);
             } catch (IOException e) {
@@ -445,8 +441,8 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
             final State finalState = item.getFinalState();
             final Map<Long, String> stringLiterals = item.getStringLiterals();
             final Path wrapperFilePath = emitEvoSuiteWrapper(i, initialState, finalState, stringLiterals);
-            final Path javacLogFilePath = this.tmpPath.resolve("javac-log-wrapper-" + i + ".txt");
-            final String[] javacParameters = { "-cp", this.classpathCompilationWrapper, "-d", this.tmpBinPath.toString(), wrapperFilePath.toString() };
+            final Path javacLogFilePath = this.o.getTmpDirectoryPath().resolve("javac-log-wrapper-" + i + ".txt");
+            final String[] javacParameters = { "-cp", this.classpathCompilationWrapper, "-d", this.o.getTmpBinDirectoryPath().toString(), wrapperFilePath.toString() };
             try (final OutputStream w = new BufferedOutputStream(Files.newOutputStream(javacLogFilePath))) {
                 this.compiler.run(null, w, w, javacParameters);
             } catch (IOException e) {
@@ -472,19 +468,23 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         final boolean isTargetAMethod = (item.getTargetClassName() == null);
         final String targetClass = (isTargetAMethod ? item.getTargetMethodClassName() : item.getTargetClassName()).replace('/', '.');
         final List<String> retVal = new ArrayList<String>();
-        retVal.add("java");
+        if (this.o.getJava8Home() == null) {
+            retVal.add("java");
+        } else {
+            retVal.add(this.o.getJava8Home().resolve("bin/java").toAbsolutePath().toString());
+        }
         retVal.add("-Xmx4G");
         retVal.add("-jar");
-        retVal.add(this.evosuitePath.toString());
+        retVal.add(this.o.getEvosuitePath().toString());
         retVal.add("-class");
         retVal.add(targetClass);
         retVal.add("-mem");
         retVal.add("2048");
         retVal.add("-DCP=" + this.classpathEvosuite); 
         retVal.add("-Dassertions=false");
-        retVal.add("-Dreport_dir=" + this.tmpPath.toString());
+        retVal.add("-Dreport_dir=" + this.o.getTmpDirectoryPath().toString());
         retVal.add("-Dsearch_budget=" + this.timeBudgetSeconds);
-        retVal.add("-Dtest_dir=" + this.tmpTestPath.toString());
+        retVal.add("-Dtest_dir=" + this.o.getTmpTestsDirectoryPath().toString());
         retVal.add("-Dvirtual_fs=false");
         retVal.add("-Dselection_function=ROULETTEWHEEL");
         retVal.add("-Dcriterion=BRANCH");                
@@ -494,10 +494,10 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         retVal.add("-Davoid_replicas_of_individuals=true"); 
         retVal.add("-Dno_change_iterations_before_reset=30");
         retVal.add("-Djunit_suffix=" + "_Seed_Test");
-        if (this.evosuiteNoDependency) {
+        if (this.o.getEvosuiteNoDependency()) {
             retVal.add("-Dno_runtime_dependency");
         }
-        if (this.useMOSA) {
+        if (this.o.getUseMOSA()) {
             retVal.add("-Dcrossover_function=SUSHI_HYBRID");
             retVal.add("-Dalgorithm=DYNAMOSA");
             retVal.add("-generateMOSuite");
@@ -530,19 +530,23 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         final String targetMethodDescriptor = items.get(0).getTargetMethodDescriptor();
         final String targetMethodName = items.get(0).getTargetMethodName();
         final List<String> retVal = new ArrayList<String>();
-        retVal.add("java");
+        if (this.o.getJava8Home() == null) {
+            retVal.add("java");
+        } else {
+            retVal.add(this.o.getJava8Home().resolve("bin/java").toAbsolutePath().toString());
+        }
         retVal.add("-Xmx4G");
         retVal.add("-jar");
-        retVal.add(this.evosuitePath.toString());
+        retVal.add(this.o.getEvosuitePath().toString());
         retVal.add("-class");
         retVal.add(targetClass);
         retVal.add("-mem");
         retVal.add("2048");
         retVal.add("-DCP=" + this.classpathEvosuite); 
         retVal.add("-Dassertions=false");
-        retVal.add("-Dreport_dir=" + this.tmpPath.toString());
+        retVal.add("-Dreport_dir=" + this.o.getTmpDirectoryPath().toString());
         retVal.add("-Dsearch_budget=" + this.timeBudgetSeconds);
-        retVal.add("-Dtest_dir=" + this.tmpTestPath.toString());
+        retVal.add("-Dtest_dir=" + this.o.getTmpTestsDirectoryPath().toString());
         retVal.add("-Dvirtual_fs=false");
         retVal.add("-Dselection_function=ROULETTEWHEEL");
         retVal.add("-Dcriterion=PATHCONDITION");		
@@ -553,11 +557,11 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         retVal.add("-Duse_minimizer_during_crossover=true");
         retVal.add("-Davoid_replicas_of_individuals=true"); 
         retVal.add("-Dno_change_iterations_before_reset=30");
-        if (this.evosuiteNoDependency) {
+        if (this.o.getEvosuiteNoDependency()) {
             retVal.add("-Dno_runtime_dependency");
         }
-        if (this.useMOSA) {
-            retVal.add("-Dpath_condition_evaluators_dir=" + this.tmpBinPath.toString());
+        if (this.o.getUseMOSA()) {
+            retVal.add("-Dpath_condition_evaluators_dir=" + this.o.getTmpBinDirectoryPath().toString());
             retVal.add("-Demit_tests_incrementally=true");
             retVal.add("-Dcrossover_function=SUSHI_HYBRID");
             retVal.add("-Dalgorithm=DYNAMOSA");
@@ -641,9 +645,9 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
     private List<JBSEResult> splitEvosuiteSeed(int testCountInitial, JBSEResult item) throws IOException {
         //parses the seed compilation unit
         final String testClassName = (item.getTargetClassName() + "_Seed_Test");
-        final String scaffClassName = (this.evosuiteNoDependency ? null : testClassName + "_scaffolding");
-        final Path testFile = this.tmpTestPath.resolve(testClassName + ".java");
-        final Path scaffFile = (this.evosuiteNoDependency ? null : this.tmpTestPath.resolve(scaffClassName + ".java"));
+        final String scaffClassName = (this.o.getEvosuiteNoDependency() ? null : testClassName + "_scaffolding");
+        final Path testFile = this.o.getTmpTestsDirectoryPath().resolve(testClassName + ".java");
+        final Path scaffFile = (this.o.getEvosuiteNoDependency() ? null : this.o.getTmpTestsDirectoryPath().resolve(scaffClassName + ".java"));
         if (!testFile.toFile().exists() || (scaffFile != null && !scaffFile.toFile().exists())) {
             System.out.println("[EVOSUITE] Failed to split the seed test class " + testFile + ": the test class does not seem to exist");
             return null; //TODO throw some exception?
@@ -743,12 +747,12 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
                 testMethodDeclarationNew.setName("test0");
                 final String testClassNameNew = (item.getTargetClassName() + "_" + testCount + "_Test");
                 final String testClassNameNew_Unqualified = testClassNameNew.substring(testClassNameNew.lastIndexOf('/') + 1);
-                final String scaffClassNameNew = (this.evosuiteNoDependency ? null : testClassNameNew + "_scaffolding");
+                final String scaffClassNameNew = (this.o.getEvosuiteNoDependency() ? null : testClassNameNew + "_scaffolding");
                 testClassDeclarationNew.setName(testClassNameNew_Unqualified);
 
                 //creates the compilation unit for the scaffolding
                 final CompilationUnit cuTestScaffNew;
-                if (this.evosuiteNoDependency) {
+                if (this.o.getEvosuiteNoDependency()) {
                     cuTestScaffNew = null;
                 } else {
                     //creates a new scaffolding class declaration
@@ -782,16 +786,16 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
                 cuTestClassNew.replace(testClassDeclarationOld, testClassDeclarationNew);
 
                 //writes the compilation units to files
-                final Path testFileNew = this.tmpTestPath.resolve(testClassNameNew + ".java");
+                final Path testFileNew = this.o.getTmpTestsDirectoryPath().resolve(testClassNameNew + ".java");
                 Files.createDirectories(testFileNew.getParent());
                 try (final BufferedWriter w = Files.newBufferedWriter(testFileNew)) {
                     w.write(cuTestClassNew.toString());
                 }
                 final Path scaffFileNew;
-                if (this.evosuiteNoDependency) {
+                if (this.o.getEvosuiteNoDependency()) {
                     scaffFileNew = null; //nothing else to write
                 } else {
-                    scaffFileNew = this.tmpTestPath.resolve(scaffClassNameNew + ".java");
+                    scaffFileNew = this.o.getTmpTestsDirectoryPath().resolve(scaffClassNameNew + ".java");
                     try (final BufferedWriter w = Files.newBufferedWriter(scaffFileNew)) {
                         w.write(cuTestScaffNew.toString());
                     }
@@ -1065,9 +1069,9 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
      */
     private void checkTestExists(String className) throws NoSuchMethodException {
         try {
-            final URLClassLoader cloader = URLClassLoader.newInstance(new URL[]{ this.tmpBinPath.toUri().toURL(), this.evosuitePath.toUri().toURL() }); 
+            final URLClassLoader cloader = URLClassLoader.newInstance(this.classpathTestURLClassLoader); 
             cloader.loadClass(className.replace('/',  '.')).getDeclaredMethod("test0");
-        } catch (SecurityException | NoClassDefFoundError | ClassNotFoundException | MalformedURLException e) {
+        } catch (SecurityException | NoClassDefFoundError | ClassNotFoundException e) {
             System.out.println("[EVOSUITE] Unexpected error while verifying that class " + className + " exists and has a test method: " + e);
             //TODO throw an exception
         }                   
@@ -1089,19 +1093,19 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         
         //checks if EvoSuite generated the files
         final String testCaseClassName = (item.hasTargetMethod() ? item.getTargetMethodClassName() : item.getTargetClassName()) + "_" + testCount + "_Test";
-        final Path testCaseScaff = (this.evosuiteNoDependency ? null : this.tmpTestPath.resolve(testCaseClassName + "_scaffolding.java"));
-        final Path testCase = this.tmpTestPath.resolve(testCaseClassName + ".java");
+        final Path testCaseScaff = (this.o.getEvosuiteNoDependency() ? null : this.o.getTmpTestsDirectoryPath().resolve(testCaseClassName + "_scaffolding.java"));
+        final Path testCase = this.o.getTmpTestsDirectoryPath().resolve(testCaseClassName + ".java");
         if (!testCase.toFile().exists() || (testCaseScaff != null && !testCaseScaff.toFile().exists())) {
             System.out.println("[EVOSUITE] Failed to generate the test case " + testCaseClassName + " for path condition: " + pathCondition + ": the generated files do not seem to exist");
             return;
         }
 
         //compiles the generated test
-        final Path javacLogFilePath = this.tmpPath.resolve("javac-log-test-" +  testCount + ".txt");
-        final String[] javacParametersTestCase = { "-cp", this.classpathCompilationTest, "-d", this.tmpBinPath.toString(), testCase.toString() };
+        final Path javacLogFilePath = this.o.getTmpTestsDirectoryPath().resolve("javac-log-test-" +  testCount + ".txt");
+        final String[] javacParametersTestCase = { "-cp", this.classpathCompilationTest, "-d", this.o.getTmpBinDirectoryPath().toString(), testCase.toString() };
         try (final OutputStream w = new BufferedOutputStream(Files.newOutputStream(javacLogFilePath))) {
             if (testCaseScaff != null) {
-                final String[] javacParametersTestScaff = { "-cp", this.classpathCompilationTest, "-d", this.tmpBinPath.toString(), testCaseScaff.toString() };
+                final String[] javacParametersTestScaff = { "-cp", this.classpathCompilationTest, "-d", this.o.getTmpBinDirectoryPath().toString(), testCaseScaff.toString() };
                 this.compiler.run(null, w, w, javacParametersTestScaff);
             }
             this.compiler.run(null, w, w, javacParametersTestCase);
@@ -1115,7 +1119,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
             checkTestExists(testCaseClassName);
             final int depth = item.getDepth();
             System.out.println("[EVOSUITE] Generated test case " + testCaseClassName + ", depth: " + depth + ", path condition: " + pathCondition);
-            final TestCase newTestCase = new TestCase(testCaseClassName, "()V", "test0", this.tmpTestPath, (testCaseScaff != null));
+            final TestCase newTestCase = new TestCase(testCaseClassName, "()V", "test0", this.o.getTmpTestsDirectoryPath(), (testCaseScaff != null));
             this.getOutputBuffer().add(new EvosuiteResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), newTestCase, depth + 1));
         } catch (NoSuchMethodException e) { 
             //EvoSuite failed to generate the test case, thus we just ignore it 

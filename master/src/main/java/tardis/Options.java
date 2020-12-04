@@ -72,11 +72,11 @@ public final class Options implements Cloneable {
 
     @Option(name = "-num_threads_jbse",
             usage = "The number of threads in the JBSE thread pool")
-    private int numOfThreadsJBSE;
+    private int numOfThreadsJBSE = 1;
 
     @Option(name = "-num_threads_evosuite",
     usage = "The number of threads in the EvoSuite thread pool")
-    private int numOfThreadsEvosuite;
+    private int numOfThreadsEvosuite = 1;
 
     @Option(name = "-throttle_factor_jbse",
             usage = "The throttle factor for the JBSE thread pool",
@@ -116,6 +116,11 @@ public final class Options implements Cloneable {
             usage = "Path to JBSE library",
             handler = PathOptionHandler.class)
     private Path jbsePath = Paths.get(".", "lib", "jbse.jar");
+
+    @Option(name = "-java8_home",
+    usage = "Home of a Java 8 JDK setup, necessary to EvoSuite",
+    handler = PathOptionHandler.class)
+    private Path java8Home;
 
     @Option(name = "-evosuite",
             usage = "Path to EvoSuite or MOSA",
@@ -384,6 +389,14 @@ public final class Options implements Cloneable {
 
     public void setJBSELibraryPath(Path jbsePath) {
         this.jbsePath = jbsePath;
+    }
+
+    public Path getJava8Home() {
+        return this.java8Home;
+    }
+
+    public void setJava8Home(Path java8Home) {
+        this.java8Home = java8Home;
     }
 
     public Path getEvosuitePath() {

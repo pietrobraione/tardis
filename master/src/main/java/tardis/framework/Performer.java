@@ -135,7 +135,7 @@ public abstract class Performer<I,O> {
             throw new NullPointerException("Invalid null parameter in performer constructor.");
         }
         if (numOfThreads <= 0 || numInputs <= 0 || timeoutDuration < 0) {
-            throw new IllegalArgumentException("Invalid negative parameter in performer constructor.");
+            throw new IllegalArgumentException("Invalid negative or zero parameter in performer constructor.");
         }
         this.in = in;
         this.out = out;
