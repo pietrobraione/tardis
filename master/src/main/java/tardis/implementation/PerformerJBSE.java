@@ -18,7 +18,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import jbse.algo.exc.CannotManageStateException;
-import jbse.base.JAVA_MAP_Utils;
+import jbse.apps.run.JAVA_MAP_Utils;
 import jbse.bc.exc.InvalidClassFileFactoryClassException;
 import jbse.common.exc.ClasspathException;
 import jbse.dec.exc.DecisionException;
