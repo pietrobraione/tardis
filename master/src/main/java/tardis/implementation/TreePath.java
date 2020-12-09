@@ -1,6 +1,8 @@
 package tardis.implementation;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 
 import jbse.mem.Clause;
@@ -24,6 +26,8 @@ final class TreePath {
         private final Clause clause;
         private NodeStatus status = NodeStatus.ATTEMPTED;
         private final List<Node> children = new ArrayList<>();
+        //variable to count every time a test hits a branch
+        private int hitCounter = 0;
 
         /**
          * Constructor for a nonroot node.
@@ -97,7 +101,7 @@ final class TreePath {
      * @param path a sequence (more precisely, an {@link Iterable}) 
      *        of {@link Clause}s. The first in the sequence is the closer
      *        to the root, the last is the leaf.
-     * @oaram covered a {@code boolean}, {@code true} iff the path is
+     * @param covered a {@code boolean}, {@code true} iff the path is
      *        covered by a test. 
      */
     public synchronized void insertPath(Iterable<Clause> path, boolean covered) {
@@ -124,7 +128,7 @@ final class TreePath {
      * @param path A sequence (more precisely, an {@link Iterable}) 
      *        of {@link Clause}s. The first in the sequence is the closer
      *        to the root, the last is the leaf.
-     * @oaram covered a {@code boolean}, {@code true} iff the path must be
+     * @param covered a {@code boolean}, {@code true} iff the path must be
      *        covered by a test. 
      * @return {@code true} iff the {@code path} was inserted by means
      *         of one or more calls to {@link #insertPath(Iterable) insertPath}.
@@ -146,5 +150,63 @@ final class TreePath {
             }
         }
         return true;
+    }
+    
+    /**
+     * Updates the value of times the branches of a particular path were
+     * hit by a test case (hitCounter).
+     * @param path A sequence (more precisely, an {@link Iterable}) 
+     *        of {@link Clause}s. The first in the sequence is the closer
+     *        to the root, the last is the leaf.
+     */
+    public synchronized void countHits(Iterable<Clause> path) {
+        Node currentInTree = this.root;
+        currentInTree.hitCounter = ++currentInTree.hitCounter;
+        for (Clause currentInPath : path) {
+            final Node child = currentInTree.findChild(currentInPath);
+            if (child == null) {
+            	break;
+            }
+            currentInTree = child;
+            currentInTree.hitCounter = ++currentInTree.hitCounter;
+        }
+    }
+    
+    /**
+     * Calculates the minimum of the values relating to how many times
+     * branches of a particular path were hit by the tests (hitCounter).
+     * @param path A sequence (more precisely, an {@link Iterable}) 
+     *        of {@link Clause}s. The first in the sequence is the closer
+     *        to the root, the last is the leaf.
+     * @return The novelty index (an int)
+     */
+    public synchronized int calculateNoveltyIndex(Iterable<Clause> path) {
+        Node currentInTree = this.root;
+        HashSet<Integer> hitCounters = new HashSet<>();
+        if (currentInTree.hitCounter > 0)
+        	hitCounters.add(currentInTree.hitCounter);
+        for (Clause currentInPath : path) {
+            final Node child = currentInTree.findChild(currentInPath);
+            if (child == null) {
+            	break;
+            }
+            currentInTree = child;
+            if (currentInTree.hitCounter > 0)
+            	hitCounters.add(currentInTree.hitCounter);
+        }
+        return Collections.min(hitCounters);
+    }
+    
+    /**
+     * Updates the minimum of the values relating to how many times
+     * branches of a particular path into the buffer were hit by the tests
+     * (hitCounter), every time a new test is run.
+     * @param arrayList An arrayList of JBSEResult used as pathConditionBuffer.
+     */
+    public synchronized void updateNoveltyIndex(ArrayList<JBSEResult> arrayList) {
+    	for (JBSEResult JBSEResultInBuffer : arrayList) {
+    		final int newMinHitValue = calculateNoveltyIndex(JBSEResultInBuffer.getFinalState().getPathCondition());
+    		JBSEResultInBuffer.setNoveltyIndex(newMinHitValue);
+    	}
     }
 }

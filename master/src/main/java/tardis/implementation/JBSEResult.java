@@ -84,6 +84,12 @@ public class JBSEResult {
      * {@code -1} if this {@link JBSEResult} is a seed item.
      */
     private final int depth;
+    
+    /**
+     * The novelty index: the minimum of the values relating to
+     * how many times branches of finalState were hit by the tests.
+     */
+    private int noveltyIndex;
 
     /**
      * Constructor for seed item (target method).
@@ -106,6 +112,7 @@ public class JBSEResult {
         this.targetBranch = null;
         this.stringLiterals = null;
         this.depth = -1;
+        this.noveltyIndex = 0;
     }
 
     /**
@@ -125,6 +132,7 @@ public class JBSEResult {
         this.targetBranch = null;
         this.stringLiterals = null;
         this.depth = -1;
+        this.noveltyIndex = 0;
     }
 
     /**
@@ -150,7 +158,7 @@ public class JBSEResult {
      * @param depth A positive {@code int}, the depth of the path 
      *        to the frontier.
      */
-    public JBSEResult(String targetMethodClassName, String targetMethodDescriptor, String targetMethodName, State initialState, State preState, State finalState, boolean atJump, String targetBranch, Map<Long, String> stringLiterals, int depth) {
+    public JBSEResult(String targetMethodClassName, String targetMethodDescriptor, String targetMethodName, State initialState, State preState, State finalState, boolean atJump, String targetBranch, Map<Long, String> stringLiterals, int depth, int noveltyIndex) {
         this.targetClassName = null;
         this.targetMethodClassName = targetMethodClassName;
         this.targetMethodDescriptor = targetMethodDescriptor;
@@ -162,6 +170,7 @@ public class JBSEResult {
         this.targetBranch = (atJump ? targetBranch : null);
         this.stringLiterals = new HashMap<>(stringLiterals); //safety copy
         this.depth = depth;
+        this.noveltyIndex = noveltyIndex;
     }
     
     /**
@@ -302,4 +311,12 @@ public class JBSEResult {
     public int getDepth() {
         return this.depth;
     }	
+    
+    public int getNoveltyIndex() {
+    	return this.noveltyIndex;
+    }
+
+    public void setNoveltyIndex(int newNoveltyIndex) {
+    	this.noveltyIndex = newNoveltyIndex;
+    }
 }

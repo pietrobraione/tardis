@@ -1,5 +1,6 @@
 package tardis.implementation;
 
+import java.util.ArrayList;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
@@ -31,4 +32,9 @@ public final class QueueInputOutputBuffer<E> implements InputBuffer<E>, OutputBu
     public boolean isEmpty() {
         return this.queue.isEmpty();
     }
+
+	@Override
+	public ArrayList<E> getList() {
+		return null;
+	}
 }

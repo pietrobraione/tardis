@@ -1,5 +1,6 @@
 package tardis.framework;
 
+import java.util.ArrayList;
 import java.util.Collection;
 
 /**
@@ -18,4 +19,6 @@ public interface OutputBuffer<O> {
      * @return {@code true} (as specified by {@link Collection#add}).
      */
     boolean add(O item);
+    
+    ArrayList<O> getList();
 }
