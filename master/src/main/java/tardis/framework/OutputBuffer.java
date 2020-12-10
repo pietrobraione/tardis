@@ -1,7 +1,7 @@
 package tardis.framework;
 
-import java.util.ArrayList;
 import java.util.Collection;
+import java.util.concurrent.LinkedBlockingQueue;
 
 /**
  * A buffer that can be (always) written.
@@ -19,6 +19,6 @@ public interface OutputBuffer<O> {
      * @return {@code true} (as specified by {@link Collection#add}).
      */
     boolean add(O item);
-    
-    ArrayList<O> getList();
+
+	LinkedBlockingQueue<O> getQueue();
 }

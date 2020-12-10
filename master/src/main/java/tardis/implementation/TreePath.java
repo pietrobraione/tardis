@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.concurrent.LinkedBlockingQueue;
 
 import jbse.mem.Clause;
 
@@ -201,10 +202,10 @@ final class TreePath {
      * Updates the minimum of the values relating to how many times
      * branches of a particular path into the buffer were hit by the tests
      * (hitCounter), every time a new test is run.
-     * @param arrayList An arrayList of JBSEResult used as pathConditionBuffer.
+     * @param linkedBlockingQueue A linkedBlockingQueue of JBSEResult used as pathConditionBuffer.
      */
-    public synchronized void updateNoveltyIndex(ArrayList<JBSEResult> arrayList) {
-    	for (JBSEResult JBSEResultInBuffer : arrayList) {
+    public synchronized void updateNoveltyIndex(LinkedBlockingQueue<JBSEResult> linkedBlockingQueue) {
+    	for (JBSEResult JBSEResultInBuffer : linkedBlockingQueue) {
     		final int newMinHitValue = calculateNoveltyIndex(JBSEResultInBuffer.getFinalState().getPathCondition());
     		JBSEResultInBuffer.setNoveltyIndex(newMinHitValue);
     	}

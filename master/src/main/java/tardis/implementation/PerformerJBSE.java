@@ -127,11 +127,9 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
                 if (this.treePath.containsPath(tcFinalPC, true)) {
                 	//updates information (hitCounter) in treePath each time a test case is run
                 	this.treePath.countHits(tcFinalPC);
-                	if (!this.getOutputBuffer().getList().isEmpty()) {
+                	if (!this.getOutputBuffer().getQueue().isEmpty()) {
                 		//updates the novelty index for each JBSEResult into the buffer each time a test case is run
-                		synchronized (this.getOutputBuffer().getList()) {
-                			this.treePath.updateNoveltyIndex(this.getOutputBuffer().getList());
-                		}
+                		this.treePath.updateNoveltyIndex(this.getOutputBuffer().getQueue());
                 	}
                     System.out.println("[JBSE    ] Test case " + tc.getClassName() + " redundant, skipped");
                     return;
@@ -139,11 +137,9 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
                 this.treePath.insertPath(tcFinalPC, true);
                 //updates information (hitCounter) in treePath each time a test case is run
                 this.treePath.countHits(tcFinalPC);
-                if (!this.getOutputBuffer().getList().isEmpty()) {
+                if (!this.getOutputBuffer().getQueue().isEmpty()) {
                 	//updates the novelty index for each JBSEResult into the buffer each time a test case is run
-                	synchronized (this.getOutputBuffer().getList()) {
-                		this.treePath.updateNoveltyIndex(this.getOutputBuffer().getList());
-                	}
+                	this.treePath.updateNoveltyIndex(this.getOutputBuffer().getQueue());
                 }
             }
             
@@ -226,9 +222,7 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
                     	//calculates the novelty index for currentPC; then adds the novelty index to the new JBSEResult.
                     	final int noveltyIndex = this.treePath.calculateNoveltyIndex(currentPC);
                         final JBSEResult output = new JBSEResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), initialState, preState, newState, atJump, (atJump ? targetBranches.get(i) : null), stringLiterals, currentDepth, noveltyIndex);
-                        synchronized (this.getOutputBuffer().getList()) {
-                        	this.getOutputBuffer().add(output);
-                        }
+                        this.getOutputBuffer().add(output);
                         System.out.println("[JBSE    ] From test case " + tc.getClassName() + " generated path condition " + stringifyPathCondition(shorten(currentPC)) + (atJump ? (" aimed at branch " + targetBranches.get(i)) : ""));
                         noPathConditionGenerated = false;
                     }

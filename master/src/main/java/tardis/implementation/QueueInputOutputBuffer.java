@@ -1,6 +1,5 @@
 package tardis.implementation;
 
-import java.util.ArrayList;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
@@ -34,7 +33,7 @@ public final class QueueInputOutputBuffer<E> implements InputBuffer<E>, OutputBu
     }
 
 	@Override
-	public ArrayList<E> getList() {
-		return null;
+	public LinkedBlockingQueue<E> getQueue() {
+		return this.queue;
 	}
 }
