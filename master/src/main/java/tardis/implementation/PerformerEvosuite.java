@@ -119,13 +119,13 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         this.o = o;
         this.timeBudgetSeconds = o.getEvosuiteTimeBudgetUnit().toSeconds(o.getEvosuiteTimeBudgetDuration());
         final String classesPathString = String.join(File.pathSeparator, stream(o.getClassesPath()).map(Object::toString).toArray(String[]::new)); 
-        this.classpathEvosuite = classesPathString + File.pathSeparator + this.o.getSushiLibPath().toString() + (this.o.getUseMOSA() ? "" : (File.pathSeparator + this.o.getTmpBinDirectoryPath().toString()));
+        this.classpathEvosuite = classesPathString + File.pathSeparator + this.o.getJBSELibraryPath().toString() + File.pathSeparator + this.o.getSushiLibPath().toString() + (this.o.getUseMOSA() ? "" : (File.pathSeparator + this.o.getTmpBinDirectoryPath().toString()));
         final ArrayList<Path> classpathTestPath = new ArrayList<>(o.getClassesPath());
         classpathTestPath.add(this.o.getSushiLibPath());
         classpathTestPath.add(this.o.getTmpBinDirectoryPath());
         classpathTestPath.add(this.o.getEvosuitePath());
         this.classpathTestURLClassLoader = stream(classpathTestPath).map(PerformerEvosuite::toURL).toArray(URL[]::new);
-        this.classpathCompilationTest = this.o.getTmpBinDirectoryPath().toString() + File.pathSeparator + classesPathString + File.pathSeparator + this.o.getSushiLibPath().toString() + File.pathSeparator + this.o.getEvosuitePath().toString();
+        this.classpathCompilationTest = this.o.getTmpBinDirectoryPath().toString() + File.pathSeparator + classesPathString + File.pathSeparator + this.o.getJBSELibraryPath().toString() + File.pathSeparator + this.o.getSushiLibPath().toString() + File.pathSeparator + this.o.getEvosuitePath().toString();
         this.classpathCompilationWrapper = classesPathString + File.pathSeparator + this.o.getSushiLibPath().toString();
         this.testCount = (o.getInitialTestCase() == null ? 0 : 1);
         this.stopForSeeding = false;
