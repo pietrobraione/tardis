@@ -275,7 +275,7 @@ final class RunnerPath implements AutoCloseable {
 
     /**
      * The {@link Actions} for the {@link Runner} that runs the guided symbolic execution
-     * up to the pre-frontier for a given depth.
+     * to the post-frontier and gathers the post-frontier states.
      * 
      * @author Pietro Braione
      *
