@@ -2,6 +2,8 @@ package tardis.implementation;
 
 import static jbse.algo.Util.valueString;
 import static jbse.apps.run.DecisionProcedureGuidanceJDI.countNonRecursiveHits;
+import static jbse.bc.ClassLoaders.CLASSLOADER_BOOT;
+import static jbse.bc.Signatures.JAVA_OBJECT;
 import static jbse.bc.Signatures.JAVA_STRING;
 import static tardis.implementation.Util.bytecodeJump;
 import static tardis.implementation.Util.bytecodeLoadConstant;
@@ -10,6 +12,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.ListIterator;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -18,6 +21,7 @@ import jbse.algo.exc.NotYetImplementedException;
 import jbse.apps.run.DecisionProcedureGuidance;
 import jbse.apps.run.DecisionProcedureGuidanceJDI;
 import jbse.apps.run.GuidanceException;
+import jbse.bc.ClassFile;
 import jbse.bc.Signature;
 import jbse.bc.exc.InvalidClassFileFactoryClassException;
 import jbse.common.exc.ClasspathException;
@@ -31,6 +35,7 @@ import jbse.dec.exc.DecisionException;
 import jbse.jvm.Runner;
 import jbse.jvm.RunnerBuilder;
 import jbse.jvm.RunnerParameters;
+import jbse.jvm.Engine;
 import jbse.jvm.EngineParameters.BreadthMode;
 import jbse.jvm.EngineParameters.StateIdentificationMode;
 import jbse.jvm.Runner.Actions;
@@ -40,11 +45,21 @@ import jbse.jvm.exc.EngineStuckException;
 import jbse.jvm.exc.FailureException;
 import jbse.jvm.exc.InitializationException;
 import jbse.jvm.exc.NonexistingObservedVariablesException;
+import jbse.mem.Clause;
+import jbse.mem.ClauseAssume;
+import jbse.mem.ClauseAssumeAliases;
+import jbse.mem.ClauseAssumeClassInitialized;
+import jbse.mem.ClauseAssumeClassNotInitialized;
+import jbse.mem.ClauseAssumeExpands;
+import jbse.mem.ClauseAssumeNull;
+import jbse.mem.ClauseAssumeReferenceSymbolic;
 import jbse.mem.Objekt;
 import jbse.mem.State;
 import jbse.mem.State.Phase;
+import jbse.mem.exc.CannotAssumeSymbolicObjectException;
 import jbse.mem.exc.ContradictionException;
 import jbse.mem.exc.FrozenStateException;
+import jbse.mem.exc.HeapMemoryExhaustedException;
 import jbse.mem.exc.InvalidNumberOfOperandsException;
 import jbse.mem.exc.ThreadStackEmptyException;
 import jbse.rewr.CalculatorRewriting;
@@ -52,10 +67,12 @@ import jbse.rewr.RewriterOperationOnSimplex;
 import jbse.rules.ClassInitRulesRepo;
 import jbse.rules.LICSRulesRepo;
 import jbse.tree.StateTree.BranchPoint;
+import jbse.val.Calculator;
 import jbse.val.Reference;
 import jbse.val.ReferenceConcrete;
 import jbse.val.ReferenceSymbolic;
 import jbse.val.Value;
+import jbse.val.exc.InvalidTypeException;
 import tardis.Options;
 
 final class RunnerPath implements AutoCloseable {
@@ -359,7 +376,63 @@ final class RunnerPath implements AutoCloseable {
                         throw new RuntimeException(e); //TODO better exception!
                     }
                 } //else, do nothing
-                getEngine().stopCurrentPath();
+                
+                final Engine engine = getEngine();
+                final Calculator calc = engine.getExecutionContext().getCalculator();
+                final ClassFile cfJAVA_OBJECT = currentState.getClassHierarchy().getClassFileClassArray(CLASSLOADER_BOOT, JAVA_OBJECT);
+                
+                //if some references were partially resolved adds foo states with expansion
+                //clauses in the path condition, hoping that EvoSuite will discover a
+                //concrete class for them
+                if (engine.someReferencePartiallyResolved()) {
+                    System.out.print("[JBSE    ] WARNING: References "); 
+                    System.out.print(String.join(", ",getEngine().getPartiallyResolvedReferences().stream().map(ReferenceSymbolic::asOriginString).toArray(String[]::new)));
+                    System.out.print(" were partially resolved, artificially generating constraints for attempting their expansion");
+                    
+                    for (ReferenceSymbolic nonExpandedReference : engine.getPartiallyResolvedReferences()) {
+                        final State stateForExpansion = engine.getExecutionContext().getStateStart();
+                        final int commonClauses = stateForExpansion.getPathCondition().size();
+                        int currentClause = 0;
+                        for (Clause c : currentState.getPathCondition()) {
+                            try {
+                                ++currentClause;
+                                if (currentClause <= commonClauses) {
+                                    continue;
+                                }
+                                if (c instanceof ClauseAssumeReferenceSymbolic && 
+                                ((ClauseAssumeReferenceSymbolic) c).getReference().equals(nonExpandedReference)) {
+                                    stateForExpansion.assumeExpands(calc, nonExpandedReference, cfJAVA_OBJECT);
+                                } else if (c instanceof ClauseAssume) {
+                                    stateForExpansion.assume(((ClauseAssume) c).getCondition());
+                                } else if (c instanceof ClauseAssumeClassInitialized) {
+                                    final ClauseAssumeClassInitialized cc = (ClauseAssumeClassInitialized) c;
+                                    if (stateForExpansion.getKlass(cc.getClassFile()) == null) {
+                                        stateForExpansion.ensureKlassSymbolic(calc, cc.getClassFile());
+                                    }
+                                    stateForExpansion.assumeClassInitialized(cc.getClassFile(), stateForExpansion.getKlass(cc.getClassFile()));
+                                } else if (c instanceof ClauseAssumeClassNotInitialized) {
+                                    stateForExpansion.assumeClassNotInitialized(((ClauseAssumeClassNotInitialized) c).getClassFile());
+                                } else if (c instanceof ClauseAssumeNull) {
+                                    stateForExpansion.assumeNull(((ClauseAssumeNull) c).getReference());
+                                } else if (c instanceof ClauseAssumeExpands) {
+                                    final ClauseAssumeExpands cc = (ClauseAssumeExpands) c;
+                                    stateForExpansion.assumeExpands(calc, cc.getReference(), cc.getObjekt().getType());
+                                } else if (c instanceof ClauseAssumeAliases) {
+                                    final ClauseAssumeAliases cc = (ClauseAssumeAliases) c;
+                                    stateForExpansion.assumeAliases(cc.getReference(), cc.getObjekt().getOrigin());
+                                }
+                            } catch (CannotAssumeSymbolicObjectException | InvalidInputException |
+                            InvalidTypeException | ContradictionException |
+                            HeapMemoryExhaustedException e) {
+                                System.out.print("[JBSE    ] Unexpected exception when attempting to artificially generate an expansion constraint: " + e);
+                                throw new RuntimeException(e); //TODO throw better exception
+                            }
+                        }
+                        this.stateList.add(stateForExpansion);
+                    }
+                }
+                
+                engine.stopCurrentPath();
             }
             
             return super.atStepPost();
