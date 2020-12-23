@@ -146,15 +146,23 @@ public final class Util {
     }
 
     /**
-     * Checks whether a bytecode is a load constant bytecode.
+     * Checks whether a bytecode is a load bytecode.
      * 
      * @param currentBytecode a {@code byte}.
-     * @return {@code true} iff {@code currentBytecode} is a load constant bytecode.
+     * @return {@code true} iff {@code currentBytecode} is a load bytecode.
      */
-    static boolean bytecodeLoadConstant(byte currentBytecode) {
+    static boolean bytecodeLoad(byte currentBytecode) {
         return (currentBytecode == Opcodes.OP_LDC ||
         currentBytecode == Opcodes.OP_LDC_W ||
-        currentBytecode == Opcodes.OP_LDC2_W);
+        currentBytecode == Opcodes.OP_LDC2_W || 
+        currentBytecode == Opcodes.OP_ALOAD || 
+        currentBytecode == Opcodes.OP_ALOAD_0 || 
+        currentBytecode == Opcodes.OP_ALOAD_1 || 
+        currentBytecode == Opcodes.OP_ALOAD_2 || 
+        currentBytecode == Opcodes.OP_ALOAD_3 || 
+        currentBytecode == Opcodes.OP_AALOAD || 
+        currentBytecode == Opcodes.OP_GETSTATIC ||
+        currentBytecode == Opcodes.OP_GETFIELD);
     }
 
     /**

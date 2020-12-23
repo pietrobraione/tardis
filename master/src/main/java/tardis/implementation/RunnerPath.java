@@ -6,14 +6,14 @@ import static jbse.bc.ClassLoaders.CLASSLOADER_BOOT;
 import static jbse.bc.Signatures.JAVA_OBJECT;
 import static jbse.bc.Signatures.JAVA_STRING;
 import static tardis.implementation.Util.bytecodeJump;
-import static tardis.implementation.Util.bytecodeLoadConstant;
+import static tardis.implementation.Util.bytecodeLoad;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.ListIterator;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import jbse.algo.exc.CannotManageStateException;
@@ -179,6 +179,7 @@ final class RunnerPath implements AutoCloseable {
         private boolean atLoadConstant = false;
         private int loadConstantStackSize = 0;
         private final HashMap<Long, String> stringLiterals = new HashMap<>();
+        private final HashSet<Long> stringOthers = new HashSet<>();
         private final HashSet<String> coverage = new HashSet<>();
 
         public ActionsRunnerPreFrontier(DecisionProcedureGuidance guid) {
@@ -218,7 +219,7 @@ final class RunnerPath implements AutoCloseable {
                     }
 
                     //if at a load constant bytecode, saves the stack size
-                    this.atLoadConstant = bytecodeLoadConstant(currentInstruction);
+                    this.atLoadConstant = bytecodeLoad(currentInstruction);
                     if (this.atLoadConstant) {
                         this.loadConstantStackSize = currentState.getStackSize();
                     }
@@ -266,10 +267,14 @@ final class RunnerPath implements AutoCloseable {
                             final Reference r = (Reference) operand;
                             final Objekt o = currentState.getObject(r);
                             if (o != null && JAVA_STRING.equals(o.getType().getClassName())) {
-                                final String s = valueString(currentState, r);
                                 final long heapPosition = (r instanceof ReferenceConcrete ? ((ReferenceConcrete) r).getHeapPosition() : currentState.getResolution((ReferenceSymbolic) r));
-                                this.stringLiterals.put(heapPosition, s);
-                            } //TODO: constants for Integer, Float, Double, ... containers
+                                final String s = valueString(currentState, r);
+                                if (s == null) {
+                                    this.stringOthers.add(heapPosition);
+                                } else {
+                                    this.stringLiterals.put(heapPosition, s);
+                                }
+                            } //TODO: constants for Integer, Float, Double ... boxed types; add generic stateful object graphs produced by pure methods
                         }					
                     }
                 } catch (FrozenStateException | InvalidNumberOfOperandsException | ThreadStackEmptyException e) {
@@ -298,17 +303,25 @@ final class RunnerPath implements AutoCloseable {
      *
      */
     private static class ActionsRunnerPostFrontier extends Actions {
-        private final HashMap<Long, String> stringLiterals;
+        private final HashMap<Long, String> stringLiteralsAtFrontier;
+        private final HashSet<Long> stringOthersAtFrontier;
         private final ArrayList<State> stateList = new ArrayList<>();
+        private final ArrayList<HashMap<Long, String>> stringLiteralsList = new ArrayList<>();
+        private final ArrayList<HashSet<Long>> stringOthersList = new ArrayList<>();
+        private final ArrayList<String> branchList = new ArrayList<>();
+        private HashMap<Long, String> stringLiteralsCurrent;
+        private HashSet<Long> stringOthersCurrent;
         private int testDepth;
         private boolean atJump = false;
         private int jumpPC = 0;
         private boolean atLoadConstant = false;
         private int loadConstantStackSize = 0;
-        private final ArrayList<String> branchList = new ArrayList<>();
 
-        public ActionsRunnerPostFrontier(HashMap<Long, String> stringLiterals) { 
-            this.stringLiterals = stringLiterals;
+        public ActionsRunnerPostFrontier(HashMap<Long, String> stringLiterals, HashSet<Long> stringOthers) { 
+            this.stringLiteralsAtFrontier = stringLiterals;
+            this.stringOthersAtFrontier = stringOthers;
+            this.stringLiteralsCurrent = new HashMap<>(this.stringLiteralsAtFrontier);
+            this.stringOthersCurrent = new HashSet<>(this.stringOthersAtFrontier);
         }
         
         public void setTestDepth(int testDepth) {
@@ -329,7 +342,7 @@ final class RunnerPath implements AutoCloseable {
                     }
 
                     //if at a load constant bytecode, saves the stack size
-                    this.atLoadConstant = bytecodeLoadConstant(currentInstruction);
+                    this.atLoadConstant = bytecodeLoad(currentInstruction);
                     if (this.atLoadConstant) {
                         this.loadConstantStackSize = currentState.getStackSize();
                     }
@@ -354,10 +367,14 @@ final class RunnerPath implements AutoCloseable {
                             final Reference r = (Reference) operand;
                             final Objekt o = currentState.getObject(r);
                             if (o != null && JAVA_STRING.equals(o.getType().getClassName())) {
-                                final String s = valueString(currentState, r);
                                 final long heapPosition = (r instanceof ReferenceConcrete ? ((ReferenceConcrete) r).getHeapPosition() : currentState.getResolution((ReferenceSymbolic) r));
-                                this.stringLiterals.put(heapPosition, s);
-                            }
+                                final String s = valueString(currentState, r);
+                                if (s == null) {
+                                    this.stringOthersCurrent.add(heapPosition);
+                                } else {
+                                    this.stringLiteralsCurrent.put(heapPosition, s);
+                                }
+                            } //TODO: constants for Integer, Float, Double ... boxed types; add generic stateful object graphs produced by pure methods
                         }                                       
                     }
                 } catch (FrozenStateException | InvalidNumberOfOperandsException | ThreadStackEmptyException e) {
@@ -367,15 +384,7 @@ final class RunnerPath implements AutoCloseable {
 
             if (currentState.getDepth() == this.testDepth + 1) {
                 //we are at the first post-frontier state
-                this.stateList.add(currentState.clone());
-                if (this.atJump) {
-                    try {
-                        this.branchList.add(currentState.getCurrentMethodSignature().toString() + ":" + this.jumpPC + ":" + currentState.getCurrentProgramCounter());
-                    } catch (ThreadStackEmptyException e) {
-                        //this should never happen
-                        throw new RuntimeException(e); //TODO better exception!
-                    }
-                } //else, do nothing
+                recordState(currentState);
                 
                 final Engine engine = getEngine();
                 final Calculator calc = engine.getExecutionContext().getCalculator();
@@ -387,7 +396,7 @@ final class RunnerPath implements AutoCloseable {
                 if (engine.someReferencePartiallyResolved()) {
                     System.out.print("[JBSE    ] WARNING: References "); 
                     System.out.print(String.join(", ",getEngine().getPartiallyResolvedReferences().stream().map(ReferenceSymbolic::asOriginString).toArray(String[]::new)));
-                    System.out.print(" were partially resolved, artificially generating constraints for attempting their expansion");
+                    System.out.println(" were partially resolved, artificially generating constraints for attempting their expansion");
                     
                     for (ReferenceSymbolic nonExpandedReference : engine.getPartiallyResolvedReferences()) {
                         final State stateForExpansion = engine.getExecutionContext().getStateStart();
@@ -428,7 +437,7 @@ final class RunnerPath implements AutoCloseable {
                                 throw new RuntimeException(e); //TODO throw better exception
                             }
                         }
-                        this.stateList.add(stateForExpansion);
+                        recordState(stateForExpansion);
                     }
                 }
                 
@@ -443,15 +452,7 @@ final class RunnerPath implements AutoCloseable {
             final State currentState = getEngine().getCurrentState();
             if (currentState.getDepth() == this.testDepth + 1) {
                 //we are at another post-frontier state
-                this.stateList.add(currentState.clone());
-                if (this.atJump) {
-                    try {
-                        this.branchList.add(currentState.getCurrentMethodSignature().toString() + ":" + this.jumpPC + ":" + currentState.getCurrentProgramCounter());
-                    } catch (ThreadStackEmptyException e) {
-                        //this should never happen
-                        throw new RuntimeException(e); //TODO better exception!
-                    }
-                } //else, do nothing
+                recordState(currentState);
                 getEngine().stopCurrentPath();            
                 return super.atBacktrackPost(bp);
             } else {
@@ -459,6 +460,22 @@ final class RunnerPath implements AutoCloseable {
                 //more post-frontier states
                 return true;
             }
+        }
+        
+        private void recordState(State s) {
+            this.stateList.add(s.clone());
+            this.stringLiteralsList.add(this.stringLiteralsCurrent);
+            this.stringOthersList.add(this.stringOthersCurrent);
+            this.stringLiteralsCurrent = new HashMap<>(this.stringLiteralsAtFrontier);
+            this.stringOthersCurrent = new HashSet<>(this.stringOthersAtFrontier);
+            if (this.atJump) {
+                try {
+                    this.branchList.add(s.getCurrentMethodSignature().toString() + ":" + this.jumpPC + ":" + s.getCurrentProgramCounter());
+                } catch (ThreadStackEmptyException e) {
+                    //this should never happen
+                    throw new RuntimeException(e); //TODO better exception!
+                }
+            } //else, do nothing
         }
     }
 
@@ -586,7 +603,7 @@ final class RunnerPath implements AutoCloseable {
             pSymbolic.setStartingState(this.preState);
 
             //builds the actions
-            this.actionsRunnerPostFrontier = new ActionsRunnerPostFrontier(this.actionsRunnerPreFrontier.stringLiterals);
+            this.actionsRunnerPostFrontier = new ActionsRunnerPostFrontier(this.actionsRunnerPreFrontier.stringLiterals, this.actionsRunnerPreFrontier.stringOthers);
             pSymbolic.setActions(this.actionsRunnerPostFrontier);
 
             //builds the runner
@@ -727,15 +744,32 @@ final class RunnerPath implements AutoCloseable {
      * Must be invoked after an invocation of {@link #runProgram(TestCase, int) runProgram(tc, depth)}.
      * Returns the string literals of the execution.
      * 
-     * @return a {@link Map}{@code <}{@link Long}{@code , }{@link String}{@code >}, 
-     *         mapping a heap position of a {@link String} literal to the
-     *         corresponding value of the literal. 
+     * @return a {@link List}{@code <? extends }{@link Map}{@code <}{@link Long}{@code , }{@link String}{@code >}{@code >}. 
+     *         Each element in the list maps a heap position of a {@link String} literal to the
+     *         corresponding value of the literal. The i-th element in the list
+     *         is for the i-th state returned by {@link #runProgram(TestCase, int)}. 
      *         If this method is invoked
      *         before an invocation of {@link #runProgram(TestCase, int)}
      *         always returns {@code null}.
      */
-    public Map<Long, String> getStringLiterals() {
-        return this.actionsRunnerPostFrontier.stringLiterals;
+    public List<? extends Map<Long, String>> getStringLiterals() {
+        return this.actionsRunnerPostFrontier.stringLiteralsList;
+    }
+
+    /**
+     * Must be invoked after an invocation of {@link #runProgram(TestCase, int) runProgram(tc, depth)}.
+     * Returns the (nonconstant) strings of the execution.
+     * 
+     * @return a {@link List}{@code <? extends }{@link Set}{@code <}{@link Long}{@code >}{@code >}{@code >}.
+     *         Each element in the list contains all the heap positions of the 
+     *         (nonconstant) {@link String} objects in the heap. The i-th element
+     *         in the list is for the i-th state returned by {@link #runProgram(TestCase, int)}. 
+     *         If this method is invoked
+     *         before an invocation of {@link #runProgram(TestCase, int)}
+     *         always returns {@code null}.
+     */
+    public List<? extends Set<Long>> getStringOthers() {
+        return this.actionsRunnerPostFrontier.stringOthersList;
     }
 
     /**

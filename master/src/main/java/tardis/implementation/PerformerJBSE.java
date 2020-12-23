@@ -195,9 +195,10 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
                     final State preState = rp.getPreState();
                     final boolean atJump = rp.getAtJump();
                     final List<String> targetBranches = rp.getTargetBranches(); 
-                    final Map<Long, String> stringLiterals = rp.getStringLiterals();
                     for (int i = 0; i < newStates.size(); ++i) {
                         final State newState = newStates.get(i);
+                        final Map<Long, String> stringLiterals = rp.getStringLiterals().get(i);
+                        final Set<Long> stringOthers = rp.getStringOthers().get(i); 
                         final List<Clause> currentPC = newState.getPathCondition();
                         if (this.treePath.containsPath(currentPC, false)) {
                             continue;
@@ -206,7 +207,7 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
                     	    System.out.println("[JBSE    ] From test case " + tc.getClassName() + " skipping path condition due to violated assumption " + currentPC.get(currentPC.size() - 1) + " on initialMap in path condition " + stringifyPathCondition(shorten(currentPC)));
                     	    continue;
                     	}
-                        final JBSEResult output = new JBSEResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), initialState, preState, newState, atJump, (atJump ? targetBranches.get(i) : null), stringLiterals, currentDepth);
+                        final JBSEResult output = new JBSEResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), initialState, preState, newState, atJump, (atJump ? targetBranches.get(i) : null), stringLiterals, stringOthers, currentDepth);
                         this.getOutputBuffer().add(output);
                         this.treePath.insertPath(currentPC, false);
                         System.out.println("[JBSE    ] From test case " + tc.getClassName() + " generated path condition " + stringifyPathCondition(shorten(currentPC)) + (atJump ? (" aimed at branch " + targetBranches.get(i)) : ""));

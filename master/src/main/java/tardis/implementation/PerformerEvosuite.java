@@ -30,6 +30,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -348,11 +349,14 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
      * @param stringLiterals a {@link Map}{@code <}{@link Long}{@code , }{@link String}{@code >}, 
      *         mapping a heap position of a {@link String} literal to the
      *         corresponding value of the literal.
+     * @param stringOthers a {@link List}{@code <}{@link Long}{@code >}, 
+     *         listing the heap positions of the nonconstant {@link String}s.
      * @return a {@link Path}, the file path of the generated EvoSuite wrapper.
      */
-    private Path emitEvoSuiteWrapper(int testCount, State initialState, State finalState, Map<Long, String> stringLiterals) {
+    private Path emitEvoSuiteWrapper(int testCount, State initialState, State finalState, Map<Long, String> stringLiterals, Set<Long> stringOthers) {
         final StateFormatterSushiPathCondition fmt = new StateFormatterSushiPathCondition(testCount, () -> initialState, true);
-        fmt.setConstants(stringLiterals);
+        fmt.setStringsConstant(stringLiterals);
+        fmt.setStringsNonconstant(stringOthers);
         fmt.formatPrologue();
         fmt.formatState(finalState);
         fmt.formatEpilogue();
@@ -407,7 +411,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
             final State s = new State(true, HistoryPoint.startingPreInitial(true), 1_000, 100_000, cp, ClassFileFactoryJavassist.class, new HashMap<>(), new HashMap<>(), new SymbolFactory());
             final ClassFile cf = s.getClassHierarchy().loadCreateClass(CLASSLOADER_APP, item.getTargetMethodClassName(), true);
             s.pushFrameSymbolic(cf, new Signature(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName()));
-            final Path wrapperFilePath = emitEvoSuiteWrapper(testCount, s, s.clone(), Collections.emptyMap());
+            final Path wrapperFilePath = emitEvoSuiteWrapper(testCount, s, s.clone(), Collections.emptyMap(), Collections.emptySet());
             final Path javacLogFilePath = this.o.getTmpDirectoryPath().resolve("javac-log-wrapper-" + testCount + ".txt");
             final String[] javacParameters = { "-cp", this.classpathCompilationWrapper, "-d", this.o.getTmpBinDirectoryPath().toString(), wrapperFilePath.toString() };
             try (final OutputStream w = new BufferedOutputStream(Files.newOutputStream(javacLogFilePath))) {
@@ -440,7 +444,8 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
             final State initialState = item.getInitialState();
             final State finalState = item.getFinalState();
             final Map<Long, String> stringLiterals = item.getStringLiterals();
-            final Path wrapperFilePath = emitEvoSuiteWrapper(i, initialState, finalState, stringLiterals);
+            final Set<Long> stringOthers = item.getStringOthers();
+            final Path wrapperFilePath = emitEvoSuiteWrapper(i, initialState, finalState, stringLiterals, stringOthers);
             final Path javacLogFilePath = this.o.getTmpDirectoryPath().resolve("javac-log-wrapper-" + i + ".txt");
             final String[] javacParameters = { "-cp", this.classpathCompilationWrapper, "-d", this.o.getTmpBinDirectoryPath().toString(), wrapperFilePath.toString() };
             try (final OutputStream w = new BufferedOutputStream(Files.newOutputStream(javacLogFilePath))) {
