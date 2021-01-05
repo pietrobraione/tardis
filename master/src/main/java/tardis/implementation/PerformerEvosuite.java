@@ -485,6 +485,10 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         retVal.add(targetClass);
         retVal.add("-mem");
         retVal.add("2048");
+        retVal.add("-Dmock_if_no_generator=false");
+        retVal.add("-Dreplace_system_in=false");
+        retVal.add("-Dreplace_gui=false");
+        retVal.add("-Dp_functional_mocking=0.0");
         retVal.add("-DCP=" + this.classpathEvosuite); 
         retVal.add("-Dassertions=false");
         retVal.add("-Dreport_dir=" + this.o.getTmpDirectoryPath().toString());
@@ -547,6 +551,10 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         retVal.add(targetClass);
         retVal.add("-mem");
         retVal.add("2048");
+        retVal.add("-Dmock_if_no_generator=false");
+        retVal.add("-Dreplace_system_in=false");
+        retVal.add("-Dreplace_gui=false");
+        retVal.add("-Dp_functional_mocking=0.0");
         retVal.add("-DCP=" + this.classpathEvosuite); 
         retVal.add("-Dassertions=false");
         retVal.add("-Dreport_dir=" + this.o.getTmpDirectoryPath().toString());
