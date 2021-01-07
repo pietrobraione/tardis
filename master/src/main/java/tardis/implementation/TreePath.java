@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.ListIterator;
 import java.util.concurrent.LinkedBlockingQueue;
 
 import jbse.mem.Clause;
@@ -208,6 +209,31 @@ final class TreePath {
     	for (JBSEResult JBSEResultInBuffer : linkedBlockingQueue) {
     		final int newMinHitValue = calculateNoveltyIndex(JBSEResultInBuffer.getFinalState().getPathCondition());
     		JBSEResultInBuffer.setNoveltyIndex(newMinHitValue);
+    	}
+    }
+     
+    /**
+     * Updates the improvability Index list (list of lists of clauses relating to not covered paths)
+     * and the improvability value (the size of improvability Index list), every time a new test is run.
+     * @param linkedBlockingQueue A linkedBlockingQueue of JBSEResult used as pathConditionBuffer.
+     * @param testPC A list of Clauses that refer to a particular path.
+     */
+    public synchronized void updateImprovabilityIndex(LinkedBlockingQueue<JBSEResult> linkedBlockingQueue, List<Clause> testPC) {
+    	for (JBSEResult JBSEResultInBuffer : linkedBlockingQueue) {
+    		ListIterator<List<Clause>> iter = JBSEResultInBuffer.getNotCoveredBranches().listIterator();
+    		while(iter.hasNext()){
+    			List<Clause> path = iter.next();
+    			if (testPC.size() < path.size()) {
+    				continue;
+    			}
+    			//if all the clauses related to a path in the improvability Index list are covered, removes the
+    			//clauses related to the path from the improvability Index list and updates the improvability Index
+    			else if (path.size() > 0 && containsPath(path, true)) {
+    				iter.remove();
+    				JBSEResultInBuffer.setNotCoveredBranches(JBSEResultInBuffer.getNotCoveredBranches());
+    				JBSEResultInBuffer.setImprovabilityIndex(JBSEResultInBuffer.getNotCoveredBranches().size());
+    			}
+    		}
     	}
     }
 }

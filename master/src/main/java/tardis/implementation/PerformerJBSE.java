@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -140,6 +141,8 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
                 if (!this.getOutputBuffer().getQueue().isEmpty()) {
                 	//updates the novelty index for each JBSEResult into the buffer each time a test case is run
                 	this.treePath.updateNoveltyIndex(this.getOutputBuffer().getQueue());
+                	//updates the improvability index and the improvability Index list for each JBSEResult into the buffer each time a test case is run
+                	this.treePath.updateImprovabilityIndex(this.getOutputBuffer().getQueue(), tcFinalState.getPathCondition());
                 }
             }
             
@@ -202,6 +205,32 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
                     if (Thread.interrupted()) {
                         return;
                     }
+                    
+                    /**
+                     * calculates the improvability index list (<List<List<Clause>>: List of lists of clauses relating to not covered
+                     * paths) for each newStates, adds the improvability index list to improvabilityIndexes (for the future creation
+                     * of the JBSEResult) and, if necessary, updates the improvability index lists of previous modified path
+                     */
+                    final List<List<List<Clause>>> improvabilityIndexes = new ArrayList<>();
+                    for (int i = 0; i < newStates.size(); ++i) {
+                    	List<List<Clause>> improvabilityIndexList = new ArrayList<>();
+                    	List<Clause> possibleImprovabilityIndex = new ArrayList<>();
+                    	//check if path is not covered
+                    	if (!this.treePath.containsPath(newStates.get(i).getPathCondition(), true)) {
+                    		possibleImprovabilityIndex = newStates.get(i).getPathCondition();
+                    		improvabilityIndexList.add(possibleImprovabilityIndex);
+                    	}
+                    	else {
+                    		improvabilityIndexList.add(possibleImprovabilityIndex);
+                    	}
+                    	improvabilityIndexes.add(improvabilityIndexList);
+                    	//if necessary, updates the improvability index lists of previous modified path
+                    	if (possibleImprovabilityIndex.size() > 0) {
+                    		for (int j = 0; j < i; ++j) {
+                    			improvabilityIndexes.get(j).add(possibleImprovabilityIndex);
+                    		}
+                    	}
+                    }
 
                     //creates all the output jobs
                     final State preState = rp.getPreState();
@@ -219,9 +248,11 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
                     	    continue;
                     	}
                     	this.treePath.insertPath(currentPC, false);
-                    	//calculates the novelty index for currentPC; then adds the novelty index to the new JBSEResult.
+                    	//calculates the novelty index and the improvability index for currentPC;
+                    	//then adds the novelty index, the improvability index and the improvability index lists to the new JBSEResult.
                     	final int noveltyIndex = this.treePath.calculateNoveltyIndex(currentPC);
-                        final JBSEResult output = new JBSEResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), initialState, preState, newState, atJump, (atJump ? targetBranches.get(i) : null), stringLiterals, currentDepth, noveltyIndex);
+                    	final int improvabilityIndex = improvabilityIndexes.get(i).size();
+                        final JBSEResult output = new JBSEResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), initialState, preState, newState, atJump, (atJump ? targetBranches.get(i) : null), stringLiterals, currentDepth, noveltyIndex, improvabilityIndex, improvabilityIndexes.get(i));
                         this.getOutputBuffer().add(output);
                         System.out.println("[JBSE    ] From test case " + tc.getClassName() + " generated path condition " + stringifyPathCondition(shorten(currentPC)) + (atJump ? (" aimed at branch " + targetBranches.get(i)) : ""));
                         noPathConditionGenerated = false;
