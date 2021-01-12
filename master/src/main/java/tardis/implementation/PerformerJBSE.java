@@ -19,7 +19,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import jbse.algo.exc.CannotManageStateException;
-import jbse.base.JAVA_MAP_Utils;
+import jbse.apps.run.JAVA_MAP_Utils;
 import jbse.bc.exc.InvalidClassFileFactoryClassException;
 import jbse.common.exc.ClasspathException;
 import jbse.dec.exc.DecisionException;
@@ -152,12 +152,15 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             
             //records coverage, emits tests, prints feedback
             final Set<String> newCoveredBranches = this.coverageSet.addAll(rp.getCoverage());
-            final Set<String> newCoveredBranchesTarget = filterTargetBranches(newCoveredBranches);
+            final Set<String> newCoveredBranchesTarget = filterBranchesTarget(newCoveredBranches);
+            final Set<String> newCoveredBranchesUnsafe = filterBranchesUnsafe(newCoveredBranches);
             final Coverage coverage = this.o.getCoverage();
-            if (coverage == Coverage.PATHS || (coverage == Coverage.BRANCHES && newCoveredBranchesTarget.size() > 0)) {
+            if (coverage == Coverage.PATHS || 
+            (coverage == Coverage.BRANCHES && newCoveredBranchesTarget.size() > 0) ||
+            (coverage == Coverage.UNSAFE && newCoveredBranchesUnsafe.size() > 0)) {
                 //more feedback
                 if (coverage == Coverage.BRANCHES) {
-                    System.out.println("[JBSE    ] Test case " + tc.getClassName() + " covered branch" + (newCoveredBranchesTarget.size() == 1 ? " " : "es ") + String.join(", ", newCoveredBranches));
+                    System.out.print("[JBSE    ] Test case " + tc.getClassName() + " covered branch" + (newCoveredBranchesTarget.size() == 1 ? " " : "es") + String.join(", ", newCoveredBranches));
                 }
                 
                 //copies the test in out
@@ -190,8 +193,9 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             }
             final long pathCoverage = this.pathCoverage.incrementAndGet();
             final int branchCoverage = this.coverageSet.size();
-            final int branchCoverageTarget = this.coverageSet.size(patternTargetBranches());
-            System.out.println("[JBSE    ] Current coverage: " + pathCoverage + " path" + (pathCoverage == 1 ? ", " : "s, ") + branchCoverage + " branch" + (branchCoverage == 1 ? "" : "es") + " (total), " + branchCoverageTarget + " branch" + (branchCoverage == 1 ? "" : "es") + " (target)");
+            final int branchCoverageTarget = this.coverageSet.size(patternBranchesTarget());
+            final int branchCoverageUnsafe = this.coverageSet.size(patternBranchesUnsafe());
+            System.out.println("[JBSE    ] Current coverage: " + pathCoverage + " path" + (pathCoverage == 1 ? ", " : "s, ") + branchCoverage + " branch" + (branchCoverage == 1 ? "" : "es") + " (total), " + branchCoverageTarget + " branch" + (branchCoverage == 1 ? "" : "es") + " (target), " + branchCoverageUnsafe + " failed assertion" + (branchCoverageUnsafe == 1 ? "" : "s"));
 
             //reruns the test case, and generates all the modified path conditions
             final int tcFinalDepth = Math.min(startDepth + this.o.getMaxTestCaseDepth(), tcFinalState.getDepth());
@@ -236,9 +240,10 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
                     final State preState = rp.getPreState();
                     final boolean atJump = rp.getAtJump();
                     final List<String> targetBranches = rp.getTargetBranches(); 
-                    final Map<Long, String> stringLiterals = rp.getStringLiterals();
                     for (int i = 0; i < newStates.size(); ++i) {
                         final State newState = newStates.get(i);
+                        final Map<Long, String> stringLiterals = rp.getStringLiterals().get(i);
+                        final Set<Long> stringOthers = rp.getStringOthers().get(i); 
                         final List<Clause> currentPC = newState.getPathCondition();
                         if (this.treePath.containsPath(currentPC, false)) {
                             continue;
@@ -252,7 +257,7 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
                     	//then adds the novelty index, the improvability index and the improvability index lists to the new JBSEResult.
                     	final int noveltyIndex = this.treePath.calculateNoveltyIndex(currentPC);
                     	final int improvabilityIndex = improvabilityIndexes.get(i).size();
-                        final JBSEResult output = new JBSEResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), initialState, preState, newState, atJump, (atJump ? targetBranches.get(i) : null), stringLiterals, currentDepth, noveltyIndex, improvabilityIndex, improvabilityIndexes.get(i));
+                        final JBSEResult output = new JBSEResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), initialState, preState, newState, atJump, (atJump ? targetBranches.get(i) : null), stringLiterals, stringOthers, currentDepth, noveltyIndex, improvabilityIndex, improvabilityIndexes.get(i));
                         this.getOutputBuffer().add(output);
                         System.out.println("[JBSE    ] From test case " + tc.getClassName() + " generated path condition " + stringifyPathCondition(shorten(currentPC)) + (atJump ? (" aimed at branch " + targetBranches.get(i)) : ""));
                         noPathConditionGenerated = false;
@@ -268,12 +273,29 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
         }
     }
     
-    private String patternTargetBranches() {
-        return (this.o.getTargetClass() == null) ? (this.o.getTargetMethod() + ":.*:.*") : (this.o.getTargetClass() + "(\\$.*)*:.*:.*:.*:.*");
+    private static String toPattern(String s) {
+        return s
+        .replace("(", "\\(")
+        .replace(")", "\\)")
+        .replace("$", "\\$");
     }
     
-    private Set<String> filterTargetBranches(Set<String> newCoveredBranches) {
-        final Pattern p = Pattern.compile(patternTargetBranches()); 
+    private String patternBranchesTarget() {
+        return (this.o.getTargetClass() == null) ? (this.o.getTargetMethod().get(0) + ":" + toPattern(this.o.getTargetMethod().get(1)) + ":" + this.o.getTargetMethod().get(2) + ":.*:.*") : (toPattern(this.o.getTargetClass()) + "(\\$.*)*:.*:.*:.*:.*");
+    }
+    
+    private Set<String> filterBranchesTarget(Set<String> newCoveredBranches) {
+        final Pattern p = Pattern.compile(patternBranchesTarget()); 
+        final Set<String> retVal = newCoveredBranches.stream().filter(s -> { final Matcher m = p.matcher(s); return m.matches(); }).collect(Collectors.toSet());
+        return retVal;
+    }
+    
+    private String patternBranchesUnsafe() {
+        return "jbse/meta/Analysis:\\(Z\\)V:ass3rt:1:4"; //TODO find a more robust way
+    }
+    
+    private Set<String> filterBranchesUnsafe(Set<String> newCoveredBranches) {
+        final Pattern p = Pattern.compile(patternBranchesUnsafe()); 
         final Set<String> retVal = newCoveredBranches.stream().filter(s -> { final Matcher m = p.matcher(s); return m.matches(); }).collect(Collectors.toSet());
         return retVal;
     }

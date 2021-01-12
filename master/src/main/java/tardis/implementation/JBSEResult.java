@@ -1,8 +1,10 @@
 package tardis.implementation;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import jbse.mem.Clause;
 import jbse.mem.State;
@@ -81,6 +83,13 @@ public class JBSEResult {
     private final HashMap<Long, String> stringLiterals;
     
     /**
+     * The (nonconstant) strings gathered during the
+     * execution of the path to the frontier, or 
+     * {@code null} if this {@link JBSEResult} is a seed item.
+     */
+    private final HashSet<Long> stringOthers;
+    
+    /**
      * The depth of the path to the frontier, or 
      * {@code -1} if this {@link JBSEResult} is a seed item.
      */
@@ -123,6 +132,7 @@ public class JBSEResult {
         this.atJump = false;
         this.targetBranch = null;
         this.stringLiterals = null;
+        this.stringOthers = null;
         this.depth = -1;
         this.noveltyIndex = 0;
         this.improvabilityIndex = 0;
@@ -145,6 +155,7 @@ public class JBSEResult {
         this.atJump = false;
         this.targetBranch = null;
         this.stringLiterals = null;
+        this.stringOthers = null;
         this.depth = -1;
         this.noveltyIndex = 0;
         this.improvabilityIndex = 0;
@@ -171,10 +182,14 @@ public class JBSEResult {
      * @param stringLiterals a {@link Map}{@code <}{@link Long}{@code , }{@link String}{@code >}, 
      *        the string literals gathered during the execution of 
      *        the path to the frontier.
+     * @param stringOthers a {@link Set}{@code <}{@link Long}{@code >}, 
+     *        containing all the heap positions of the (nonconstant) 
+     *        {@link String} objects gathered during the execution of 
+     *        the path to the frontier. 
      * @param depth A positive {@code int}, the depth of the path 
      *        to the frontier.
      */
-    public JBSEResult(String targetMethodClassName, String targetMethodDescriptor, String targetMethodName, State initialState, State preState, State finalState, boolean atJump, String targetBranch, Map<Long, String> stringLiterals, int depth, int noveltyIndex, int improvabilityIndex, List<List<Clause>> notCoveredBranches) {
+    public JBSEResult(String targetMethodClassName, String targetMethodDescriptor, String targetMethodName, State initialState, State preState, State finalState, boolean atJump, String targetBranch, Map<Long, String> stringLiterals, Set<Long> stringOthers, int depth, int noveltyIndex, int improvabilityIndex, List<List<Clause>> notCoveredBranches) {
         this.targetClassName = null;
         this.targetMethodClassName = targetMethodClassName;
         this.targetMethodDescriptor = targetMethodDescriptor;
@@ -185,6 +200,7 @@ public class JBSEResult {
         this.atJump = atJump;
         this.targetBranch = (atJump ? targetBranch : null);
         this.stringLiterals = new HashMap<>(stringLiterals); //safety copy
+        this.stringOthers = new HashSet<>(stringOthers);     //safety copy
         this.depth = depth;
         this.noveltyIndex = noveltyIndex;
         this.improvabilityIndex = improvabilityIndex;
@@ -318,6 +334,17 @@ public class JBSEResult {
      */
     public Map<Long, String> getStringLiterals() {
         return this.stringLiterals;
+    }
+
+    /**
+     * Gets the (nonconstant) strings gathered during the
+     * execution of the path to the frontier.
+     * 
+     * @return A {@link List}{@code <}{@link Long}{@code >}, or {@code null}
+     *         if {@link #isSeed() isSeed}{@code () == true}.
+     */
+    public Set<Long> getStringOthers() {
+        return this.stringOthers;
     }
 
     /**

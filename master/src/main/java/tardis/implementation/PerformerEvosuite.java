@@ -30,6 +30,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -119,13 +120,13 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         this.o = o;
         this.timeBudgetSeconds = o.getEvosuiteTimeBudgetUnit().toSeconds(o.getEvosuiteTimeBudgetDuration());
         final String classesPathString = String.join(File.pathSeparator, stream(o.getClassesPath()).map(Object::toString).toArray(String[]::new)); 
-        this.classpathEvosuite = classesPathString + File.pathSeparator + this.o.getSushiLibPath().toString() + (this.o.getUseMOSA() ? "" : (File.pathSeparator + this.o.getTmpBinDirectoryPath().toString()));
+        this.classpathEvosuite = classesPathString + File.pathSeparator + this.o.getJBSELibraryPath().toString() + File.pathSeparator + this.o.getSushiLibPath().toString() + (this.o.getUseMOSA() ? "" : (File.pathSeparator + this.o.getTmpBinDirectoryPath().toString()));
         final ArrayList<Path> classpathTestPath = new ArrayList<>(o.getClassesPath());
         classpathTestPath.add(this.o.getSushiLibPath());
         classpathTestPath.add(this.o.getTmpBinDirectoryPath());
         classpathTestPath.add(this.o.getEvosuitePath());
         this.classpathTestURLClassLoader = stream(classpathTestPath).map(PerformerEvosuite::toURL).toArray(URL[]::new);
-        this.classpathCompilationTest = this.o.getTmpBinDirectoryPath().toString() + File.pathSeparator + classesPathString + File.pathSeparator + this.o.getSushiLibPath().toString() + File.pathSeparator + this.o.getEvosuitePath().toString();
+        this.classpathCompilationTest = this.o.getTmpBinDirectoryPath().toString() + File.pathSeparator + classesPathString + File.pathSeparator + this.o.getJBSELibraryPath().toString() + File.pathSeparator + this.o.getSushiLibPath().toString() + File.pathSeparator + this.o.getEvosuitePath().toString();
         this.classpathCompilationWrapper = classesPathString + File.pathSeparator + this.o.getSushiLibPath().toString();
         this.testCount = (o.getInitialTestCase() == null ? 0 : 1);
         this.stopForSeeding = false;
@@ -348,11 +349,14 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
      * @param stringLiterals a {@link Map}{@code <}{@link Long}{@code , }{@link String}{@code >}, 
      *         mapping a heap position of a {@link String} literal to the
      *         corresponding value of the literal.
+     * @param stringOthers a {@link List}{@code <}{@link Long}{@code >}, 
+     *         listing the heap positions of the nonconstant {@link String}s.
      * @return a {@link Path}, the file path of the generated EvoSuite wrapper.
      */
-    private Path emitEvoSuiteWrapper(int testCount, State initialState, State finalState, Map<Long, String> stringLiterals) {
+    private Path emitEvoSuiteWrapper(int testCount, State initialState, State finalState, Map<Long, String> stringLiterals, Set<Long> stringOthers) {
         final StateFormatterSushiPathCondition fmt = new StateFormatterSushiPathCondition(testCount, () -> initialState, true);
-        fmt.setConstants(stringLiterals);
+        fmt.setStringsConstant(stringLiterals);
+        fmt.setStringsNonconstant(stringOthers);
         fmt.formatPrologue();
         fmt.formatState(finalState);
         fmt.formatEpilogue();
@@ -407,7 +411,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
             final State s = new State(true, HistoryPoint.startingPreInitial(true), 1_000, 100_000, cp, ClassFileFactoryJavassist.class, new HashMap<>(), new HashMap<>(), new SymbolFactory());
             final ClassFile cf = s.getClassHierarchy().loadCreateClass(CLASSLOADER_APP, item.getTargetMethodClassName(), true);
             s.pushFrameSymbolic(cf, new Signature(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName()));
-            final Path wrapperFilePath = emitEvoSuiteWrapper(testCount, s, s.clone(), Collections.emptyMap());
+            final Path wrapperFilePath = emitEvoSuiteWrapper(testCount, s, s.clone(), Collections.emptyMap(), Collections.emptySet());
             final Path javacLogFilePath = this.o.getTmpDirectoryPath().resolve("javac-log-wrapper-" + testCount + ".txt");
             final String[] javacParameters = { "-cp", this.classpathCompilationWrapper, "-d", this.o.getTmpBinDirectoryPath().toString(), wrapperFilePath.toString() };
             try (final OutputStream w = new BufferedOutputStream(Files.newOutputStream(javacLogFilePath))) {
@@ -440,7 +444,8 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
             final State initialState = item.getInitialState();
             final State finalState = item.getFinalState();
             final Map<Long, String> stringLiterals = item.getStringLiterals();
-            final Path wrapperFilePath = emitEvoSuiteWrapper(i, initialState, finalState, stringLiterals);
+            final Set<Long> stringOthers = item.getStringOthers();
+            final Path wrapperFilePath = emitEvoSuiteWrapper(i, initialState, finalState, stringLiterals, stringOthers);
             final Path javacLogFilePath = this.o.getTmpDirectoryPath().resolve("javac-log-wrapper-" + i + ".txt");
             final String[] javacParameters = { "-cp", this.classpathCompilationWrapper, "-d", this.o.getTmpBinDirectoryPath().toString(), wrapperFilePath.toString() };
             try (final OutputStream w = new BufferedOutputStream(Files.newOutputStream(javacLogFilePath))) {
@@ -480,6 +485,10 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         retVal.add(targetClass);
         retVal.add("-mem");
         retVal.add("2048");
+        retVal.add("-Dmock_if_no_generator=false");
+        retVal.add("-Dreplace_system_in=false");
+        retVal.add("-Dreplace_gui=false");
+        retVal.add("-Dp_functional_mocking=0.0");
         retVal.add("-DCP=" + this.classpathEvosuite); 
         retVal.add("-Dassertions=false");
         retVal.add("-Dreport_dir=" + this.o.getTmpDirectoryPath().toString());
@@ -542,6 +551,10 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         retVal.add(targetClass);
         retVal.add("-mem");
         retVal.add("2048");
+        retVal.add("-Dmock_if_no_generator=false");
+        retVal.add("-Dreplace_system_in=false");
+        retVal.add("-Dreplace_gui=false");
+        retVal.add("-Dp_functional_mocking=0.0");
         retVal.add("-DCP=" + this.classpathEvosuite); 
         retVal.add("-Dassertions=false");
         retVal.add("-Dreport_dir=" + this.o.getTmpDirectoryPath().toString());

@@ -37,7 +37,7 @@ final class TreePath {
          * @param clause The {@link Clause} stored
          *        in the node.
          */
-        public Node(Clause clause) {
+        Node(Clause clause) {
             this.clause = clause;
         }
 
@@ -45,7 +45,7 @@ final class TreePath {
          * Constructor for the root node. It does
          * not store any {@link Clause}.
          */
-        public Node() { 
+        Node() { 
             this(null);
         }
 
@@ -59,7 +59,7 @@ final class TreePath {
          *         {@code possibleChild}, otherwise 
          *         {@code null}.
          */
-        public Node findChild(Clause possibleChild) {
+        Node findChild(Clause possibleChild) {
             for (Node current : this.children) {
                 if (current.clause.equals(possibleChild)) {
                     return current;
@@ -75,7 +75,7 @@ final class TreePath {
          * @return the created child {@link Node}, 
          *         that will store {@code newChild}.
          */
-        public Node addChild(Clause newChild) {
+        Node addChild(Clause newChild) {
             final Node retVal = new Node(newChild);
             this.children.add(retVal);
             return retVal;
@@ -127,13 +127,15 @@ final class TreePath {
 
     /**
      * Checks whether a path exists in the {@link TreePath}
-     * @param path A sequence (more precisely, an {@link Iterable}) 
+     * @param path a sequence (more precisely, an {@link Iterable}) 
      *        of {@link Clause}s. The first in the sequence is the closer
      *        to the root, the last is the leaf.
      * @param covered a {@code boolean}, {@code true} iff the path must be
      *        covered by a test. 
      * @return {@code true} iff the {@code path} was inserted by means
-     *         of one or more calls to {@link #insertPath(Iterable) insertPath}.
+     *         of one or more calls to {@link #insertPath(Iterable) insertPath}, 
+     *         and in case {@code covered == true}, if it is also covered 
+     *         by a test.
      */
     public synchronized boolean containsPath(Iterable<Clause> path, boolean covered) {
         Node currentInTree = this.root;
