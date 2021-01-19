@@ -1,10 +1,12 @@
 package tardis.implementation;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.ListIterator;
+import java.util.Set;
 import java.util.concurrent.LinkedBlockingQueue;
 
 import jbse.mem.Clause;
@@ -18,6 +20,8 @@ import jbse.mem.Clause;
  */
 final class TreePath {
     enum NodeStatus { ATTEMPTED, COVERED };
+    //map used to extract the path conditions related to a branch
+    HashMap<String, HashSet<Collection<Clause>>> map = new HashMap<>(); //TODO ConcurrentHashMap?
     
     /**
      * A node in the {@link TreePath}.
@@ -30,6 +34,10 @@ final class TreePath {
         private final List<Node> children = new ArrayList<>();
         //variable to count every time a test hits a branch
         private int hitCounter = 0;
+        //the branches covered by the path condition
+        private HashSet<String> branches = new HashSet<>();
+        //a List of Strings containing the branches used to calculate the improvability index
+        private List<String> improvabilityIndexBranches = new ArrayList<>();
 
         /**
          * Constructor for a nonroot node.
@@ -103,11 +111,19 @@ final class TreePath {
      * @param path a sequence (more precisely, an {@link Iterable}) 
      *        of {@link Clause}s. The first in the sequence is the closer
      *        to the root, the last is the leaf.
+     * @param branches a List of String. The branches covered by path:
+     *        they are saved in the last node of the path condition in
+     *        the TreePath.
+     * @param improvabilityIndexBranches a List of Strings containing the
+     *        branches used to calculate the improvability index: if it is
+     *        not null, they are saved in the last node of the path condition
+     *        in the TreePath.
      * @param covered a {@code boolean}, {@code true} iff the path is
      *        covered by a test. 
      */
-    public synchronized void insertPath(Iterable<Clause> path, boolean covered) {
-        Node currentInTree = this.root;
+    public synchronized void insertPath(Collection<Clause> path, HashSet<String> branches, List<String> improvabilityIndexBranches, boolean covered) {
+        int index = 0;
+    	Node currentInTree = this.root;
         if (covered) {
             currentInTree.status = NodeStatus.COVERED;
         }
@@ -122,7 +138,29 @@ final class TreePath {
             if (covered) {
                 currentInTree.status = NodeStatus.COVERED;
             }
+            if (index == path.size()-1) {
+            	currentInTree.branches.addAll(branches);
+            	if (improvabilityIndexBranches != null) {
+            		currentInTree.improvabilityIndexBranches.addAll(improvabilityIndexBranches);
+            	}
+            }
+            ++index;
         }
+        
+        for (String branch : branches) {
+        	addToHashSet(branch, path);
+        }
+    }
+    
+    public synchronized void addToHashSet(String branch, Collection<Clause> path) {
+    	HashSet<Collection<Clause>> pathConditionsSet = this.map.get(branch);
+    	if(pathConditionsSet == null) {
+    		pathConditionsSet = new HashSet<Collection<Clause>>();
+    		pathConditionsSet.add(path);
+    		this.map.put(branch, pathConditionsSet);
+    	} else {
+    		pathConditionsSet.add(path);
+    	}
     }
 
     /**
@@ -210,32 +248,102 @@ final class TreePath {
     public synchronized void updateNoveltyIndex(LinkedBlockingQueue<JBSEResult> linkedBlockingQueue) {
     	for (JBSEResult JBSEResultInBuffer : linkedBlockingQueue) {
     		final int newMinHitValue = calculateNoveltyIndex(JBSEResultInBuffer.getFinalState().getPathCondition());
-    		JBSEResultInBuffer.setNoveltyIndex(newMinHitValue);
+    		//JBSEResultInBuffer.setNoveltyIndex(newMinHitValue);
     	}
     }
-     
+    
     /**
-     * Updates the improvability Index list (list of lists of clauses relating to not covered paths)
-     * and the improvability value (the size of improvability Index list), every time a new test is run.
-     * @param linkedBlockingQueue A linkedBlockingQueue of JBSEResult used as pathConditionBuffer.
-     * @param testPC A list of Clauses that refer to a particular path.
+     * Returns the branches related to a given path condition.
+     * @param path A sequence (more precisely, an {@link Iterable}) 
+     *        of {@link Clause}s. The first in the sequence is the closer
+     *        to the root, the last is the leaf.
+     * @return an HashSet containing the branches related to the path condition.
      */
-    public synchronized void updateImprovabilityIndex(LinkedBlockingQueue<JBSEResult> linkedBlockingQueue, List<Clause> testPC) {
-    	for (JBSEResult JBSEResultInBuffer : linkedBlockingQueue) {
-    		ListIterator<List<Clause>> iter = JBSEResultInBuffer.getNotCoveredBranches().listIterator();
-    		while(iter.hasNext()){
-    			List<Clause> path = iter.next();
-    			if (testPC.size() < path.size()) {
-    				continue;
-    			}
-    			//if all the clauses related to a path in the improvability Index list are covered, removes the
-    			//clauses related to the path from the improvability Index list and updates the improvability Index
-    			else if (path.size() > 0 && containsPath(path, true)) {
-    				iter.remove();
-    				JBSEResultInBuffer.setNotCoveredBranches(JBSEResultInBuffer.getNotCoveredBranches());
-    				JBSEResultInBuffer.setImprovabilityIndex(JBSEResultInBuffer.getNotCoveredBranches().size());
+    public synchronized HashSet<String> getBranches(Collection<Clause> path) {
+    	Node currentInTree = this.root;
+
+        for (Clause currentInPath : path) {
+            final Node child = currentInTree.findChild(currentInPath);
+            if (child == null) {
+                return null;
+            }
+            currentInTree = child;
+        }
+        return currentInTree.branches;
+    }
+    
+    /**
+     * Returns the list of branches used to calculate the improvability index for
+     * a given path condition.
+     * @param path A sequence (more precisely, an {@link Iterable}) 
+     *        of {@link Clause}s. The first in the sequence is the closer
+     *        to the root, the last is the leaf.
+     * @return a List containing the branches used to calculate the improvability index.
+     */
+    public synchronized List<String> getImprovabilityIndexBranches(Collection<Clause> path) {
+    	Node currentInTree = this.root;
+
+        for (Clause currentInPath : path) {
+            final Node child = currentInTree.findChild(currentInPath);
+            if (child == null) {
+                return null;
+            }
+            currentInTree = child;
+        }
+        return currentInTree.improvabilityIndexBranches;
+    }
+    
+    /**
+     * Updates the list of branches used to calculate the improvability index for
+     * a given path condition; i.e. removes the new covered branch from the list.
+     * @param path A sequence (more precisely, an {@link Iterable}) 
+     *        of {@link Clause}s. The first in the sequence is the closer
+     *        to the root, the last is the leaf.
+     * @param coveredBranch The new covered branch (a String).
+     */
+    public synchronized void updateImprovabilityIndexBranches(Collection<Clause> path, String coveredBranch) {
+    	Node currentInTree = this.root;
+
+        for (Clause currentInPath : path) {
+            final Node child = currentInTree.findChild(currentInPath);
+            if (child == null) {
+                break;
+            }
+            currentInTree = child;
+        }
+        currentInTree.improvabilityIndexBranches.remove(coveredBranch);
+    }
+    
+    /**
+     * If necessary updates the position (the LinkedBlockingQueue chosen based on the improvability index) of JBSEResults in the buffer
+     * every time a new branch is covered.
+     * @param buffer HashMap of LinkedBlockingQueue used as path condition buffer.
+     * @param newCoveredBranches A set of new covered branches.
+     */
+    public synchronized void updateImprovabilityIndex(HashMap<Integer, LinkedBlockingQueue<JBSEResult>> buffer, Set<String> newCoveredBranches) {
+    	for (String branch : newCoveredBranches) {
+    		for (int index : buffer.keySet()) {
+    			for (JBSEResult JBSEResultInBuffer : buffer.get(index)) {
+    				final List<Clause> pathCondition = JBSEResultInBuffer.getFinalState().getPathCondition();
+    				if (index != 0 && getImprovabilityIndexBranches(pathCondition).contains(branch)) {
+    					updateImprovabilityIndexBranches(pathCondition, branch);
+    					buffer.get(index).remove(JBSEResultInBuffer);
+    					if (buffer.get(index-1) == null) {
+    						buffer.put(index-1, new LinkedBlockingQueue<JBSEResult>());
+    					}
+    					buffer.get(index-1).add(JBSEResultInBuffer);
+    				}
     			}
     		}
     	}
+    }
+    
+    /**
+     * For a given branch, it returns in which path conditions that branch is in.
+     * @param branch A String
+     * @return an HashSet containing the path conditions related to the branch.
+     */
+    public synchronized HashSet<Collection<Clause>> getPathConditions(String branch) {
+    	return this.map.get(branch);
     }
 }

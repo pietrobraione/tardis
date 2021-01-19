@@ -6,7 +6,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import jbse.mem.Clause;
 import jbse.mem.State;
 
 /**
@@ -94,23 +93,6 @@ public class JBSEResult {
      * {@code -1} if this {@link JBSEResult} is a seed item.
      */
     private final int depth;
-    
-    /**
-     * The novelty index: the minimum of the values relating to
-     * how many times branches of finalState were hit by the tests.
-     */
-    private int noveltyIndex;
-    
-    /**
-     * The improvability index: the size of notCoveredBranches list.
-     */
-    private int improvabilityIndex;
-    
-    /**
-     * List of lists of clauses relating to not covered paths;
-     * used for the improvability index calculation.
-     */
-    List<List<Clause>> notCoveredBranches;
 
     /**
      * Constructor for seed item (target method).
@@ -134,9 +116,6 @@ public class JBSEResult {
         this.stringLiterals = null;
         this.stringOthers = null;
         this.depth = -1;
-        this.noveltyIndex = 0;
-        this.improvabilityIndex = 0;
-        this.notCoveredBranches = null;
     }
 
     /**
@@ -157,9 +136,6 @@ public class JBSEResult {
         this.stringLiterals = null;
         this.stringOthers = null;
         this.depth = -1;
-        this.noveltyIndex = 0;
-        this.improvabilityIndex = 0;
-        this.notCoveredBranches = null;
     }
 
     /**
@@ -189,7 +165,7 @@ public class JBSEResult {
      * @param depth A positive {@code int}, the depth of the path 
      *        to the frontier.
      */
-    public JBSEResult(String targetMethodClassName, String targetMethodDescriptor, String targetMethodName, State initialState, State preState, State finalState, boolean atJump, String targetBranch, Map<Long, String> stringLiterals, Set<Long> stringOthers, int depth, int noveltyIndex, int improvabilityIndex, List<List<Clause>> notCoveredBranches) {
+    public JBSEResult(String targetMethodClassName, String targetMethodDescriptor, String targetMethodName, State initialState, State preState, State finalState, boolean atJump, String targetBranch, Map<Long, String> stringLiterals, Set<Long> stringOthers, int depth) {
         this.targetClassName = null;
         this.targetMethodClassName = targetMethodClassName;
         this.targetMethodDescriptor = targetMethodDescriptor;
@@ -202,9 +178,6 @@ public class JBSEResult {
         this.stringLiterals = new HashMap<>(stringLiterals); //safety copy
         this.stringOthers = new HashSet<>(stringOthers);     //safety copy
         this.depth = depth;
-        this.noveltyIndex = noveltyIndex;
-        this.improvabilityIndex = improvabilityIndex;
-        this.notCoveredBranches = notCoveredBranches;
     }
     
     /**
@@ -355,29 +328,5 @@ public class JBSEResult {
      */
     public int getDepth() {
         return this.depth;
-    }	
-    
-    public int getNoveltyIndex() {
-    	return this.noveltyIndex;
-    }
-
-    public void setNoveltyIndex(int newNoveltyIndex) {
-    	this.noveltyIndex = newNoveltyIndex;
-    }
-    
-    public int getImprovabilityIndex() {
-    	return this.improvabilityIndex;
-    }
-    
-    public void setImprovabilityIndex(int newImprovabilityIndex) {
-    	this.improvabilityIndex = newImprovabilityIndex;
-    }
-    
-    public List<List<Clause>> getNotCoveredBranches() {
-    	return this.notCoveredBranches;
-    }
-    
-    public void setNotCoveredBranches(List<List<Clause>> newNotCoveredBranches) {
-    	this.notCoveredBranches = newNotCoveredBranches;
     }
 }

@@ -10,6 +10,7 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -126,24 +127,22 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             //otherwise records its path
             synchronized (this.treePath) {
                 if (this.treePath.containsPath(tcFinalPC, true)) {
-                	//updates information (hitCounter) in treePath each time a test case is run
-                	this.treePath.countHits(tcFinalPC);
-                	if (!this.getOutputBuffer().getQueue().isEmpty()) {
-                		//updates the novelty index for each JBSEResult into the buffer each time a test case is run
-                		this.treePath.updateNoveltyIndex(this.getOutputBuffer().getQueue());
-                	}
+//                	//updates information (hitCounter) in treePath each time a test case is run
+//                	this.treePath.countHits(tcFinalPC);
+//                	if (!this.getOutputBuffer().getQueue().isEmpty()) {
+//                		//updates the novelty index for each JBSEResult into the buffer each time a test case is run
+//                		this.treePath.updateNoveltyIndex(this.getOutputBuffer().getQueue());
+//                	}
                     System.out.println("[JBSE    ] Test case " + tc.getClassName() + " redundant, skipped");
                     return;
                 }
-                this.treePath.insertPath(tcFinalPC, true);
-                //updates information (hitCounter) in treePath each time a test case is run
-                this.treePath.countHits(tcFinalPC);
-                if (!this.getOutputBuffer().getQueue().isEmpty()) {
-                	//updates the novelty index for each JBSEResult into the buffer each time a test case is run
-                	this.treePath.updateNoveltyIndex(this.getOutputBuffer().getQueue());
-                	//updates the improvability index and the improvability Index list for each JBSEResult into the buffer each time a test case is run
-                	this.treePath.updateImprovabilityIndex(this.getOutputBuffer().getQueue(), tcFinalState.getPathCondition());
-                }
+                this.treePath.insertPath(tcFinalPC, rp.getCoverage(), null, true);
+//                //updates information (hitCounter) in treePath each time a test case is run
+//                this.treePath.countHits(tcFinalPC);
+//                if (!this.getOutputBuffer().getQueue().isEmpty()) {
+//                	//updates the novelty index for each JBSEResult into the buffer each time a test case is run
+//                	this.treePath.updateNoveltyIndex(this.getOutputBuffer().getQueue());
+//                }
             }
             
             //possibly caches the initial state
@@ -196,44 +195,47 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             final int branchCoverageTarget = this.coverageSet.size(patternBranchesTarget());
             final int branchCoverageUnsafe = this.coverageSet.size(patternBranchesUnsafe());
             System.out.println("[JBSE    ] Current coverage: " + pathCoverage + " path" + (pathCoverage == 1 ? ", " : "s, ") + branchCoverage + " branch" + (branchCoverage == 1 ? "" : "es") + " (total), " + branchCoverageTarget + " branch" + (branchCoverage == 1 ? "" : "es") + " (target), " + branchCoverageUnsafe + " failed assertion" + (branchCoverageUnsafe == 1 ? "" : "s"));
-
+            
             //reruns the test case, and generates all the modified path conditions
             final int tcFinalDepth = Math.min(startDepth + this.o.getMaxTestCaseDepth(), tcFinalState.getDepth());
             boolean noPathConditionGenerated = true;
             synchronized (this.treePath) {
-                for (int currentDepth = startDepth; currentDepth < Math.min(this.o.getMaxDepth(), tcFinalDepth); ++currentDepth) {
+                if (newCoveredBranches.size() > 0) {
+                	this.treePath.updateImprovabilityIndex(this.getOutputBuffer().getMap(), newCoveredBranches);
+                }
+            	
+            	//calculates the improvabilityIndexLists: list of lists of not covered branches starting from the initial depth up to the maximum depth
+            	List<List<String>> improvabilityIndexLists = new ArrayList<>();
+            	for (int currentDepth = startDepth; currentDepth < Math.min(this.o.getMaxDepth(), tcFinalDepth); ++currentDepth) {
+            		List<String> notCoveredBranch = new ArrayList<>();
+            		final List<State> newStates = rp.runProgram(currentDepth);
+            		final List<String> targetBranches = rp.getTargetBranches();
+            		//checks if at least one branch is not covered to update the list of notCoveredBranch at this depth
+            		for (String branch : targetBranches) {
+            			if (!this.coverageSet.covers(branch)) {
+            				notCoveredBranch.add(branch);
+            			}
+            		}
+            		if (notCoveredBranch.size() > 0) {
+            			//updates all the previous lists into improvabilityIndexLists
+            			for (int i = 0; i < improvabilityIndexLists.size(); ++i) {
+            				improvabilityIndexLists.get(i).addAll(notCoveredBranch);
+            			}
+            			improvabilityIndexLists.add(notCoveredBranch);
+            		}
+            		else {
+            			improvabilityIndexLists.add(notCoveredBranch);
+            		}
+            	}
+            	
+            	int indexPosition = 0;
+            	for (int currentDepth = startDepth; currentDepth < Math.min(this.o.getMaxDepth(), tcFinalDepth); ++currentDepth) {
                     //runs the program
                     final List<State> newStates = rp.runProgram(currentDepth);
 
                     //checks shutdown of the performer
                     if (Thread.interrupted()) {
                         return;
-                    }
-                    
-                    /**
-                     * calculates the improvability index list (<List<List<Clause>>: List of lists of clauses relating to not covered
-                     * paths) for each newStates, adds the improvability index list to improvabilityIndexes (for the future creation
-                     * of the JBSEResult) and, if necessary, updates the improvability index lists of previous modified path
-                     */
-                    final List<List<List<Clause>>> improvabilityIndexes = new ArrayList<>();
-                    for (int i = 0; i < newStates.size(); ++i) {
-                    	List<List<Clause>> improvabilityIndexList = new ArrayList<>();
-                    	List<Clause> possibleImprovabilityIndex = new ArrayList<>();
-                    	//check if path is not covered
-                    	if (!this.treePath.containsPath(newStates.get(i).getPathCondition(), true)) {
-                    		possibleImprovabilityIndex = newStates.get(i).getPathCondition();
-                    		improvabilityIndexList.add(possibleImprovabilityIndex);
-                    	}
-                    	else {
-                    		improvabilityIndexList.add(possibleImprovabilityIndex);
-                    	}
-                    	improvabilityIndexes.add(improvabilityIndexList);
-                    	//if necessary, updates the improvability index lists of previous modified path
-                    	if (possibleImprovabilityIndex.size() > 0) {
-                    		for (int j = 0; j < i; ++j) {
-                    			improvabilityIndexes.get(j).add(possibleImprovabilityIndex);
-                    		}
-                    	}
                     }
 
                     //creates all the output jobs
@@ -252,16 +254,23 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
                     	    System.out.println("[JBSE    ] From test case " + tc.getClassName() + " skipping path condition due to violated assumption " + currentPC.get(currentPC.size() - 1) + " on initialMap in path condition " + stringifyPathCondition(shorten(currentPC)));
                     	    continue;
                     	}
-                    	this.treePath.insertPath(currentPC, false);
-                    	//calculates the novelty index and the improvability index for currentPC;
-                    	//then adds the novelty index, the improvability index and the improvability index lists to the new JBSEResult.
-                    	final int noveltyIndex = this.treePath.calculateNoveltyIndex(currentPC);
-                    	final int improvabilityIndex = improvabilityIndexes.get(i).size();
-                        final JBSEResult output = new JBSEResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), initialState, preState, newState, atJump, (atJump ? targetBranches.get(i) : null), stringLiterals, stringOthers, currentDepth, noveltyIndex, improvabilityIndex, improvabilityIndexes.get(i));
-                        this.getOutputBuffer().add(output);
+                    	
+                    	if (atJump) {
+                    		HashSet<String> totalBranches = rp.getCoverage();
+                    		totalBranches.add(targetBranches.get(i));
+                        	this.treePath.insertPath(currentPC, totalBranches, improvabilityIndexLists.get(indexPosition), false);
+                        }
+                        else {
+                        	this.treePath.insertPath(currentPC, rp.getCoverage(), improvabilityIndexLists.get(indexPosition), false);
+                        }
+                    	
+                    	final int improvabilityIndex = improvabilityIndexLists.get(indexPosition).size();
+                        final JBSEResult output = new JBSEResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), initialState, preState, newState, atJump, (atJump ? targetBranches.get(i) : null), stringLiterals, stringOthers, currentDepth);
+                        this.getOutputBuffer().addWithIndex(improvabilityIndex > 9 ? 10 : improvabilityIndex, output);
                         System.out.println("[JBSE    ] From test case " + tc.getClassName() + " generated path condition " + stringifyPathCondition(shorten(currentPC)) + (atJump ? (" aimed at branch " + targetBranches.get(i)) : ""));
                         noPathConditionGenerated = false;
                     }
+                    ++indexPosition;
                 }
             }
             if (noPathConditionGenerated) {
