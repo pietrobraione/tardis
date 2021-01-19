@@ -200,9 +200,18 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             final int tcFinalDepth = Math.min(startDepth + this.o.getMaxTestCaseDepth(), tcFinalState.getDepth());
             boolean noPathConditionGenerated = true;
             synchronized (this.treePath) {
-                if (newCoveredBranches.size() > 0) {
-                	this.treePath.updateImprovabilityIndex(this.getOutputBuffer().getMap(), newCoveredBranches);
-                }
+            	if (newCoveredBranches.size() > 0) {
+            		synchronized (this.getOutputBuffer().getMap()) {
+            			this.treePath.updateImprovabilityIndex(this.getOutputBuffer().getMap(), newCoveredBranches);
+            		}
+            	}
+            	
+            	List<List<State>> newStateLists = new ArrayList<>();
+            	List<State> preStateList = new ArrayList<>();
+            	List<Boolean> atJumpList = new ArrayList<>();
+            	List<List<String>>targetBranchesLists = new ArrayList<>();
+            	List<List<? extends Map<Long, String>>> stringLiteralsLists = new ArrayList<>();
+            	List<List<? extends Set<Long>>> stringOthersLists = new ArrayList<>();
             	
             	//calculates the improvabilityIndexLists: list of lists of not covered branches starting from the initial depth up to the maximum depth
             	List<List<String>> improvabilityIndexLists = new ArrayList<>();
@@ -226,12 +235,18 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             		else {
             			improvabilityIndexLists.add(notCoveredBranch);
             		}
+            		//saves information for the next generation of JBSEResults
+            		newStateLists.add(newStates);
+            		preStateList.add(rp.getPreState());
+            		atJumpList.add(rp.getAtJump());
+            		targetBranchesLists.add(targetBranches);
+            		stringLiteralsLists.add(rp.getStringLiterals());
+            		stringOthersLists.add(rp.getStringOthers());
             	}
             	
-            	int indexPosition = 0;
+            	int depthLevel = 0;
             	for (int currentDepth = startDepth; currentDepth < Math.min(this.o.getMaxDepth(), tcFinalDepth); ++currentDepth) {
-                    //runs the program
-                    final List<State> newStates = rp.runProgram(currentDepth);
+                    final List<State> newStates = newStateLists.get(depthLevel);
 
                     //checks shutdown of the performer
                     if (Thread.interrupted()) {
@@ -239,13 +254,13 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
                     }
 
                     //creates all the output jobs
-                    final State preState = rp.getPreState();
-                    final boolean atJump = rp.getAtJump();
-                    final List<String> targetBranches = rp.getTargetBranches(); 
+                    final State preState = preStateList.get(depthLevel);
+                    final boolean atJump = atJumpList.get(depthLevel);
+                    final List<String> targetBranches = targetBranchesLists.get(depthLevel); 
                     for (int i = 0; i < newStates.size(); ++i) {
                         final State newState = newStates.get(i);
-                        final Map<Long, String> stringLiterals = rp.getStringLiterals().get(i);
-                        final Set<Long> stringOthers = rp.getStringOthers().get(i); 
+                        final Map<Long, String> stringLiterals = stringLiteralsLists.get(depthLevel).get(i);
+                        final Set<Long> stringOthers = stringOthersLists.get(depthLevel).get(i); 
                         final List<Clause> currentPC = newState.getPathCondition();
                         if (this.treePath.containsPath(currentPC, false)) {
                             continue;
@@ -258,19 +273,19 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
                     	if (atJump) {
                     		HashSet<String> totalBranches = rp.getCoverage();
                     		totalBranches.add(targetBranches.get(i));
-                        	this.treePath.insertPath(currentPC, totalBranches, improvabilityIndexLists.get(indexPosition), false);
+                        	this.treePath.insertPath(currentPC, totalBranches, improvabilityIndexLists.get(depthLevel), false);
                         }
                         else {
-                        	this.treePath.insertPath(currentPC, rp.getCoverage(), improvabilityIndexLists.get(indexPosition), false);
+                        	this.treePath.insertPath(currentPC, rp.getCoverage(), improvabilityIndexLists.get(depthLevel), false);
                         }
                     	
-                    	final int improvabilityIndex = improvabilityIndexLists.get(indexPosition).size();
+                    	final int improvabilityIndex = improvabilityIndexLists.get(depthLevel).size();
                         final JBSEResult output = new JBSEResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), initialState, preState, newState, atJump, (atJump ? targetBranches.get(i) : null), stringLiterals, stringOthers, currentDepth);
                         this.getOutputBuffer().addWithIndex(improvabilityIndex > 9 ? 10 : improvabilityIndex, output);
                         System.out.println("[JBSE    ] From test case " + tc.getClassName() + " generated path condition " + stringifyPathCondition(shorten(currentPC)) + (atJump ? (" aimed at branch " + targetBranches.get(i)) : ""));
                         noPathConditionGenerated = false;
                     }
-                    ++indexPosition;
+                    ++depthLevel;
                 }
             }
             if (noPathConditionGenerated) {
