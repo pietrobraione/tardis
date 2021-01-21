@@ -200,9 +200,9 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             final int tcFinalDepth = Math.min(startDepth + this.o.getMaxTestCaseDepth(), tcFinalState.getDepth());
             boolean noPathConditionGenerated = true;
             synchronized (this.treePath) {
-            	if (newCoveredBranches.size() > 0) {
+            	if (newCoveredBranchesTarget.size() > 0) {
             		synchronized (this.getOutputBuffer().getMap()) {
-            			this.treePath.updateImprovabilityIndex(this.getOutputBuffer().getMap(), newCoveredBranches);
+            			this.treePath.updateImprovabilityIndex(this.getOutputBuffer().getMap(), newCoveredBranchesTarget);
             		}
             	}
             	
@@ -219,8 +219,10 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             		List<String> notCoveredBranch = new ArrayList<>();
             		final List<State> newStates = rp.runProgram(currentDepth);
             		final List<String> targetBranches = rp.getTargetBranches();
+            		//filters branches related to the target class or the target method
+            		final Set<String> branchesFilteredByTarget = filterBranchesTarget(new HashSet<String>(targetBranches));
             		//checks if at least one branch is not covered to update the list of notCoveredBranch at this depth
-            		for (String branch : targetBranches) {
+            		for (String branch : branchesFilteredByTarget) {
             			if (!this.coverageSet.covers(branch)) {
             				notCoveredBranch.add(branch);
             			}
