@@ -218,6 +218,12 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             	for (int currentDepth = startDepth; currentDepth < Math.min(this.o.getMaxDepth(), tcFinalDepth); ++currentDepth) {
             		List<String> notCoveredBranch = new ArrayList<>();
             		final List<State> newStates = rp.runProgram(currentDepth);
+            		
+                    //checks shutdown of the performer
+                    if (Thread.interrupted()) {
+                        return;
+                    }
+            		
             		final List<String> targetBranches = rp.getTargetBranches();
             		//filters branches related to the target class or the target method
             		final Set<String> branchesFilteredByTarget = filterBranchesTarget(new HashSet<String>(targetBranches));
