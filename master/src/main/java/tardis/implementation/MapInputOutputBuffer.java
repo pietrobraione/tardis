@@ -11,7 +11,7 @@ import tardis.framework.OutputBuffer;
 public final class MapInputOutputBuffer<E> implements InputBuffer<E>, OutputBuffer<E> {
     private final HashMap<Integer, LinkedBlockingQueue<E>> map = new HashMap<>();
 	final int[] indexValues = new int[] {10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0};
-	final int[] probabilityValues = new int[] {33, 17, 12, 10, 7, 6, 5, 4, 3, 2, 1};
+	final int[] probabilityValues = new int[] {50, 12, 9, 7, 6, 5, 4, 3, 2, 1, 1};
 
     @Override
     public boolean addWithIndex(int index, E item) {

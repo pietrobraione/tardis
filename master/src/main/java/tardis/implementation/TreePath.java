@@ -303,15 +303,19 @@ final class TreePath {
      */
     public synchronized void updateImprovabilityIndexBranches(Collection<Clause> path, String coveredBranch) {
     	Node currentInTree = this.root;
+    	boolean inTree = true;
 
         for (Clause currentInPath : path) {
             final Node child = currentInTree.findChild(currentInPath);
             if (child == null) {
+            	inTree = false;
                 break;
             }
             currentInTree = child;
         }
-        currentInTree.improvabilityIndexBranches.remove(coveredBranch);
+        if (inTree) {
+        	currentInTree.improvabilityIndexBranches.remove(coveredBranch);
+        }
     }
     
     /**
@@ -327,11 +331,14 @@ final class TreePath {
     				final List<Clause> pathCondition = JBSEResultInBuffer.getFinalState().getPathCondition();
     				if (index != 0 && getImprovabilityIndexBranches(pathCondition).contains(branch)) {
     					updateImprovabilityIndexBranches(pathCondition, branch);
-    					buffer.get(index).remove(JBSEResultInBuffer);
-    					if (buffer.get(index-1) == null) {
-    						buffer.put(index-1, new LinkedBlockingQueue<JBSEResult>());
+    					//do nothing if the item has a new improvability index >= 10
+    					if (getImprovabilityIndexBranches(pathCondition).size() < 10) {
+    						buffer.get(index).remove(JBSEResultInBuffer);
+    						if (buffer.get(index-1) == null) {
+    							buffer.put(index-1, new LinkedBlockingQueue<JBSEResult>());
+    						}
+    						buffer.get(index-1).add(JBSEResultInBuffer);
     					}
-    					buffer.get(index-1).add(JBSEResultInBuffer);
     				}
     			}
     		}
