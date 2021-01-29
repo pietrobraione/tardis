@@ -127,22 +127,10 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             //otherwise records its path
             synchronized (this.treePath) {
                 if (this.treePath.containsPath(tcFinalPC, true)) {
-//                	//updates information (hitCounter) in treePath each time a test case is run
-//                	this.treePath.countHits(tcFinalPC);
-//                	if (!this.getOutputBuffer().getQueue().isEmpty()) {
-//                		//updates the novelty index for each JBSEResult into the buffer each time a test case is run
-//                		this.treePath.updateNoveltyIndex(this.getOutputBuffer().getQueue());
-//                	}
                     System.out.println("[JBSE    ] Test case " + tc.getClassName() + " redundant, skipped");
                     return;
                 }
                 this.treePath.insertPath(tcFinalPC, rp.getCoverage(), null, true);
-//                //updates information (hitCounter) in treePath each time a test case is run
-//                this.treePath.countHits(tcFinalPC);
-//                if (!this.getOutputBuffer().getQueue().isEmpty()) {
-//                	//updates the novelty index for each JBSEResult into the buffer each time a test case is run
-//                	this.treePath.updateNoveltyIndex(this.getOutputBuffer().getQueue());
-//                }
             }
             
             //possibly caches the initial state
