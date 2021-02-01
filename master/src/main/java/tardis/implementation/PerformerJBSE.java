@@ -132,7 +132,7 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
                 }
                 this.treePath.insertPath(tcFinalPC, rp.getCoverage(), null, true);
 //                synchronized (this.getOutputBuffer().getMap()) {
-//                	this.treePath.updateNoveltyIndex(this.getOutputBuffer().getMap());
+//                	this.treePath.updateNoveltyIndex(this.getOutputBuffer().getMap(), rp.getCoverage());
 //                }
             }
             

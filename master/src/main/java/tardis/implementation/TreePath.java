@@ -266,8 +266,8 @@ final class TreePath {
     }
     
     /**
-     * If necessary updates the position (the LinkedBlockingQueue chosen based on the improvability index) of JBSEResults in the buffer
-     * every time a new branch is covered.
+     * If necessary updates the position (the LinkedBlockingQueue chosen based on the improvability index) of
+     * JBSEResults in the buffer every time a new branch is covered.
      * @param buffer HashMap of LinkedBlockingQueue used as path condition buffer.
      * @param newCoveredBranches A set of new covered branches.
      */
@@ -312,21 +312,24 @@ final class TreePath {
     }
     
     /**
-     * Updates the minimum of the values relating to how many times
-     * the code branches of a particular path into the buffer were hit by the tests,
-     * every time a new test is run.
+     * If necessary updates the position (the LinkedBlockingQueue chosen based on the novelty index) of
+     * JBSEResults in the buffer every time a new test is run.
      * @param buffer HashMap of LinkedBlockingQueue used as path condition buffer.
+     * @param coveredBranches HashSet of branches covered by the test.
      */
-    public synchronized void updateNoveltyIndex(HashMap<Integer, LinkedBlockingQueue<JBSEResult>> buffer) {
+    public synchronized void updateNoveltyIndex(HashMap<Integer, LinkedBlockingQueue<JBSEResult>> buffer, HashSet<String> coveredBranches) {
     	for (int index : buffer.keySet()) {
     		for (JBSEResult JBSEResultInBuffer : buffer.get(index)) {
-    			final int newNoveltyIndex = getNoveltyIndex(JBSEResultInBuffer.getPreStateCoverage());
-    			if (newNoveltyIndex != index) {
-    				buffer.get(index).remove(JBSEResultInBuffer);
-    				if (buffer.get(newNoveltyIndex) == null) {
-						buffer.put(newNoveltyIndex, new LinkedBlockingQueue<JBSEResult>());
-					}
-					buffer.get(newNoveltyIndex).add(JBSEResultInBuffer);
+    			//do nothing if there are no branches in common
+    			if (!Collections.disjoint(JBSEResultInBuffer.getPreStateCoverage(), coveredBranches)) {
+    				final int newNoveltyIndex = getNoveltyIndex(JBSEResultInBuffer.getPreStateCoverage());
+    				if (newNoveltyIndex != index) {
+    					buffer.get(index).remove(JBSEResultInBuffer);
+    					if (buffer.get(newNoveltyIndex) == null) {
+    						buffer.put(newNoveltyIndex, new LinkedBlockingQueue<JBSEResult>());
+    					}
+    					buffer.get(newNoveltyIndex).add(JBSEResultInBuffer);
+    				}
     			}
     		}
     	}
