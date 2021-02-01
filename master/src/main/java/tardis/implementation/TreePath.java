@@ -20,8 +20,8 @@ import jbse.mem.Clause;
  */
 final class TreePath {
     enum NodeStatus { ATTEMPTED, COVERED };
-    //map used to extract the path conditions related to a branch
-    HashMap<String, HashSet<Collection<Clause>>> map = new HashMap<>(); //TODO ConcurrentHashMap?
+    //map used to track the times the tests hit a branch
+    HashMap<String, Integer> hitsCounterMap = new HashMap<>(); //TODO ConcurrentHashMap?
     
     /**
      * A node in the {@link TreePath}.
@@ -145,19 +145,26 @@ final class TreePath {
             ++index;
         }
         
-        for (String branch : branches) {
-        	addToHashSet(branch, path);
+        if (covered) {
+        	for (String branch : branches) {
+        		updateHitsCounterMap(branch);
+        	}
         }
     }
     
-    public synchronized void addToHashSet(String branch, Collection<Clause> path) {
-    	HashSet<Collection<Clause>> pathConditionsSet = this.map.get(branch);
-    	if(pathConditionsSet == null) {
-    		pathConditionsSet = new HashSet<Collection<Clause>>();
-    		pathConditionsSet.add(path);
-    		this.map.put(branch, pathConditionsSet);
-    	} else {
-    		pathConditionsSet.add(path);
+    /**
+     * Inserts a branch in the Hit Counter Map. Increases its Hits value
+     * by one if the branch is already present in the map.
+     * 
+     * @param branch a String.
+     */
+    public synchronized void updateHitsCounterMap(String branch) {
+    	Integer hitsCounter = this.hitsCounterMap.get(branch);
+    	if (hitsCounter == null) {
+    		this.hitsCounterMap.put(branch, 1);
+    	}
+    	else {
+    		this.hitsCounterMap.put(branch, hitsCounter + 1);
     	}
     }
 
@@ -286,11 +293,42 @@ final class TreePath {
     }
     
     /**
-     * For a given branch, it returns in which path conditions that branch is in.
-     * @param branch A String
-     * @return an HashSet containing the path conditions related to the branch.
+     * Calculates the minimum of the values relating to how many times
+     * the code branches of a particular path were hit by the tests.
+     * @param branches a Set of String. The code branches covered by the
+     *        execution of a test case.
+     * @return The novelty index (an int)
      */
-    public synchronized HashSet<Collection<Clause>> getPathConditions(String branch) {
-    	return this.map.get(branch);
+    public synchronized int getNoveltyIndex(HashSet<String> branches) {
+    	HashSet<Integer> hitsCounters = new HashSet<>();
+    	for (String branch : branches) {
+    		Integer hitsCount = this.hitsCounterMap.get(branch);
+    		if (hitsCount != null) {
+    			hitsCounters.add(hitsCount);
+    		}
+    	}
+    	int minimum = Collections.min(hitsCounters);
+    	return minimum > 9 ? 10 : minimum;
+    }
+    
+    /**
+     * Updates the minimum of the values relating to how many times
+     * the code branches of a particular path into the buffer were hit by the tests,
+     * every time a new test is run.
+     * @param buffer HashMap of LinkedBlockingQueue used as path condition buffer.
+     */
+    public synchronized void updateNoveltyIndex(HashMap<Integer, LinkedBlockingQueue<JBSEResult>> buffer) {
+    	for (int index : buffer.keySet()) {
+    		for (JBSEResult JBSEResultInBuffer : buffer.get(index)) {
+    			final int newNoveltyIndex = getNoveltyIndex(JBSEResultInBuffer.getPreStateCoverage());
+    			if (newNoveltyIndex != index) {
+    				buffer.get(index).remove(JBSEResultInBuffer);
+    				if (buffer.get(newNoveltyIndex) == null) {
+						buffer.put(newNoveltyIndex, new LinkedBlockingQueue<JBSEResult>());
+					}
+					buffer.get(newNoveltyIndex).add(JBSEResultInBuffer);
+    			}
+    		}
+    	}
     }
 }
