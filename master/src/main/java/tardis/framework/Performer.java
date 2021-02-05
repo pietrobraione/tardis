@@ -151,13 +151,10 @@ public abstract class Performer<I,O> {
                     waitIfPaused();
                     waitInputAndSubmitJob();
                 } catch (InterruptedException e) {
-                    if (this.paused) {
-                        //interrupted by pause(): goes on to waitIfPaused()
-                        continue; //pleonastic
-                    } else {
+                    if (this.stopped) {
                         //interrupted by stop(): exit from the loop 
                         break;
-                    } 
+                    } //else, interrupted by pause(): loops and enters in waitIfPaused()
                 }
             }
             this.threadPool.shutdownNow();
