@@ -18,7 +18,7 @@ import org.kohsuke.args4j.spi.Setter;
  * 
  * @author Pietro Braione
  */
-final class MultiSignatureOptionHandler extends DelimitedOptionHandler<List<String>> {
+public final class MultiSignatureOptionHandler extends DelimitedOptionHandler<List<String>> {
     /**
      * Character used as separator within a signature.
      */

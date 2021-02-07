@@ -273,6 +273,7 @@ final class TreePath {
      */
     public synchronized void updateImprovabilityIndex(HashMap<Integer, LinkedBlockingQueue<JBSEResult>> buffer, Set<String> newCoveredBranches) {
     	for (String branch : newCoveredBranches) {
+    		HashMap<Integer, LinkedBlockingQueue<JBSEResult>> tempMap = new HashMap<>();
     		for (int index : buffer.keySet()) {
     			for (JBSEResult JBSEResultInBuffer : buffer.get(index)) {
     				final List<Clause> pathCondition = JBSEResultInBuffer.getFinalState().getPathCondition();
@@ -282,13 +283,18 @@ final class TreePath {
     					if (getImprovabilityIndexBranches(pathCondition).size() < 10) {
     						buffer.get(index).remove(JBSEResultInBuffer);
     						if (buffer.get(index-1) == null) {
-    							buffer.put(index-1, new LinkedBlockingQueue<JBSEResult>());
+    							if (tempMap.get(index-1) == null) {
+    								tempMap.put(index-1, new LinkedBlockingQueue<JBSEResult>());
+    							}
+    							tempMap.get(index-1).add(JBSEResultInBuffer);
+    							continue;
     						}
     						buffer.get(index-1).add(JBSEResultInBuffer);
     					}
     				}
     			}
     		}
+    		buffer.putAll(tempMap);
     	}
     }
     
