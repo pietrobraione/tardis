@@ -1,5 +1,6 @@
 package tardis.implementation;
 
+import static jbse.apps.run.JAVA_MAP_Utils.assumptionViolated;
 import static tardis.implementation.Util.shorten;
 import static tardis.implementation.Util.stringifyPathCondition;
 
@@ -18,7 +19,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import jbse.algo.exc.CannotManageStateException;
-import jbse.apps.run.JAVA_MAP_Utils;
+import jbse.bc.ClassHierarchy;
 import jbse.bc.exc.InvalidClassFileFactoryClassException;
 import jbse.common.exc.ClasspathException;
 import jbse.dec.exc.DecisionException;
@@ -204,10 +205,11 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
                         final Map<Long, String> stringLiterals = rp.getStringLiterals().get(i);
                         final Set<Long> stringOthers = rp.getStringOthers().get(i); 
                         final List<Clause> currentPC = newState.getPathCondition();
+                        final ClassHierarchy hier = newState.getClassHierarchy();
                         if (this.treePath.containsPath(currentPC, false)) {
                             continue;
                         }
-                    	if (!currentPC.isEmpty() && JAVA_MAP_Utils.assumptionViolated(currentPC.get(currentPC.size() - 1))) {
+                    	if (!currentPC.isEmpty() && assumptionViolated(hier, currentPC.get(currentPC.size() - 1))) {
                     	    System.out.println("[JBSE    ] From test case " + tc.getClassName() + " skipping path condition due to violated assumption " + currentPC.get(currentPC.size() - 1) + " on initialMap in path condition " + stringifyPathCondition(shorten(currentPC)));
                     	    continue;
                     	}
