@@ -279,7 +279,8 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
                     	}
                     	
                     	if (atJump) {
-                    		HashSet<String> totalBranches = coverageBranchesLists.get(depthLevel);
+                    		HashSet<String> totalBranches = new HashSet<>();
+                    		totalBranches.addAll(coverageBranchesLists.get(depthLevel));
                     		totalBranches.add(targetBranches.get(i));
                         	this.treePath.insertPath(currentPC, totalBranches, improvabilityIndexLists.get(depthLevel), false);
                         }
