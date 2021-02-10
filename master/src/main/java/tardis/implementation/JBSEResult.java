@@ -53,12 +53,6 @@ public class JBSEResult {
     private final State preState;
     
     /**
-     * The code branches covered by the pre-frontier {@link State}
-     * of the path.
-     */
-    private final HashSet<String> preStateCoverage;
-    
-    /**
      * The final (post-frontier) {@link State} of the path, or 
      * {@code null} if this {@link JBSEResult} is a seed item.
      */
@@ -103,7 +97,7 @@ public class JBSEResult {
     /**
      * Constructor for seed item (target method).
      * 
-     * @param targetMethod A {@link List}{@code <}{@link String}{@code >}
+     * @param targetMethod a {@link List}{@code <}{@link String}{@code >}
      *        with length (at least) 3, the signature of the target method.
      *        The name of the class of the target method is {@code targetMethod.}{@link List#get(int) get}{@code (0)}, 
      *        the descriptor of the target method is {@code targetMethod.}{@link List#get(int) get}{@code (1)},
@@ -116,7 +110,6 @@ public class JBSEResult {
         this.targetMethodName = targetMethod.get(2);
         this.initialState = null;
         this.preState = null;
-        this.preStateCoverage = null;
         this.finalState = null;
         this.atJump = false;
         this.targetBranch = null;
@@ -128,7 +121,7 @@ public class JBSEResult {
     /**
      * Constructor for seed item (target class).
      * 
-     * @param targetClassName A {@link String}, the name of the target class.
+     * @param targetClassName a {@link String}, the name of the target class.
      */
     public JBSEResult(String targetClassName) {
         this.targetClassName = targetClassName;
@@ -137,7 +130,6 @@ public class JBSEResult {
         this.targetMethodName = null;
         this.initialState = null;
         this.preState = null;
-        this.preStateCoverage = null;
         this.finalState = null;
         this.atJump = false;
         this.targetBranch = null;
@@ -149,21 +141,19 @@ public class JBSEResult {
     /**
      * Constructor for non-seed item (target method only).
      * 
-     * @param targetMethodClassName A {@link String}, 
+     * @param targetMethodClassName a {@link String}, 
      *        the name of the class of the target method.
-     * @param targetMethodDescriptor A {@link String}, the 
+     * @param targetMethodDescriptor a {@link String}, the 
      *        descriptor of the target method.
-     * @param targetMethodName A {@link String}, the name 
+     * @param targetMethodName a {@link String}, the name 
      *        of the target method.
-     * @param initialState The initial {@link State} of the path.
-     * @param preState The pre-frontier {@link State} of the path.
-     * @param preStateCoverage The code branches covered by the 
-     *        pre-frontier {@link State} of the path.
-     * @param finalState The final (post-frontier) {@link State} 
+     * @param initialState the initial {@link State} of the path.
+     * @param preState the pre-frontier {@link State} of the path.
+     * @param finalState the final (post-frontier) {@link State} 
      *        of the path.
-     * @param atJump A {@code boolean}, set to {@code true} iff 
+     * @param atJump a {@code boolean}, set to {@code true} iff 
      *        the frontier is a jump bytecode.
-     * @param targetBranch A {@link String} that identifies the target
+     * @param targetBranch a {@link String} that identifies the target
      *        branch. If {@code atJump == false} it is irrelevant.
      * @param stringLiterals a {@link Map}{@code <}{@link Long}{@code , }{@link String}{@code >}, 
      *        the string literals gathered during the execution of 
@@ -172,17 +162,16 @@ public class JBSEResult {
      *        containing all the heap positions of the (nonconstant) 
      *        {@link String} objects gathered during the execution of 
      *        the path to the frontier. 
-     * @param depth A positive {@code int}, the depth of the path 
+     * @param depth a positive {@code int}, the depth of the path 
      *        to the frontier.
      */
-    public JBSEResult(String targetMethodClassName, String targetMethodDescriptor, String targetMethodName, State initialState, State preState, HashSet<String> preStateCoverage, State finalState, boolean atJump, String targetBranch, Map<Long, String> stringLiterals, Set<Long> stringOthers, int depth) {
+    public JBSEResult(String targetMethodClassName, String targetMethodDescriptor, String targetMethodName, State initialState, State preState, State finalState, boolean atJump, String targetBranch, Map<Long, String> stringLiterals, Set<Long> stringOthers, int depth) {
         this.targetClassName = null;
         this.targetMethodClassName = targetMethodClassName;
         this.targetMethodDescriptor = targetMethodDescriptor;
         this.targetMethodName = targetMethodName;
         this.initialState = initialState.clone();
         this.preState = preState.clone();
-        this.preStateCoverage = new HashSet<>(preStateCoverage);
         this.finalState = finalState.clone();
         this.atJump = atJump;
         this.targetBranch = (atJump ? targetBranch : null);
@@ -276,16 +265,6 @@ public class JBSEResult {
         return this.preState;
     }
     
-    /**
-     * Gets the code branches covered by the pre-frontier
-     * {@link State} of the path.
-     * 
-     * @return A {@link HashSet}{@code <}{@link String}{@code >}
-     */
-    public HashSet<String> getPreStateCoverage() {
-    	return this.preStateCoverage;
-    }
-
     /**
      * Gets the final (post-frontier) {@link State} of the path.
      * 

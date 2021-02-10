@@ -10,6 +10,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -38,20 +39,20 @@ import jbse.mem.exc.ThreadStackEmptyException;
 import sushi.configure.Coverage;
 import tardis.Options;
 import tardis.framework.InputBuffer;
-import tardis.framework.OutputBuffer;
 import tardis.framework.Performer;
 
 public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
     private final Options o;
-    private final CoverageSet coverageSet;
-    private final TreePath treePath = new TreePath();
+    private final JBSEResultInputOutputBuffer out;
+    private final TreePath treePath;
     private final HashMap<String, State> initialStateCache = new HashMap<>();
     private AtomicLong pathCoverage = new AtomicLong(0);
 
-    public PerformerJBSE(Options o, InputBuffer<EvosuiteResult> in, OutputBuffer<JBSEResult> out, CoverageSet coverageSet) {
+    public PerformerJBSE(Options o, InputBuffer<EvosuiteResult> in, JBSEResultInputOutputBuffer out, TreePath treePath) {
         super(in, out, o.getNumOfThreadsJBSE(), 1, o.getThrottleFactorJBSE(), o.getGlobalTimeBudgetDuration(), o.getGlobalTimeBudgetUnit());
         this.o = o.clone();
-        this.coverageSet = coverageSet;
+        this.out = out;
+        this.treePath = treePath;
     }
 
     @Override
@@ -126,25 +127,30 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             
             //skips the test case if its path was already covered,
             //otherwise records its path
+            final Set<String> newCoveredBranches;
             synchronized (this.treePath) {
                 if (this.treePath.containsPath(tcFinalPC, true)) {
                     System.out.println("[JBSE    ] Test case " + tc.getClassName() + " redundant, skipped");
                     return;
                 }
-                this.treePath.insertPath(tcFinalPC, rp.getCoverage(), null, true);
-//                synchronized (this.getOutputBuffer().getMap()) {
-//                	this.treePath.updateNoveltyIndex(this.getOutputBuffer().getMap(), rp.getCoverage());
-//                }
+                newCoveredBranches = this.treePath.insertPath(tcFinalPC, rp.getCoverage(), Collections.emptySet(), true);
             }
             
             //possibly caches the initial state
             final State initialState = rp.getInitialState();
             possiblySetInitialStateCached(item, initialState);
             
-            //records coverage, emits tests, prints feedback
-            final Set<String> newCoveredBranches = this.coverageSet.addAll(rp.getCoverage());
-            final Set<String> newCoveredBranchesTarget = filterBranchesTarget(newCoveredBranches);
+            //records coverage
+            final Set<String> newCoveredBranchesTarget = filterBranchesTarget(newCoveredBranches);            
             final Set<String> newCoveredBranchesUnsafe = filterBranchesUnsafe(newCoveredBranches);
+            
+            //recalculates indices of items in output queue
+            if (newCoveredBranchesTarget.size() > 0) {
+                this.out.updateImprovabilityIndex(newCoveredBranchesTarget);
+            }
+            //TODO this.out.updateNoveltyIndex(newCoveredBranches? newCoveredBranchesTarget?), nel caso in cui tale insieme abbia dimensione > 0;
+
+            //produces feedback and emits the test
             final Coverage coverage = this.o.getCoverage();
             if (coverage == Coverage.PATHS || 
             (coverage == Coverage.BRANCHES && newCoveredBranchesTarget.size() > 0) ||
@@ -183,121 +189,107 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
                 }
             }
             final long pathCoverage = this.pathCoverage.incrementAndGet();
-            final int branchCoverage = this.coverageSet.size();
-            final int branchCoverageTarget = this.coverageSet.size(patternBranchesTarget());
-            final int branchCoverageUnsafe = this.coverageSet.size(patternBranchesUnsafe());
+            final int branchCoverage = this.treePath.totalCovered();
+            final int branchCoverageTarget = this.treePath.totalCovered(patternBranchesTarget());
+            final int branchCoverageUnsafe = this.treePath.totalCovered(patternBranchesUnsafe());
             System.out.println("[JBSE    ] Current coverage: " + pathCoverage + " path" + (pathCoverage == 1 ? ", " : "s, ") + branchCoverage + " branch" + (branchCoverage == 1 ? "" : "es") + " (total), " + branchCoverageTarget + " branch" + (branchCoverage == 1 ? "" : "es") + " (target), " + branchCoverageUnsafe + " failed assertion" + (branchCoverageUnsafe == 1 ? "" : "s"));
             
-            //reruns the test case, and generates all the modified path conditions
+            //reruns the test case at all the depths in the range generates all the modified path conditions
+            //and gathers the necessary information
             final int tcFinalDepth = Math.min(startDepth + this.o.getMaxTestCaseDepth(), tcFinalState.getDepth());
             boolean noPathConditionGenerated = true;
-            synchronized (this.treePath) {
-            	if (newCoveredBranchesTarget.size() > 0) {
-            		synchronized (this.getOutputBuffer().getMap()) {
-            			this.treePath.updateImprovabilityIndex(this.getOutputBuffer().getMap(), newCoveredBranchesTarget);
-            		}
-            	}
-            	
-            	List<List<State>> newStateLists = new ArrayList<>();
-            	List<State> preStateList = new ArrayList<>();
-            	List<Boolean> atJumpList = new ArrayList<>();
-            	List<HashSet<String>>coverageBranchesLists = new ArrayList<>();
-            	List<List<String>>targetBranchesLists = new ArrayList<>();
-            	List<List<? extends Map<Long, String>>> stringLiteralsLists = new ArrayList<>();
-            	List<List<? extends Set<Long>>> stringOthersLists = new ArrayList<>();
-            	
-            	//calculates the improvabilityIndexLists: list of lists of not covered branches starting from the initial depth up to the maximum depth
-            	List<List<String>> improvabilityIndexLists = new ArrayList<>();
-            	List<Integer> noveltyIndexList = new ArrayList<>();
-            	for (int currentDepth = startDepth; currentDepth < Math.min(this.o.getMaxDepth(), tcFinalDepth); ++currentDepth) {
-            		List<String> notCoveredBranch = new ArrayList<>();
-            		final List<State> newStates = rp.runProgram(currentDepth);
-            		
-                    //checks shutdown of the performer
-                    if (Thread.interrupted()) {
-                        return;
-                    }
-            		
-                    final HashSet<String> coverageBranches = rp.getCoverage();
-                    //calculates the noveltyIndexLists: list of novelty index starting from the initial depth up to the maximum depth
-                    noveltyIndexList.add(coverageBranches.size()>0 ? this.treePath.getNoveltyIndex(coverageBranches) : 0); //TODO check novelty index = 0
-                    
-            		final List<String> targetBranches = rp.getTargetBranches();
-            		//filters branches related to the target class or the target method
-            		final Set<String> branchesFilteredByTarget = filterBranchesTarget(new HashSet<String>(targetBranches));
-            		//checks if at least one branch is not covered to update the list of notCoveredBranch at this depth
-            		for (String branch : branchesFilteredByTarget) {
-            			if (!this.coverageSet.covers(branch)) {
-            				notCoveredBranch.add(branch);
-            			}
-            		}
-            		if (notCoveredBranch.size() > 0) {
-            			//updates all the previous lists into improvabilityIndexLists
-            			for (int i = 0; i < improvabilityIndexLists.size(); ++i) {
-            				improvabilityIndexLists.get(i).addAll(notCoveredBranch);
-            			}
-            			improvabilityIndexLists.add(notCoveredBranch);
-            		}
-            		else {
-            			improvabilityIndexLists.add(notCoveredBranch);
-            		}
-            		//saves information for the next generation of JBSEResults
-            		newStateLists.add(newStates);
-            		preStateList.add(rp.getPreState());
-            		atJumpList.add(rp.getAtJump());
-            		coverageBranchesLists.add(coverageBranches);
-            		targetBranchesLists.add(targetBranches);
-            		stringLiteralsLists.add(rp.getStringLiterals());
-            		stringOthersLists.add(rp.getStringOthers());
-            	}
-            	
-            	int depthLevel = 0;
-            	for (int currentDepth = startDepth; currentDepth < Math.min(this.o.getMaxDepth(), tcFinalDepth); ++currentDepth) {
-                    final List<State> newStates = newStateLists.get(depthLevel);
+            final ArrayList<HashSet<String>> neighborFrontierBranchesList = new ArrayList<>();
+            final ArrayList<List<State>> newStateLists = new ArrayList<>();
+            final ArrayList<State> preStateList = new ArrayList<>();
+            final ArrayList<Boolean> atJumpList = new ArrayList<>();
+            final ArrayList<HashSet<String>> coverageBranchesLists = new ArrayList<>();
+            final ArrayList<List<String>> targetBranchesLists = new ArrayList<>();
+            final ArrayList<List<? extends Map<Long, String>>> stringLiteralsLists = new ArrayList<>();
+            final ArrayList<List<? extends Set<Long>>> stringOthersLists = new ArrayList<>();
+            for (int currentDepth = startDepth; currentDepth < Math.min(this.o.getMaxDepth(), tcFinalDepth); ++currentDepth) {
+                final List<State> newStates = rp.runProgram(currentDepth);
 
-                    //checks shutdown of the performer
-                    if (Thread.interrupted()) {
-                        return;
+                //checks shutdown of the performer
+                if (Thread.interrupted()) {
+                    return;
+                }
+
+                //selects post-frontier branches in the target class or the target method
+                final List<String> branchesPostFrontier = rp.getBranchesPostFrontier();
+                final Set<String> branchesPostFrontierTarget = filterBranchesTarget(new HashSet<>(branchesPostFrontier));
+                
+                //selects all the post-frontier target branches that are not 
+                //yet covered
+                final HashSet<String> branchesPostFrontierTargetNotCovered = new HashSet<>();
+                for (String branch : branchesPostFrontierTarget) {
+                    if (!this.treePath.covers(branch)) {
+                        branchesPostFrontierTargetNotCovered.add(branch);
+                    }
+                }
+                
+                //updates neigborFrontierBranchesList
+                if (branchesPostFrontierTargetNotCovered.size() > 0) {
+                    //updates all the previous lists into improvabilityIndexLists
+                    for (int i = 0; i < neighborFrontierBranchesList.size(); ++i) {
+                        neighborFrontierBranchesList.get(i).addAll(branchesPostFrontierTargetNotCovered);
+                    }
+                }
+                neighborFrontierBranchesList.add(branchesPostFrontierTargetNotCovered);
+                                
+                //updates all the other lists
+                newStateLists.add(newStates);
+                preStateList.add(rp.getPreState());
+                atJumpList.add(rp.getAtJump());
+                coverageBranchesLists.add(rp.getCoverage());
+                targetBranchesLists.add(branchesPostFrontier);
+                stringLiteralsLists.add(rp.getStringLiterals());
+                stringOthersLists.add(rp.getStringOthers());
+            }
+
+            //puts all the output jobs in the output queue 
+            for (int currentDepth = startDepth; currentDepth < Math.min(this.o.getMaxDepth(), tcFinalDepth); ++currentDepth) {
+                final int depthLevel = currentDepth - startDepth;
+                final List<State> newStates = newStateLists.get(depthLevel);
+
+                //checks shutdown of the performer
+                if (Thread.interrupted()) {
+                    return;
+                }
+
+                //creates all the output jobs
+                final State preState = preStateList.get(depthLevel);
+                final boolean atJump = atJumpList.get(depthLevel);
+                final List<String> targetBranches = targetBranchesLists.get(depthLevel); 
+                for (int i = 0; i < newStates.size(); ++i) {
+                    final State newState = newStates.get(i);
+                    final Map<Long, String> stringLiterals = stringLiteralsLists.get(depthLevel).get(i);
+                    final Set<Long> stringOthers = stringOthersLists.get(depthLevel).get(i); 
+                    final List<Clause> currentPC = newState.getPathCondition();
+                    final ClassHierarchy hier = newState.getClassHierarchy();
+                    if (this.treePath.containsPath(currentPC, false)) {
+                        continue;
+                    }
+                    if (!currentPC.isEmpty() && assumptionViolated(hier, currentPC.get(currentPC.size() - 1))) {
+                        System.out.println("[JBSE    ] From test case " + tc.getClassName() + " skipping path condition due to violated assumption " + currentPC.get(currentPC.size() - 1) + " on initialMap in path condition " + stringifyPathCondition(shorten(currentPC)));
+                        continue;
                     }
 
-                    //creates all the output jobs
-                    final State preState = preStateList.get(depthLevel);
-                    final boolean atJump = atJumpList.get(depthLevel);
-                    final List<String> targetBranches = targetBranchesLists.get(depthLevel); 
-                    for (int i = 0; i < newStates.size(); ++i) {
-                        final State newState = newStates.get(i);
-                        final Map<Long, String> stringLiterals = stringLiteralsLists.get(depthLevel).get(i);
-                        final Set<Long> stringOthers = stringOthersLists.get(depthLevel).get(i); 
-                        final List<Clause> currentPC = newState.getPathCondition();
-                        final ClassHierarchy hier = newState.getClassHierarchy();
-                        if (this.treePath.containsPath(currentPC, false)) {
-                            continue;
-                        }
-                    	if (!currentPC.isEmpty() && assumptionViolated(hier, currentPC.get(currentPC.size() - 1))) {
-                    	    System.out.println("[JBSE    ] From test case " + tc.getClassName() + " skipping path condition due to violated assumption " + currentPC.get(currentPC.size() - 1) + " on initialMap in path condition " + stringifyPathCondition(shorten(currentPC)));
-                    	    continue;
-                    	}
-                    	
-                    	if (atJump) {
-                    		HashSet<String> totalBranches = new HashSet<>();
-                    		totalBranches.addAll(coverageBranchesLists.get(depthLevel));
-                    		totalBranches.add(targetBranches.get(i));
-                        	this.treePath.insertPath(currentPC, totalBranches, improvabilityIndexLists.get(depthLevel), false);
-                        }
-                        else {
-                        	this.treePath.insertPath(currentPC, coverageBranchesLists.get(depthLevel), improvabilityIndexLists.get(depthLevel), false);
-                        }
-                    	
-                    	final int improvabilityIndex = improvabilityIndexLists.get(depthLevel).size();
-                    	final int noveltyIndex = noveltyIndexList.get(depthLevel);
-                        final JBSEResult output = new JBSEResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), initialState, preState, coverageBranchesLists.get(depthLevel), newState, atJump, (atJump ? targetBranches.get(i) : null), stringLiterals, stringOthers, currentDepth);
-                        this.getOutputBuffer().addWithIndex(improvabilityIndex > 9 ? 10 : improvabilityIndex, output);
-                        System.out.println("[JBSE    ] From test case " + tc.getClassName() + " generated path condition " + stringifyPathCondition(shorten(currentPC)) + (atJump ? (" aimed at branch " + targetBranches.get(i)) : ""));
-                        noPathConditionGenerated = false;
+                    if (atJump) {
+                        final HashSet<String> totallyCoveredBranches = new HashSet<>();
+                        totallyCoveredBranches.addAll(coverageBranchesLists.get(depthLevel));
+                        totallyCoveredBranches.add(targetBranches.get(i));
+                        this.treePath.insertPath(currentPC, totallyCoveredBranches, neighborFrontierBranchesList.get(depthLevel), false);
+                    } else {
+                        this.treePath.insertPath(currentPC, coverageBranchesLists.get(depthLevel), neighborFrontierBranchesList.get(depthLevel), false);
                     }
-                    ++depthLevel;
+
+                    final JBSEResult output = new JBSEResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), initialState, preState, newState, atJump, (atJump ? targetBranches.get(i) : null), stringLiterals, stringOthers, currentDepth);
+                    this.getOutputBuffer().add(output);
+                    System.out.println("[JBSE    ] From test case " + tc.getClassName() + " generated path condition " + stringifyPathCondition(shorten(currentPC)) + (atJump ? (" aimed at branch " + targetBranches.get(i)) : ""));
+                    noPathConditionGenerated = false;
                 }
             }
+
             if (noPathConditionGenerated) {
                 System.out.println("[JBSE    ] From test case " + tc.getClassName() + " no path condition generated");
             }

@@ -736,7 +736,7 @@ final class RunnerPath implements AutoCloseable {
      *         If  {@link #getAtJump() getAtJump}{@code () == false}, or if the method is
      *         invoked before an invocation of {@link #runProgram(int)}, returns {@code null}.
      */
-    public List<String> getTargetBranches() {
+    public List<String> getBranchesPostFrontier() {
         return this.actionsRunnerPostFrontier.branchList;
     }
 

@@ -1,6 +1,5 @@
 package tardis.implementation;
 
-import java.util.HashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
@@ -32,16 +31,4 @@ public final class QueueInputOutputBuffer<E> implements InputBuffer<E>, OutputBu
     public boolean isEmpty() {
         return this.queue.isEmpty();
     }
-
-    //this should never be used
-	@Override
-	public boolean addWithIndex(int index, E item) {
-		return this.queue.add(item);
-	}
-
-	//this should never be used
-	@Override
-	public HashMap<Integer, LinkedBlockingQueue<E>> getMap() {
-		return null;
-	}
 }

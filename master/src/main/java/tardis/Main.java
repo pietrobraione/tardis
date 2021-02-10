@@ -26,16 +26,16 @@ import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.ParserProperties;
 
 import tardis.framework.TerminationManager;
-import tardis.implementation.CoverageSet;
 import tardis.implementation.EvosuiteResult;
 import tardis.implementation.JBSEResult;
-import tardis.implementation.MapInputOutputBuffer;
+import tardis.implementation.JBSEResultInputOutputBuffer;
 import tardis.implementation.NoJavaCompilerException;
 import tardis.implementation.PerformerEvosuite;
 import tardis.implementation.PerformerEvosuiteInitException;
 import tardis.implementation.PerformerJBSE;
 import tardis.implementation.QueueInputOutputBuffer;
 import tardis.implementation.TestCase;
+import tardis.implementation.TreePath;
 
 /**
  * TARDIS main class.
@@ -73,16 +73,16 @@ public final class Main {
                 createDirectory(o.getTmpBinDirectoryPath());
             }
 
-            //creates the coverage set data structure
-            final CoverageSet coverageSet = new CoverageSet();
+            //creates the state space and coverage data structure
+            final TreePath treePath = new TreePath();
 
             //creates the communication buffers between the performers
-            final MapInputOutputBuffer<JBSEResult> pathConditionBuffer = new MapInputOutputBuffer<>();
+            final JBSEResultInputOutputBuffer pathConditionBuffer = new JBSEResultInputOutputBuffer(treePath);
             final QueueInputOutputBuffer<EvosuiteResult> testCaseBuffer = new QueueInputOutputBuffer<>();
 
             //creates and wires together the components of the architecture
             final PerformerEvosuite performerEvosuite = new PerformerEvosuite(this.o, pathConditionBuffer, testCaseBuffer);
-            final PerformerJBSE performerJBSE = new PerformerJBSE(this.o, testCaseBuffer, pathConditionBuffer, coverageSet);
+            final PerformerJBSE performerJBSE = new PerformerJBSE(this.o, testCaseBuffer, pathConditionBuffer, treePath);
             final TerminationManager terminationManager = new TerminationManager(this.o.getGlobalTimeBudgetDuration(), this.o.getGlobalTimeBudgetUnit(), performerJBSE, performerEvosuite);
 
             //seeds the initial test cases
