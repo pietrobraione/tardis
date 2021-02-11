@@ -27,7 +27,7 @@ public final class MultiSignatureOptionHandler extends DelimitedOptionHandler<Li
     /**
      * Character used to separate different signatures.
      */
-    private static final String LIST_SEPARATOR = ";";
+    private static final String LIST_SEPARATOR = "!";
     
     /**
      * Constructor.
