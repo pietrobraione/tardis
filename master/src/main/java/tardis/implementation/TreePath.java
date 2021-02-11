@@ -200,11 +200,9 @@ public final class TreePath {
         }
 
         if (covered) {
-        	Set<String> retVal = coveredBranches.stream().filter(s -> !covers(s)).collect(Collectors.toSet());
-            for (String branch : coveredBranches) {
-                this.coverage.add(branch);
-                increaseHits(branch);
-            }
+            final Set<String> retVal = coveredBranches.stream().filter(s -> !covers(s)).collect(Collectors.toSet());
+            this.coverage.addAll(coveredBranches);
+            increaseHits(coveredBranches);
             return retVal;
         } else {
             return null;
@@ -212,16 +210,18 @@ public final class TreePath {
     }
     
     /**
-     * Increases by one the number of hits of a branch.
+     * Increases by one the number of hits of a set of branches.
      * 
-     * @param branch a {@link String}.
+     * @param coveredBranches a {@link Set}{@code <}{@link String}{@code >}.
      */
-    private synchronized void increaseHits(String branch) {
-        final Integer hitsCounter = this.hitsCounterMap.get(branch);
-        if (hitsCounter == null) {
-            this.hitsCounterMap.put(branch, 1);
-        } else {
-            this.hitsCounterMap.put(branch, hitsCounter + 1);
+    private synchronized void increaseHits(Set<String> coveredBranches) {
+        for (String branch : coveredBranches) {
+            final Integer hitsCounter = this.hitsCounterMap.get(branch);
+            if (hitsCounter == null) {
+                this.hitsCounterMap.put(branch, 1);
+            } else {
+                this.hitsCounterMap.put(branch, hitsCounter + 1);
+            }
         }
     }
 
