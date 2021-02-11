@@ -200,11 +200,12 @@ public final class TreePath {
         }
 
         if (covered) {
+        	Set<String> retVal = coveredBranches.stream().filter(s -> !covers(s)).collect(Collectors.toSet());
             for (String branch : coveredBranches) {
                 this.coverage.add(branch);
                 increaseHits(branch);
             }
-            return coveredBranches.stream().filter(s -> !covers(s)).collect(Collectors.toSet());
+            return retVal;
         } else {
             return null;
         }
