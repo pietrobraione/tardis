@@ -21,6 +21,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import jbse.algo.exc.CannotManageStateException;
 import jbse.bc.ClassHierarchy;
 import jbse.bc.exc.InvalidClassFileFactoryClassException;
@@ -42,6 +45,8 @@ import tardis.framework.InputBuffer;
 import tardis.framework.Performer;
 
 public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
+    private static final Logger LOGGER = LogManager.getFormatterLogger(PerformerJBSE.class);
+    
     private final Options o;
     private final JBSEResultInputOutputBuffer out;
     private final TreePath treePath;
@@ -66,7 +71,8 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             ClasspathException | CannotBacktrackException | CannotManageStateException |
             ThreadStackEmptyException | ContradictionException | EngineStuckException |
             FailureException e ) {
-                System.out.println("[JBSE    ] Unexpected exception raised while exploring test case " + item.getTestCase().getClassName() + ": " + e);
+                LOGGER.error("Unexpected error while exploring test case %s", item.getTestCase().getClassName());
+                LOGGER.error("Message: %s", e);
             }
         };
         return job;
@@ -123,14 +129,14 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 
             //prints some feedback
             final TestCase tc = item.getTestCase();
-            System.out.println("[JBSE    ] Run test case " + tc.getClassName() + ", path condition " + stringifyPathCondition(shorten(tcFinalPC)));
+            LOGGER.info("Run test case %s, path condition %s", tc.getClassName(), stringifyPathCondition(shorten(tcFinalPC)));
             
             //skips the test case if its path was already covered,
             //otherwise records its path
             final Set<String> newCoveredBranches;
             synchronized (this.treePath) {
                 if (this.treePath.containsPath(tcFinalPC, true)) {
-                    System.out.println("[JBSE    ] Test case " + tc.getClassName() + " redundant, skipped");
+                    LOGGER.info("Test case %s redundant, skipped", tc.getClassName());
                     return;
                 }
                 newCoveredBranches = this.treePath.insertPath(tcFinalPC, rp.getCoverage(), Collections.emptySet(), true);
@@ -157,7 +163,7 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             (coverage == Coverage.UNSAFE && newCoveredBranchesUnsafe.size() > 0)) {
                 //more feedback
                 if (coverage == Coverage.BRANCHES) {
-                    System.out.print("[JBSE    ] Test case " + tc.getClassName() + " covered branch" + (newCoveredBranchesTarget.size() == 1 ? " " : "es") + String.join(", ", newCoveredBranches));
+                    LOGGER.info("Test case %s covered branch%s %s", tc.getClassName(), (newCoveredBranchesTarget.size() == 1 ? " " : "es"), String.join(", ", newCoveredBranches));
                 }
                 
                 //copies the test in out
@@ -185,14 +191,16 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
                     }
                     
                 } catch (IOException e) {
-                    System.out.println("[JBSE    ] Error while attempting to copy test case " + tc.getClassName() + " or its scaffolding to its destination directory: " + e);
+                    LOGGER.error("Unexpected I/O error while attempting to copy test case %s or its scaffolding to its destination directory", tc.getClassName());
+                    LOGGER.error("Message: %s", e);
+                    //falls through
                 }
             }
             final long pathCoverage = this.pathCoverage.incrementAndGet();
             final int branchCoverage = this.treePath.totalCovered();
             final int branchCoverageTarget = this.treePath.totalCovered(patternBranchesTarget());
             final int branchCoverageUnsafe = this.treePath.totalCovered(patternBranchesUnsafe());
-            System.out.println("[JBSE    ] Current coverage: " + pathCoverage + " path" + (pathCoverage == 1 ? ", " : "s, ") + branchCoverage + " branch" + (branchCoverage == 1 ? "" : "es") + " (total), " + branchCoverageTarget + " branch" + (branchCoverage == 1 ? "" : "es") + " (target), " + branchCoverageUnsafe + " failed assertion" + (branchCoverageUnsafe == 1 ? "" : "s"));
+            LOGGER.info("Current coverage: %d path%s, %d branch%s (total), %d branch%s (target), %d failed assertion%s", pathCoverage, (pathCoverage == 1 ? "" : "s"), branchCoverage, (branchCoverage == 1 ? "" : "es"), branchCoverageTarget, (branchCoverageTarget == 1 ? "" : "es"), branchCoverageUnsafe, (branchCoverageUnsafe == 1 ? "" : "s"));
             
             //reruns the test case at all the depths in the range generates all the modified path conditions
             //and gathers the necessary information
@@ -270,7 +278,7 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
                         continue;
                     }
                     if (!currentPC.isEmpty() && assumptionViolated(hier, currentPC.get(currentPC.size() - 1))) {
-                        System.out.println("[JBSE    ] From test case " + tc.getClassName() + " skipping path condition due to violated assumption " + currentPC.get(currentPC.size() - 1) + " on initialMap in path condition " + stringifyPathCondition(shorten(currentPC)));
+                        LOGGER.info("From test case %s skipping path condition due to violated assumption %s on initialMap in path condition %s", tc.getClassName(), currentPC.get(currentPC.size() - 1), stringifyPathCondition(shorten(currentPC)));
                         continue;
                     }
 
@@ -285,17 +293,17 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 
                     final JBSEResult output = new JBSEResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), initialState, preState, newState, atJump, (atJump ? targetBranches.get(i) : null), stringLiterals, stringOthers, currentDepth);
                     this.getOutputBuffer().add(output);
-                    System.out.println("[JBSE    ] From test case " + tc.getClassName() + " generated path condition " + stringifyPathCondition(shorten(currentPC)) + (atJump ? (" aimed at branch " + targetBranches.get(i)) : ""));
+                    LOGGER.info("From test case %s generated path condition %s%s", tc.getClassName(), stringifyPathCondition(shorten(currentPC)), (atJump ? (" aimed at branch " + targetBranches.get(i)) : ""));
                     noPathConditionGenerated = false;
                 }
             }
 
             if (noPathConditionGenerated) {
-                System.out.println("[JBSE    ] From test case " + tc.getClassName() + " no path condition generated");
+                LOGGER.info("From test case %s no path condition generated", tc.getClassName());
             }
         } catch (NoTargetHitException e) {
             //prints some feedback
-            System.out.println("[JBSE    ] Run test case " + item.getTestCase().getClassName() + ", does not reach the target method " + item.getTargetMethodClassName() + ":" + item.getTargetMethodDescriptor() + ":" + item.getTargetMethodName());
+            LOGGER.warn("Run test case %s, does not reach the target method %s:%s:%s", item.getTestCase().getClassName(), item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName());
         }
     }
     

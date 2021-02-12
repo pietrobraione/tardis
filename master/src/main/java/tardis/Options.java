@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+import org.apache.logging.log4j.Level;
 import org.kohsuke.args4j.Option;
 import org.kohsuke.args4j.spi.MapOptionHandler;
 import org.kohsuke.args4j.spi.PathOptionHandler;
@@ -34,6 +35,11 @@ public final class Options implements Cloneable {
     @Option(name = "-help",
             usage = "Prints usage and exits")
     private boolean help = false;
+    
+    @Option(name = "-verbosity",
+            usage = "Verbosity of log messages: OFF, FATAL, ERROR, WARN, INFO, DEBUG, TRACE, ALL",
+            handler = LoggingLevelOptionHandler.class)
+    private Level verbosity = Level.INFO;
 
     @Option(name = "-initial_test",
             usage = "Java signature of the initial test case method for seeding concolic exploration",
@@ -192,6 +198,14 @@ public final class Options implements Cloneable {
 
     public void setHelp(boolean help) {
         this.help = help;
+    }
+
+    public Level getVerbosity() {
+        return this.verbosity;
+    }
+
+    public void setVerbosity(Level verbosity) {
+        this.verbosity = verbosity;
     }
 
     public List<String> getInitialTestCase() {

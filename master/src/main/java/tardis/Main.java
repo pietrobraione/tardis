@@ -11,8 +11,6 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -21,6 +19,17 @@ import java.util.regex.Pattern;
 import javax.tools.JavaCompiler;
 import javax.tools.ToolProvider;
 
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.core.appender.ConsoleAppender;
+import org.apache.logging.log4j.core.config.Configurator;
+import org.apache.logging.log4j.core.config.builder.api.AppenderComponentBuilder;
+import org.apache.logging.log4j.core.config.builder.api.ConfigurationBuilder;
+import org.apache.logging.log4j.core.config.builder.api.ConfigurationBuilderFactory;
+import org.apache.logging.log4j.core.config.builder.api.LayoutComponentBuilder;
+import org.apache.logging.log4j.core.config.builder.api.RootLoggerComponentBuilder;
+import org.apache.logging.log4j.core.config.builder.impl.BuiltConfiguration;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.ParserProperties;
@@ -43,6 +52,8 @@ import tardis.implementation.TreePath;
  * @author Pietro Braione
  */
 public final class Main {
+    private static Logger LOGGER;
+    
     /**
      * The configuration {@link Options}.
      */
@@ -64,6 +75,9 @@ public final class Main {
      *         exit due to an error, {@code 2} meaning exit due to an internal error.
      */
     public int start() {
+        configureLogger();
+        LOGGER = LogManager.getFormatterLogger(Main.class);
+        
         try {
             //creates the temporary directories if they do not exist
             if (!exists(o.getTmpDirectoryPath())) {
@@ -97,59 +111,78 @@ public final class Main {
                 final ArrayList<EvosuiteResult> seed = generateSeedForPerformerJBSE();
                 performerJBSE.seed(seed);
             }
-
+            
+            //logs some message
+            LOGGER.info("This is %s, version %s, \u00a9 2017-2021 %s", getName(), getVersion(), getVendor());
+            LOGGER.info("Target is %s", (this.o.getTargetMethod() == null ? ("class " + this.o.getTargetClass()) : ("method " + this.o.getTargetMethod().get(0) + ":" + this.o.getTargetMethod().get(1) + ":" + this.o.getTargetMethod().get(2))));
+            
             //starts everything
-            System.out.println("[MAIN    ] This is " + getName() + ", version " + getVersion() + ", " + '\u00a9' + " 2017-2020 " + getVendor());
-            final DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss");
-            System.out.println("[MAIN    ] Starting at " + dtf.format(LocalDateTime.now()) + ", target is " + (this.o.getTargetMethod() == null ? ("class " + this.o.getTargetClass()) : ("method " + this.o.getTargetMethod().get(0) + ":" + this.o.getTargetMethod().get(1) + ":" + this.o.getTargetMethod().get(2))));
             performerJBSE.start();
             performerEvosuite.start();
             terminationManager.start();
 
-            //waits end and prints a final message
+            //waits end
             terminationManager.waitTermination();
-            System.out.println("[MAIN    ] Ending at " + dtf.format(LocalDateTime.now()));
+            
+            //prints a final message and returns
+            LOGGER.info("%s ends", getName());
             return 0;
         } catch (IOException e) {
-            System.err.println("[MAIN    ] Error: Unexpected I/O error");
-            System.err.println("[MAIN    ] Message: " + e);
+            LOGGER.error("Unexpected I/O error");
+            LOGGER.error("Message: %s", e);
             return 1;
         } catch (PerformerEvosuiteInitException e) {
-            System.err.println("[MAIN    ] Error: Unable to create the Evosuite performer");
-            System.err.println("[MAIN    ] Message: " + e);
-            return 1;
-        } catch (SecurityException e) {
-            System.err.println("[MAIN    ] Error: The security manager did not allow to get the system class loader");
-            System.err.println("[MAIN    ] Message: " + e);
+            LOGGER.error("Unable to create the Evosuite performer");
+            LOGGER.error("Message: %s", e);
             return 1;
         } catch (NoJavaCompilerException e) {
-            System.err.println("[MAIN    ] Error: Failed to find a system Java compiler. Did you install a JDK?");
+            LOGGER.error("Failed to find a system Java compiler. Did you install a JDK?");
             return 1;
-        } catch (InterruptedException e) {
-            System.err.println("[MAIN    ] Internal error: Unexpected interruption when waiting for termination of application");
-            System.err.println("[MAIN    ] Message: " + e);
-            return 2;
-        } catch (NullPointerException e) {
-            System.err.println("[MAIN    ] Internal error: Unexpected null value");
-            System.err.println("[MAIN    ] Message: " + e);
-            return 2;
-        } catch (IllegalArgumentException e) {
-            System.err.println("[MAIN    ] Internal error: Unexpected illegal argument");
-            System.err.println("[MAIN    ] Message: " + e);
-            return 2;
         } catch (JavaCompilerException e) {
-            System.err.println("[MAIN    ] Internal error: Unexpected I/O error while creating test case compilation log file");
-            System.err.println("[MAIN    ] Message: " + e);
+            LOGGER.error("Internal error: Unexpected I/O error while creating test case compilation log file");
+            LOGGER.error("Message: %s", e);
+            return 2;
+        } catch (InterruptedException e) {
+            LOGGER.error("Internal error: Unexpected interruption when waiting for termination of application");
+            LOGGER.error("Message: %s", e);
+            return 2;
+        } catch (RuntimeException e) {
+            LOGGER.error("Internal error: Unexpected runtime exception");
+            LOGGER.error("Message: %s", e);
             return 2;
         }
     }
+    
+    /**
+     * Configures the logger
+     */
+    private void configureLogger() {
+        ConfigurationBuilder<BuiltConfiguration> builder = ConfigurationBuilderFactory.newConfigurationBuilder();
+        builder.setStatusLevel(Level.WARN);
+
+        //appender
+        AppenderComponentBuilder appenderBuilder = builder.newAppender("Stdout", "CONSOLE");
+        appenderBuilder.addAttribute("target", ConsoleAppender.Target.SYSTEM_OUT);
+        LayoutComponentBuilder layoutBuilder = builder.newLayout("PatternLayout");
+        layoutBuilder.addAttribute("pattern", "%d{HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n");
+        appenderBuilder.add(layoutBuilder);
+        builder.add(appenderBuilder);
+
+        //root logger
+        RootLoggerComponentBuilder rootLoggerBuilder = builder.newRootLogger(this.o.getVerbosity());
+        rootLoggerBuilder.add(builder.newAppenderRef("Stdout"));
+        builder.add(rootLoggerBuilder);
+        Configurator.initialize(builder.build());
+    }
+
 
     /**
-     * Generates a seed for the Evosuite performer, 
-     * @return
-     * @throws SecurityException
+     * Generates a seed for the Evosuite performer.
+     * 
+     * @return an {@link ArrayList}{@code <}{@link JBSEResult}{@code >}, to be
+     *         inserted in the input queue of the Evosuite performed.
      */
-    private ArrayList<JBSEResult> generateSeedForPerformerEvosuite() throws SecurityException {
+    private ArrayList<JBSEResult> generateSeedForPerformerEvosuite() {
         //this is the "no initial test case" situation
         final ArrayList<JBSEResult> retVal = new ArrayList<>();
         if (this.o.getTargetMethod() == null) {
@@ -160,7 +193,8 @@ public final class Main {
         return retVal;
     }
 
-    private ArrayList<EvosuiteResult> generateSeedForPerformerJBSE() throws NoJavaCompilerException, JavaCompilerException {
+    private ArrayList<EvosuiteResult> generateSeedForPerformerJBSE() 
+    throws NoJavaCompilerException, JavaCompilerException {
         final TestCase tc = new TestCase(this.o, false);
         final String classpathCompilationTest = String.join(File.pathSeparator, stream(this.o.getClassesPath()).map(Object::toString).toArray(String[]::new));
         final Path javacLogFilePath = this.o.getTmpDirectoryPath().resolve("javac-log-test-0.txt");

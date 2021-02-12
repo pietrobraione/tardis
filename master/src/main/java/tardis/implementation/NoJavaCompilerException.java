@@ -15,5 +15,6 @@ public class NoJavaCompilerException extends Exception {
      * Constructor.
      */
     public NoJavaCompilerException() {
+        //nothing to do
     }
 }

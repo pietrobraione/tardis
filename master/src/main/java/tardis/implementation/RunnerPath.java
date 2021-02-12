@@ -16,6 +16,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import jbse.algo.exc.CannotManageStateException;
 import jbse.algo.exc.NotYetImplementedException;
 import jbse.apps.run.DecisionProcedureGuidance;
@@ -76,6 +79,8 @@ import jbse.val.exc.InvalidTypeException;
 import tardis.Options;
 
 final class RunnerPath implements AutoCloseable {
+    private static final Logger LOGGER = LogManager.getFormatterLogger(RunnerPath.class);
+    
     private static final String SWITCH_CHAR = System.getProperty("os.name").toLowerCase().contains("windows") ? "/" : "-";
 
     private final String z3Path;
@@ -225,7 +230,9 @@ final class RunnerPath implements AutoCloseable {
                     }
                 } catch (ThreadStackEmptyException | FrozenStateException e) {
                     //this should never happen
-                    throw new RuntimeException(e); //TODO better exception!
+                    LOGGER.error("Internal error when attempting to inspect the state before bytecode instruction execution");
+                    LOGGER.error("Message: %s", e);
+                    throw new RuntimeException(e); //TODO throw better exception
                 }
             }
             
@@ -254,7 +261,9 @@ final class RunnerPath implements AutoCloseable {
                     this.coverage.add(currentState.getCurrentMethodSignature().toString() + ":" + this.jumpPC + ":" + currentState.getCurrentProgramCounter());
                 } catch (ThreadStackEmptyException e) {
                     //this should never happen
-                    throw new RuntimeException(e); //TODO better exception!
+                    LOGGER.error("Internal error when attempting to update coverage");
+                    LOGGER.error("Message: %s", e);
+                    throw new RuntimeException(e); //TODO throw better exception
                 }
             }
 
@@ -278,7 +287,10 @@ final class RunnerPath implements AutoCloseable {
                         }					
                     }
                 } catch (FrozenStateException | InvalidNumberOfOperandsException | ThreadStackEmptyException e) {
-                    throw new RuntimeException(e); //TODO better exception!
+                    //this should never happen
+                    LOGGER.error("Internal error when attempting to manage String literals");
+                    LOGGER.error("Message: %s", e);
+                    throw new RuntimeException(e); //TODO throw better exception
                 }
             }
 
@@ -348,7 +360,9 @@ final class RunnerPath implements AutoCloseable {
                     }
                 } catch (ThreadStackEmptyException | FrozenStateException e) {
                     //this should never happen
-                    throw new RuntimeException(e); //TODO better exception!
+                    LOGGER.error("Internal error when attempting to inspect the current bytecode instruction");
+                    LOGGER.error("Message: %s", e);
+                    throw new RuntimeException(e); //TODO throw better exception
                 }
             }
             return super.atStepPre();
@@ -378,7 +392,10 @@ final class RunnerPath implements AutoCloseable {
                         }                                       
                     }
                 } catch (FrozenStateException | InvalidNumberOfOperandsException | ThreadStackEmptyException e) {
-                    throw new RuntimeException(e); //TODO better exception!
+                    //this should never happen
+                    LOGGER.error("Internal error when attempting to manage String literals");
+                    LOGGER.error("Message: %s", e);
+                    throw new RuntimeException(e); //TODO throw better exception
                 }
             }
 
@@ -394,9 +411,8 @@ final class RunnerPath implements AutoCloseable {
                 //clauses in the path condition, hoping that EvoSuite will discover a
                 //concrete class for them
                 if (engine.someReferencePartiallyResolved()) {
-                    System.out.print("[JBSE    ] WARNING: References "); 
-                    System.out.print(String.join(", ",getEngine().getPartiallyResolvedReferences().stream().map(ReferenceSymbolic::asOriginString).toArray(String[]::new)));
-                    System.out.println(" were partially resolved, artificially generating constraints for attempting their expansion");
+                    LOGGER.warn("References %s were partially resolved, artificially generating constraints for attempting their expansion",
+                    String.join(", ",getEngine().getPartiallyResolvedReferences().stream().map(ReferenceSymbolic::asOriginString).toArray(String[]::new)));
                     
                     for (ReferenceSymbolic nonExpandedReference : engine.getPartiallyResolvedReferences()) {
                         final State stateForExpansion = engine.getExecutionContext().getStateStart();
@@ -431,9 +447,12 @@ final class RunnerPath implements AutoCloseable {
                                     stateForExpansion.assumeAliases(cc.getReference(), cc.getObjekt().getOrigin());
                                 }
                             } catch (CannotAssumeSymbolicObjectException | InvalidInputException |
-                            InvalidTypeException | ContradictionException |
-                            HeapMemoryExhaustedException e) {
-                                System.out.print("[JBSE    ] Unexpected exception when attempting to artificially generate an expansion constraint: " + e);
+                            InvalidTypeException | ContradictionException e) {
+                                LOGGER.error("Internal error when attempting to artificially generate an expansion constraint");
+                                LOGGER.error("Message: %s", e);
+                                throw new RuntimeException(e); //TODO throw better exception
+                            } catch (HeapMemoryExhaustedException e) {
+                                LOGGER.error("Symbolic execution heap memory exhausted when attempting to artificially generate an expansion constraint");
                                 throw new RuntimeException(e); //TODO throw better exception
                             }
                         }

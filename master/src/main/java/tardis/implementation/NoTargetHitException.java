@@ -13,5 +13,8 @@ public class NoTargetHitException extends Exception {
      * 
      */
     private static final long serialVersionUID = -7060402958023071977L;
-
+    
+    public NoTargetHitException() {
+        //nothing to do
+    }
 }

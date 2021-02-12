@@ -37,6 +37,9 @@ import java.util.stream.Collectors;
 import javax.tools.JavaCompiler;
 import javax.tools.ToolProvider;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
@@ -94,6 +97,8 @@ import tardis.framework.Performer;
  *
  */
 public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
+    private static final Logger LOGGER = LogManager.getFormatterLogger(PerformerEvosuite.class);
+    
     private final List<List<String>> visibleTargetMethods;
     private final JavaCompiler compiler;
     private final Options o;
@@ -104,9 +109,9 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
     private final String classpathCompilationWrapper;
     private int testCount;
     private volatile boolean stopForSeeding;
-
     
-    public PerformerEvosuite(Options o, InputBuffer<JBSEResult> in, OutputBuffer<EvosuiteResult> out) throws PerformerEvosuiteInitException {
+    public PerformerEvosuite(Options o, InputBuffer<JBSEResult> in, OutputBuffer<EvosuiteResult> out) 
+    throws NoJavaCompilerException, PerformerEvosuiteInitException {
         super(in, out, o.getNumOfThreadsEvosuite(), (o.getUseMOSA() ? o.getNumMOSATargets() : 1), o.getThrottleFactorEvosuite(), o.getTimeoutMOSATaskCreationDuration(), o.getTimeoutMOSATaskCreationUnit());
         try {
             this.visibleTargetMethods = getTargets(o);
@@ -115,7 +120,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         }
         this.compiler = ToolProvider.getSystemJavaCompiler();
         if (this.compiler == null) {
-            throw new PerformerEvosuiteInitException("Failed to find a system Java compiler. Did you install a JDK?");
+            throw new NoJavaCompilerException();
         }
         this.o = o;
         this.timeBudgetSeconds = o.getEvosuiteTimeBudgetUnit().toSeconds(o.getEvosuiteTimeBudgetDuration());
@@ -125,7 +130,11 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         classpathTestPath.add(this.o.getSushiLibPath());
         classpathTestPath.add(this.o.getTmpBinDirectoryPath());
         classpathTestPath.add(this.o.getEvosuitePath());
-        this.classpathTestURLClassLoader = stream(classpathTestPath).map(PerformerEvosuite::toURL).toArray(URL[]::new);
+        try {
+            this.classpathTestURLClassLoader = stream(classpathTestPath).map(PerformerEvosuite::toURL).toArray(URL[]::new);
+        } catch (RuntimeException e) {
+            throw new PerformerEvosuiteInitException(e);
+        }
         this.classpathCompilationTest = this.o.getTmpBinDirectoryPath().toString() + File.pathSeparator + classesPathString + File.pathSeparator + this.o.getJBSELibraryPath().toString() + File.pathSeparator + this.o.getSushiLibPath().toString() + File.pathSeparator + this.o.getEvosuitePath().toString();
         this.classpathCompilationWrapper = classesPathString + File.pathSeparator + this.o.getSushiLibPath().toString();
         this.testCount = (o.getInitialTestCase() == null ? 0 : 1);
@@ -136,7 +145,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         try {
             return path.toUri().toURL();
         } catch (MalformedURLException e) {
-            System.out.println("[EVOSUITE] Unexpected error while converting " + path.toString() + " to URL: " + e);
+            LOGGER.error("Internal error while converting path %s to URL", path.toString());
             throw new RuntimeException(e);
         }                   
     }
@@ -183,9 +192,10 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
                 final Process processEvosuite;
                 try {
                     processEvosuite = launchProcess(evosuiteCommand, evosuiteLogFilePath);
-                    System.out.println("[EVOSUITE] Launched EvoSuite seed process, command line: " + evosuiteCommand.stream().reduce("", (s1, s2) -> { return s1 + " " + s2; }));
+                    LOGGER.info("Launched EvoSuite seed process, command line: %s", evosuiteCommand.stream().reduce("", (s1, s2) -> { return s1 + " " + s2; }));
                 } catch (IOException e) {
-                    System.out.println("[EVOSUITE] Unexpected I/O error while running EvoSuite: " + e);
+                    LOGGER.error("Unexpected I/O error while running EvoSuite seed process");
+                    LOGGER.error("Message: %s", e);
                     return; //TODO throw an exception?
                 }
 
@@ -213,9 +223,10 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
                 final Process processEvosuite;
                 try {
                     processEvosuite = launchProcess(evosuiteCommand, evosuiteLogFilePath);
-                    System.out.println("[EVOSUITE] Launched EvoSuite seed process, command line: " + evosuiteCommand.stream().reduce("", (s1, s2) -> { return s1 + " " + s2; }));
+                    LOGGER.info("Launched EvoSuite seed process, command line: %s", evosuiteCommand.stream().reduce("", (s1, s2) -> { return s1 + " " + s2; }));
                 } catch (IOException e) {
-                    System.out.println("[EVOSUITE] Unexpected I/O error while running EvoSuite seed: " + e);
+                    LOGGER.error("Unexpected I/O error while running EvoSuite seed process");
+                    LOGGER.error("Message: %s", e);
                     return; //TODO throw an exception?
                 }
 
@@ -234,7 +245,8 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
                 try {
                     splitItems = splitEvosuiteSeed(testCountInitial, item);
                 } catch (IOException e) {
-                    System.out.println("[EVOSUITE] Unexpected I/O error while splitting EvoSuite seed: " + e);
+                    LOGGER.error("Unexpected I/O error while splitting EvoSuite seed");
+                    LOGGER.error("Message: %s", e);
                     return; //TODO throw an exception?
                 }
 
@@ -266,7 +278,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
      */
     private void generateTestsAndScheduleJBSE(int testCountInitial, List<JBSEResult> items) {
         if (!this.o.getUseMOSA() && items.size() != 1) {
-            System.out.println("[EVOSUITE] Unexpected internal error: MOSA is not used but the number of targets passed to EvoSuite is different from 1");
+            LOGGER.error("Internal error: MOSA is not used but the number of targets passed to EvoSuite is different from 1");
             return; //TODO throw an exception?
         }
 
@@ -292,9 +304,10 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
             final Process processEvosuite;
             try {
                 processEvosuite = launchProcess(evosuiteCommand, evosuiteLogFilePath);
-                System.out.println("[EVOSUITE] Launched EvoSuite process, command line: " + evosuiteCommand.stream().reduce("", (s1, s2) -> { return s1 + " " + s2; }));
+                LOGGER.info("Launched EvoSuite process, command line: %s", evosuiteCommand.stream().reduce("", (s1, s2) -> { return s1 + " " + s2; }));
             } catch (IOException e) {
-                System.out.println("[EVOSUITE] Unexpected I/O error while running EvoSuite: " + e);
+                LOGGER.error("Unexpected I/O error while running EvoSuite process");
+                LOGGER.error("Message: %s", e);
                 return; //TODO throw an exception?
             }
 
@@ -365,9 +378,9 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         try {
             initialCurrentClassName = initialState.getStack().get(0).getMethodClass().getClassName();
         } catch (FrozenStateException e) {
-            System.out.println("[EVOSUITE] Unexpected internal error while creating EvoSuite wrapper directory: The initial state is frozen.");
+            LOGGER.error("Internal error while creating EvoSuite wrapper directory: The initial state is frozen");
             fmt.cleanup();
-            return null; //TODO throw an exception
+            return null; //TODO throw an exception?
         }
         
         final int lastSlash = initialCurrentClassName.lastIndexOf('/');
@@ -376,15 +389,17 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         try {
             Files.createDirectories(wrapperDirectoryPath);
         } catch (IOException e) {
-            System.out.println("[EVOSUITE] Unexpected I/O error while creating EvoSuite wrapper directory " + wrapperDirectoryPath.toString() + ": " + e);
+            LOGGER.error("Unexpected I/O error while creating EvoSuite wrapper directory %s", wrapperDirectoryPath);
+            LOGGER.error("Message: %s", e);
             fmt.cleanup();
-            return null; //TODO throw an exception
+            return null; //TODO throw an exception?
         }
         final Path wrapperFilePath = wrapperDirectoryPath.resolve("EvoSuiteWrapper_" + testCount + ".java");
         try (final BufferedWriter w = Files.newBufferedWriter(wrapperFilePath)) {
             w.write(fmt.emit());
         } catch (IOException e) {
-            System.out.println("[EVOSUITE] Unexpected I/O error while creating EvoSuite wrapper " + wrapperFilePath.toString() + ": " + e);
+            LOGGER.error("Unexpected I/O error while creating EvoSuite wrapper %s", wrapperFilePath);
+            LOGGER.error("Message: %s", e);
             fmt.cleanup();
             return null; //TODO throw an exception
         }
@@ -415,17 +430,22 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
             final Path javacLogFilePath = this.o.getTmpDirectoryPath().resolve("javac-log-wrapper-" + testCount + ".txt");
             final String[] javacParameters = { "-cp", this.classpathCompilationWrapper, "-d", this.o.getTmpBinDirectoryPath().toString(), wrapperFilePath.toString() };
             try (final OutputStream w = new BufferedOutputStream(Files.newOutputStream(javacLogFilePath))) {
-                this.compiler.run(null, w, w, javacParameters);
+                final int success = this.compiler.run(null, w, w, javacParameters);
+                if (success != 0) {
+                    LOGGER.error("Internal error: EvoSuite seed wrapper %s compilation failed", wrapperFilePath);
+                }
             } catch (IOException e) {
-                System.out.println("[EVOSUITE] Unexpected I/O error while creating seed EvoSuite wrapper compilation log file " + javacLogFilePath.toString() + ": " + e);
-                //TODO throw an exception
+                LOGGER.error("Unexpected I/O error while creating EvoSuite seed wrapper compilation log file %s", javacLogFilePath);
+                LOGGER.error("Message: %s", e);
+                return; //TODO throw an exception?
             }
         } catch (IOException | InvalidClassFileFactoryClassException | InvalidInputException | ClassFileNotFoundException | ClassFileIllFormedException | 
                  ClassFileNotAccessibleException | IncompatibleClassFileException | PleaseLoadClassException | BadClassFileVersionException | 
                  WrongClassNameException | CannotAssumeSymbolicObjectException | MethodNotFoundException | MethodCodeNotFoundException | 
                  HeapMemoryExhaustedException | RenameUnsupportedException e) {
-            System.out.println("[EVOSUITE] Unexpected error while creating seed EvoSuite wrapper: " + e);
-            return; //TODO throw an exception
+            LOGGER.error("Unexpected I/O error while creating EvoSuite seed wrapper");
+            LOGGER.error("Message: %s", e);
+            return; //TODO throw an exception?
         }
 
     }
@@ -449,10 +469,15 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
             final Path javacLogFilePath = this.o.getTmpDirectoryPath().resolve("javac-log-wrapper-" + i + ".txt");
             final String[] javacParameters = { "-cp", this.classpathCompilationWrapper, "-d", this.o.getTmpBinDirectoryPath().toString(), wrapperFilePath.toString() };
             try (final OutputStream w = new BufferedOutputStream(Files.newOutputStream(javacLogFilePath))) {
-                this.compiler.run(null, w, w, javacParameters);
+                final int success = this.compiler.run(null, w, w, javacParameters);
+                if (success != 0) {
+                    LOGGER.error("Internal error: EvoSuite wrapper %s compilation failed", wrapperFilePath);
+                    //TODO remove item from items, throw an exception?
+                }
             } catch (IOException e) {
-                System.out.println("[EVOSUITE] Unexpected I/O error while creating EvoSuite wrapper compilation log file " + javacLogFilePath.toString() + ": " + e);
-                //TODO throw an exception
+                LOGGER.error("Unexpected I/O error while creating EvoSuite wrapper compilation log file %s", javacLogFilePath);
+                LOGGER.error("Message: %s", e);
+                //TODO remove item from items, throw an exception?
             }
             ++i;
         }
@@ -662,7 +687,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         final Path testFile = this.o.getTmpTestsDirectoryPath().resolve(testClassName + ".java");
         final Path scaffFile = (this.o.getEvosuiteNoDependency() ? null : this.o.getTmpTestsDirectoryPath().resolve(scaffClassName + ".java"));
         if (!testFile.toFile().exists() || (scaffFile != null && !scaffFile.toFile().exists())) {
-            System.out.println("[EVOSUITE] Failed to split the seed test class " + testFile + ": the test class does not seem to exist");
+            LOGGER.error("Failed to split the seed test class %s: the test class does not seem to exist", testFile);
             return null; //TODO throw some exception?
         }
         final CompilationUnit cuTestClass = StaticJavaParser.parse(testFile);
@@ -1056,7 +1081,8 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
                 //the performer was shut down:
                 //just fall through
             } catch (IOException e) {
-                System.out.println("[EVOSUITE] Unexpected I/O error while reading EvoSuite log file " + this.evosuiteLogFilePath.toString() + ": " + e);
+                LOGGER.error("Unexpected I/O error while reading EvoSuite log file %s", this.evosuiteLogFilePath);
+                LOGGER.error("Message: %s", e);
                 //TODO throw an exception?
             }
 
@@ -1065,7 +1091,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
             int testCount = this.testCountInitial;
             for (JBSEResult item : this.items) {
                 if (!generated.contains(testCount)) {
-                    System.out.println("[EVOSUITE] Failed to generate a test case for path condition: " + stringifyPathCondition(shorten(item.getFinalState().getPathCondition())) + ", log file: " + this.evosuiteLogFilePath.toString() + ", wrapper: EvoSuiteWrapper_" + testCount);
+                    LOGGER.info("Failed to generate a test case for path condition: %s, log file: %s, wrapper: EvoSuiteWrapper_%d", stringifyPathCondition(shorten(item.getFinalState().getPathCondition())), this.evosuiteLogFilePath.toString(), testCount);
                 }
                 ++testCount;
             }
@@ -1079,15 +1105,15 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
      * @param className a {@link String}, the name of the test class.
      * @throws NoSuchMethodException if the class {@code className} has not
      *         a {@code void test0()} method.
+     * @throws SecurityException if the method {@code test0} of class 
+     *         {@code className} cannot be accessed. 
+     * @throws NoClassDefFoundError if class {@code className} does not exist.
+     * @throws ClassNotFoundException if class {@code className} does not exist.
      */
-    private void checkTestExists(String className) throws NoSuchMethodException {
-        try {
-            final URLClassLoader cloader = URLClassLoader.newInstance(this.classpathTestURLClassLoader); 
-            cloader.loadClass(className.replace('/',  '.')).getDeclaredMethod("test0");
-        } catch (SecurityException | NoClassDefFoundError | ClassNotFoundException e) {
-            System.out.println("[EVOSUITE] Unexpected error while verifying that class " + className + " exists and has a test method: " + e);
-            //TODO throw an exception
-        }                   
+    private void checkTestExists(String className) 
+    throws NoSuchMethodException, SecurityException, NoClassDefFoundError, ClassNotFoundException {
+        final URLClassLoader cloader = URLClassLoader.newInstance(this.classpathTestURLClassLoader); 
+        cloader.loadClass(className.replace('/',  '.')).getDeclaredMethod("test0");
     }
 
     /**
@@ -1109,7 +1135,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         final Path testCaseScaff = (this.o.getEvosuiteNoDependency() ? null : this.o.getTmpTestsDirectoryPath().resolve(testCaseClassName + "_scaffolding.java"));
         final Path testCase = this.o.getTmpTestsDirectoryPath().resolve(testCaseClassName + ".java");
         if (!testCase.toFile().exists() || (testCaseScaff != null && !testCaseScaff.toFile().exists())) {
-            System.out.println("[EVOSUITE] Failed to generate the test case " + testCaseClassName + " for path condition: " + pathCondition + ": the generated files do not seem to exist");
+            LOGGER.warn("Failed to generate the test case %s for path condition: %s: the generated files do not seem to exist (perhaps EvoSuite must be blamed)", testCaseClassName, pathCondition);
             return;
         }
 
@@ -1119,24 +1145,37 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         try (final OutputStream w = new BufferedOutputStream(Files.newOutputStream(javacLogFilePath))) {
             if (testCaseScaff != null) {
                 final String[] javacParametersTestScaff = { "-cp", this.classpathCompilationTest, "-d", this.o.getTmpBinDirectoryPath().toString(), testCaseScaff.toString() };
-                this.compiler.run(null, w, w, javacParametersTestScaff);
+                final int successTestCaseScaff = this.compiler.run(null, w, w, javacParametersTestScaff);
+                if (successTestCaseScaff != 0) {
+                    LOGGER.error("Internal error: EvoSuite test case scaffolding %s compilation failed", testCaseScaff);
+                    return; //TODO throw an exception?
+                }
             }
-            this.compiler.run(null, w, w, javacParametersTestCase);
+            final int successTestCase = this.compiler.run(null, w, w, javacParametersTestCase);
+            if (successTestCase != 0) {
+                LOGGER.error("Internal error: EvoSuite test case %s compilation failed", testCaseScaff);
+                return; //TODO throw an exception?
+            }
         } catch (IOException e) {
-            System.out.println("[EVOSUITE] Unexpected I/O error while creating test case compilation log file " + javacLogFilePath.toString() + ": " + e);
-            //TODO throw an exception
+            LOGGER.error("Unexpected I/O error while creating test case compilation log file %s", javacLogFilePath);
+            LOGGER.error("Message: %s", e);
+            return; //TODO throw an exception?
         }
 
         //creates the TestCase and schedules it for further exploration
         try {
             checkTestExists(testCaseClassName);
             final int depth = item.getDepth();
-            System.out.println("[EVOSUITE] Generated test case " + testCaseClassName + ", depth: " + depth + ", path condition: " + pathCondition);
+            LOGGER.info("Generated test case %s, depth: %d, path condition: %s", testCaseClassName, depth, pathCondition);
             final TestCase newTestCase = new TestCase(testCaseClassName, "()V", "test0", this.o.getTmpTestsDirectoryPath(), (testCaseScaff != null));
             this.getOutputBuffer().add(new EvosuiteResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), newTestCase, depth + 1));
         } catch (NoSuchMethodException e) { 
             //EvoSuite failed to generate the test case, thus we just ignore it 
-            System.out.println("[EVOSUITE] Failed to generate the test case " + testCaseClassName + " for path condition: " + pathCondition + ": the generated file does not contain a test method");
+            LOGGER.warn("Failed to generate the test case %s for path condition: %s: the generated files does not contain a test method (perhaps EvoSuite must be blamed)", testCaseClassName, pathCondition);
+        } catch (SecurityException | NoClassDefFoundError | ClassNotFoundException e) {
+            LOGGER.error("Unexpected error while verifying that class %s exists and has a test method", testCaseClassName);
+            LOGGER.error("Message: %s", e);
+            //TODO throw an exception?
         }
     }
 }
