@@ -112,7 +112,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
     
     public PerformerEvosuite(Options o, InputBuffer<JBSEResult> in, OutputBuffer<EvosuiteResult> out) 
     throws NoJavaCompilerException, PerformerEvosuiteInitException {
-        super(in, out, o.getNumOfThreadsEvosuite(), (o.getUseMOSA() ? o.getNumMOSATargets() : 1), o.getThrottleFactorEvosuite(), o.getTimeoutMOSATaskCreationDuration(), o.getTimeoutMOSATaskCreationUnit());
+        super(in, out, o.getNumOfThreadsEvosuite(), o.getNumMOSATargets(), o.getThrottleFactorEvosuite(), o.getTimeoutMOSATaskCreationDuration(), o.getTimeoutMOSATaskCreationUnit());
         try {
             this.visibleTargetMethods = getTargets(o);
         } catch (ClassNotFoundException | MalformedURLException | SecurityException e) {
@@ -125,7 +125,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         this.o = o;
         this.timeBudgetSeconds = o.getEvosuiteTimeBudgetUnit().toSeconds(o.getEvosuiteTimeBudgetDuration());
         final String classesPathString = String.join(File.pathSeparator, stream(o.getClassesPath()).map(Object::toString).toArray(String[]::new)); 
-        this.classpathEvosuite = classesPathString + File.pathSeparator + this.o.getJBSELibraryPath().toString() + File.pathSeparator + this.o.getSushiLibPath().toString() + (this.o.getUseMOSA() ? "" : (File.pathSeparator + this.o.getTmpBinDirectoryPath().toString()));
+        this.classpathEvosuite = classesPathString + File.pathSeparator + this.o.getJBSELibraryPath().toString() + File.pathSeparator + this.o.getSushiLibPath().toString();
         final ArrayList<Path> classpathTestPath = new ArrayList<>(o.getClassesPath());
         classpathTestPath.add(this.o.getSushiLibPath());
         classpathTestPath.add(this.o.getTmpBinDirectoryPath());
@@ -195,7 +195,11 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
                     LOGGER.info("Launched EvoSuite seed process, command line: %s", evosuiteCommand.stream().reduce("", (s1, s2) -> { return s1 + " " + s2; }));
                 } catch (IOException e) {
                     LOGGER.error("Unexpected I/O error while running EvoSuite seed process");
-                    LOGGER.error("Message: %s", e);
+                    LOGGER.error("Message: %s", e.toString());
+                    LOGGER.error("Stack trace:");
+                    for (StackTraceElement elem : e.getStackTrace()) {
+                        LOGGER.error("%s", elem.toString());
+                    }
                     return; //TODO throw an exception?
                 }
 
@@ -226,7 +230,11 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
                     LOGGER.info("Launched EvoSuite seed process, command line: %s", evosuiteCommand.stream().reduce("", (s1, s2) -> { return s1 + " " + s2; }));
                 } catch (IOException e) {
                     LOGGER.error("Unexpected I/O error while running EvoSuite seed process");
-                    LOGGER.error("Message: %s", e);
+                    LOGGER.error("Message: %s", e.toString());
+                    LOGGER.error("Stack trace:");
+                    for (StackTraceElement elem : e.getStackTrace()) {
+                        LOGGER.error("%s", elem.toString());
+                    }
                     return; //TODO throw an exception?
                 }
 
@@ -246,7 +254,11 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
                     splitItems = splitEvosuiteSeed(testCountInitial, item);
                 } catch (IOException e) {
                     LOGGER.error("Unexpected I/O error while splitting EvoSuite seed");
-                    LOGGER.error("Message: %s", e);
+                    LOGGER.error("Message: %s", e.toString());
+                    LOGGER.error("Stack trace:");
+                    for (StackTraceElement elem : e.getStackTrace()) {
+                        LOGGER.error("%s", elem.toString());
+                    }
                     return; //TODO throw an exception?
                 }
 
@@ -277,11 +289,6 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
      * @param items a {@link List}{@code <}{@link JBSEResult}{@code >}, results of symbolic execution.
      */
     private void generateTestsAndScheduleJBSE(int testCountInitial, List<JBSEResult> items) {
-        if (!this.o.getUseMOSA() && items.size() != 1) {
-            LOGGER.error("Internal error: MOSA is not used but the number of targets passed to EvoSuite is different from 1");
-            return; //TODO throw an exception?
-        }
-
         //splits items in sublists having same target method
         final Map<String, List<JBSEResult>> splitItems = 
         items.stream().collect(Collectors.groupingBy(r -> r.getTargetMethodClassName() + ":" + r.getTargetMethodDescriptor() + ":" + r.getTargetMethodName()));
@@ -307,7 +314,11 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
                 LOGGER.info("Launched EvoSuite process, command line: %s", evosuiteCommand.stream().reduce("", (s1, s2) -> { return s1 + " " + s2; }));
             } catch (IOException e) {
                 LOGGER.error("Unexpected I/O error while running EvoSuite process");
-                LOGGER.error("Message: %s", e);
+                LOGGER.error("Message: %s", e.toString());
+                LOGGER.error("Stack trace:");
+                for (StackTraceElement elem : e.getStackTrace()) {
+                    LOGGER.error("%s", elem.toString());
+                }
                 return; //TODO throw an exception?
             }
 
@@ -390,7 +401,11 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
             Files.createDirectories(wrapperDirectoryPath);
         } catch (IOException e) {
             LOGGER.error("Unexpected I/O error while creating EvoSuite wrapper directory %s", wrapperDirectoryPath);
-            LOGGER.error("Message: %s", e);
+            LOGGER.error("Message: %s", e.toString());
+            LOGGER.error("Stack trace:");
+            for (StackTraceElement elem : e.getStackTrace()) {
+                LOGGER.error("%s", elem.toString());
+            }
             fmt.cleanup();
             return null; //TODO throw an exception?
         }
@@ -399,9 +414,13 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
             w.write(fmt.emit());
         } catch (IOException e) {
             LOGGER.error("Unexpected I/O error while creating EvoSuite wrapper %s", wrapperFilePath);
-            LOGGER.error("Message: %s", e);
+            LOGGER.error("Message: %s", e.toString());
+            LOGGER.error("Stack trace:");
+            for (StackTraceElement elem : e.getStackTrace()) {
+                LOGGER.error("%s", elem.toString());
+            }
             fmt.cleanup();
-            return null; //TODO throw an exception
+            return null; //TODO throw an exception?
         }
         fmt.cleanup();
 
@@ -436,7 +455,11 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
                 }
             } catch (IOException e) {
                 LOGGER.error("Unexpected I/O error while creating EvoSuite seed wrapper compilation log file %s", javacLogFilePath);
-                LOGGER.error("Message: %s", e);
+                LOGGER.error("Message: %s", e.toString());
+                LOGGER.error("Stack trace:");
+                for (StackTraceElement elem : e.getStackTrace()) {
+                    LOGGER.error("%s", elem.toString());
+                }
                 return; //TODO throw an exception?
             }
         } catch (IOException | InvalidClassFileFactoryClassException | InvalidInputException | ClassFileNotFoundException | ClassFileIllFormedException | 
@@ -444,7 +467,11 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
                  WrongClassNameException | CannotAssumeSymbolicObjectException | MethodNotFoundException | MethodCodeNotFoundException | 
                  HeapMemoryExhaustedException | RenameUnsupportedException e) {
             LOGGER.error("Unexpected I/O error while creating EvoSuite seed wrapper");
-            LOGGER.error("Message: %s", e);
+            LOGGER.error("Message: %s", e.toString());
+            LOGGER.error("Stack trace:");
+            for (StackTraceElement elem : e.getStackTrace()) {
+                LOGGER.error("%s", elem.toString());
+            }
             return; //TODO throw an exception?
         }
 
@@ -476,7 +503,11 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
                 }
             } catch (IOException e) {
                 LOGGER.error("Unexpected I/O error while creating EvoSuite wrapper compilation log file %s", javacLogFilePath);
-                LOGGER.error("Message: %s", e);
+                LOGGER.error("Message: %s", e.toString());
+                LOGGER.error("Stack trace:");
+                for (StackTraceElement elem : e.getStackTrace()) {
+                    LOGGER.error("%s", elem.toString());
+                }
                 //TODO remove item from items, throw an exception?
             }
             ++i;
@@ -497,7 +528,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
     private List<String> buildEvoSuiteCommandSeed(JBSEResult item) {
         final boolean isTargetAMethod = (item.getTargetClassName() == null);
         final String targetClass = (isTargetAMethod ? item.getTargetMethodClassName() : item.getTargetClassName()).replace('/', '.');
-        final List<String> retVal = new ArrayList<String>();
+        final ArrayList<String> retVal = new ArrayList<>();
         if (this.o.getJava8Home() == null) {
             retVal.add("java");
         } else {
@@ -531,17 +562,10 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         if (this.o.getEvosuiteNoDependency()) {
             retVal.add("-Dno_runtime_dependency");
         }
-        if (this.o.getUseMOSA()) {
-            retVal.add("-Dcrossover_function=SUSHI_HYBRID");
-            retVal.add("-Dalgorithm=DYNAMOSA");
-            retVal.add("-generateMOSuite");
-        } else {
-            retVal.add("-Dhtml=false");
-            retVal.add("-Dcrossover_function=SINGLEPOINT");
-            retVal.add("-Dcrossover_implementation=SUSHI_HYBRID");
-            retVal.add("-Dmax_size=1");
-            retVal.add("-Dmax_initial_tests=1");
-        }
+        retVal.add("-Dmax_subclasses_per_class=10");
+        retVal.add("-Dcrossover_function=SUSHI_HYBRID");
+        retVal.add("-Dalgorithm=DYNAMOSA");
+        retVal.add("-generateMOSuite");
 
         return retVal;
     }
@@ -563,7 +587,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         final String targetClass = items.get(0).getTargetMethodClassName().replace('/', '.');
         final String targetMethodDescriptor = items.get(0).getTargetMethodDescriptor();
         final String targetMethodName = items.get(0).getTargetMethodName();
-        final List<String> retVal = new ArrayList<String>();
+        final ArrayList<String> retVal = new ArrayList<>();
         if (this.o.getJava8Home() == null) {
             retVal.add("java");
         } else {
@@ -598,20 +622,12 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         if (this.o.getEvosuiteNoDependency()) {
             retVal.add("-Dno_runtime_dependency");
         }
-        if (this.o.getUseMOSA()) {
-            retVal.add("-Dpath_condition_evaluators_dir=" + this.o.getTmpBinDirectoryPath().toString());
-            retVal.add("-Demit_tests_incrementally=true");
-            retVal.add("-Dcrossover_function=SUSHI_HYBRID");
-            retVal.add("-Dalgorithm=DYNAMOSA");
-            retVal.add("-generateMOSuite");
-        } else {
-            retVal.add("-Djunit_suffix=" + "_" + testCountInitial  + "_Test");
-            retVal.add("-Dhtml=false");
-            retVal.add("-Dcrossover_function=SINGLEPOINT");
-            retVal.add("-Dcrossover_implementation=SUSHI_HYBRID");
-            retVal.add("-Dmax_size=1");
-            retVal.add("-Dmax_initial_tests=1");
-        }
+        retVal.add("-Dmax_subclasses_per_class=10");
+        retVal.add("-Dpath_condition_evaluators_dir=" + this.o.getTmpBinDirectoryPath().toString());
+        retVal.add("-Demit_tests_incrementally=true");
+        retVal.add("-Dcrossover_function=SUSHI_HYBRID");
+        retVal.add("-Dalgorithm=DYNAMOSA");
+        retVal.add("-generateMOSuite");
         final StringBuilder optionPC = new StringBuilder("-Dpath_condition=");
         for (int i = testCountInitial; i < testCountInitial + items.size(); ++i) {
             if (i > testCountInitial) {
@@ -1082,7 +1098,11 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
                 //just fall through
             } catch (IOException e) {
                 LOGGER.error("Unexpected I/O error while reading EvoSuite log file %s", this.evosuiteLogFilePath);
-                LOGGER.error("Message: %s", e);
+                LOGGER.error("Message: %s", e.toString());
+                LOGGER.error("Stack trace:");
+                for (StackTraceElement elem : e.getStackTrace()) {
+                    LOGGER.error("%s", elem.toString());
+                }
                 //TODO throw an exception?
             }
 
@@ -1158,7 +1178,11 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
             }
         } catch (IOException e) {
             LOGGER.error("Unexpected I/O error while creating test case compilation log file %s", javacLogFilePath);
-            LOGGER.error("Message: %s", e);
+            LOGGER.error("Message: %s", e.toString());
+            LOGGER.error("Stack trace:");
+            for (StackTraceElement elem : e.getStackTrace()) {
+                LOGGER.error("%s", elem.toString());
+            }
             return; //TODO throw an exception?
         }
 
@@ -1174,7 +1198,11 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
             LOGGER.warn("Failed to generate the test case %s for path condition: %s: the generated files does not contain a test method (perhaps EvoSuite must be blamed)", testCaseClassName, pathCondition);
         } catch (SecurityException | NoClassDefFoundError | ClassNotFoundException e) {
             LOGGER.error("Unexpected error while verifying that class %s exists and has a test method", testCaseClassName);
-            LOGGER.error("Message: %s", e);
+            LOGGER.error("Message: %s", e.toString());
+            LOGGER.error("Stack trace:");
+            for (StackTraceElement elem : e.getStackTrace()) {
+                LOGGER.error("%s", elem.toString());
+            }
             //TODO throw an exception?
         }
     }

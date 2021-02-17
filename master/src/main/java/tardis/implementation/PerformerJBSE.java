@@ -72,7 +72,11 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             ThreadStackEmptyException | ContradictionException | EngineStuckException |
             FailureException e ) {
                 LOGGER.error("Unexpected error while exploring test case %s", item.getTestCase().getClassName());
-                LOGGER.error("Message: %s", e);
+                LOGGER.error("Message: %s", e.toString());
+                LOGGER.error("Stack trace:");
+                for (StackTraceElement elem : e.getStackTrace()) {
+                    LOGGER.error("%s", elem.toString());
+                }
             }
         };
         return job;
@@ -192,7 +196,11 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
                     
                 } catch (IOException e) {
                     LOGGER.error("Unexpected I/O error while attempting to copy test case %s or its scaffolding to its destination directory", tc.getClassName());
-                    LOGGER.error("Message: %s", e);
+                    LOGGER.error("Message: %s", e.toString());
+                    LOGGER.error("Stack trace:");
+                    for (StackTraceElement elem : e.getStackTrace()) {
+                        LOGGER.error("%s", elem.toString());
+                    }
                     //falls through
                 }
             }

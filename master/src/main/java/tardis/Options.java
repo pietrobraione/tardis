@@ -129,9 +129,9 @@ public final class Options implements Cloneable {
     private Path java8Home;
 
     @Option(name = "-evosuite",
-            usage = "Path to EvoSuite or MOSA",
+            usage = "Path to EvoSuite",
             handler = PathOptionHandler.class)
-    private Path evosuitePath = Paths.get(".", "lib", "evosuite.jar");
+    private Path evosuitePath = Paths.get(".", "lib", "evosuite-shaded-1.0.6-SNAPSHOT.jar");
 
     @Option(name = "-sushi_lib",
             usage = "Path to SUSHI library",
@@ -169,10 +169,6 @@ public final class Options implements Cloneable {
     @Option(name = "-num_mosa_targets",
             usage = "Maximum number of target passed to a MOSA job")
     private int numMOSATargets = 5;
-
-    @Option(name = "-use_mosa",
-            usage = "Set to true if you want to use MOSA, false for ordinary EvoSuite")
-    private boolean useMOSA = false;
 
     @Option(name = "-heap_scope",
             usage = "JBSE heap scope in the form <className1>=<maxNumInstances1>; multiple heap scopes can be specified",
@@ -500,14 +496,6 @@ public final class Options implements Cloneable {
 
     public void setNumMOSATargets(int numMOSATargets) {
         this.numMOSATargets = numMOSATargets;
-    }
-
-    public boolean getUseMOSA() {
-        return this.useMOSA;
-    }
-
-    public void setUseMOSA(boolean useMOSA) {
-        this.useMOSA = useMOSA;
     }
 
     public void setHeapScope(String className, int scope) {

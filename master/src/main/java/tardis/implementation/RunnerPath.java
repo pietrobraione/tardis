@@ -231,7 +231,11 @@ final class RunnerPath implements AutoCloseable {
                 } catch (ThreadStackEmptyException | FrozenStateException e) {
                     //this should never happen
                     LOGGER.error("Internal error when attempting to inspect the state before bytecode instruction execution");
-                    LOGGER.error("Message: %s", e);
+                    LOGGER.error("Message: %s", e.toString());
+                    LOGGER.error("Stack trace:");
+                    for (StackTraceElement elem : e.getStackTrace()) {
+                        LOGGER.error("%s", elem.toString());
+                    }
                     throw new RuntimeException(e); //TODO throw better exception
                 }
             }
@@ -262,7 +266,11 @@ final class RunnerPath implements AutoCloseable {
                 } catch (ThreadStackEmptyException e) {
                     //this should never happen
                     LOGGER.error("Internal error when attempting to update coverage");
-                    LOGGER.error("Message: %s", e);
+                    LOGGER.error("Message: %s", e.toString());
+                    LOGGER.error("Stack trace:");
+                    for (StackTraceElement elem : e.getStackTrace()) {
+                        LOGGER.error("%s", elem.toString());
+                    }
                     throw new RuntimeException(e); //TODO throw better exception
                 }
             }
@@ -289,7 +297,11 @@ final class RunnerPath implements AutoCloseable {
                 } catch (FrozenStateException | InvalidNumberOfOperandsException | ThreadStackEmptyException e) {
                     //this should never happen
                     LOGGER.error("Internal error when attempting to manage String literals");
-                    LOGGER.error("Message: %s", e);
+                    LOGGER.error("Message: %s", e.toString());
+                    LOGGER.error("Stack trace:");
+                    for (StackTraceElement elem : e.getStackTrace()) {
+                        LOGGER.error("%s", elem.toString());
+                    }
                     throw new RuntimeException(e); //TODO throw better exception
                 }
             }
@@ -361,7 +373,11 @@ final class RunnerPath implements AutoCloseable {
                 } catch (ThreadStackEmptyException | FrozenStateException e) {
                     //this should never happen
                     LOGGER.error("Internal error when attempting to inspect the current bytecode instruction");
-                    LOGGER.error("Message: %s", e);
+                    LOGGER.error("Message: %s", e.toString());
+                    LOGGER.error("Stack trace:");
+                    for (StackTraceElement elem : e.getStackTrace()) {
+                        LOGGER.error("%s", elem.toString());
+                    }
                     throw new RuntimeException(e); //TODO throw better exception
                 }
             }
@@ -394,7 +410,11 @@ final class RunnerPath implements AutoCloseable {
                 } catch (FrozenStateException | InvalidNumberOfOperandsException | ThreadStackEmptyException e) {
                     //this should never happen
                     LOGGER.error("Internal error when attempting to manage String literals");
-                    LOGGER.error("Message: %s", e);
+                    LOGGER.error("Message: %s", e.toString());
+                    LOGGER.error("Stack trace:");
+                    for (StackTraceElement elem : e.getStackTrace()) {
+                        LOGGER.error("%s", elem.toString());
+                    }
                     throw new RuntimeException(e); //TODO throw better exception
                 }
             }
@@ -449,7 +469,11 @@ final class RunnerPath implements AutoCloseable {
                             } catch (CannotAssumeSymbolicObjectException | InvalidInputException |
                             InvalidTypeException | ContradictionException e) {
                                 LOGGER.error("Internal error when attempting to artificially generate an expansion constraint");
-                                LOGGER.error("Message: %s", e);
+                                LOGGER.error("Message: %s", e.toString());
+                                LOGGER.error("Stack trace:");
+                                for (StackTraceElement elem : e.getStackTrace()) {
+                                    LOGGER.error("%s", elem.toString());
+                                }
                                 throw new RuntimeException(e); //TODO throw better exception
                             } catch (HeapMemoryExhaustedException e) {
                                 LOGGER.error("Symbolic execution heap memory exhausted when attempting to artificially generate an expansion constraint");
