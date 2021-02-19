@@ -447,7 +447,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
             s.pushFrameSymbolic(cf, new Signature(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName()));
             final Path wrapperFilePath = emitEvoSuiteWrapper(testCount, s, s.clone(), Collections.emptyMap(), Collections.emptySet());
             final Path javacLogFilePath = this.o.getTmpDirectoryPath().resolve("javac-log-wrapper-" + testCount + ".txt");
-            final String[] javacParameters = { "-cp", this.classpathCompilationWrapper, "-d", this.o.getTmpBinDirectoryPath().toString(), wrapperFilePath.toString() };
+            final String[] javacParameters = { "-cp", this.classpathCompilationWrapper, "-d", this.o.getTmpBinDirectoryPath().toString(), "-source", "8", "-target", "8", wrapperFilePath.toString() };
             try (final OutputStream w = new BufferedOutputStream(Files.newOutputStream(javacLogFilePath))) {
                 final int success = this.compiler.run(null, w, w, javacParameters);
                 if (success != 0) {
@@ -494,7 +494,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
             final Set<Long> stringOthers = item.getStringOthers();
             final Path wrapperFilePath = emitEvoSuiteWrapper(i, initialState, finalState, stringLiterals, stringOthers);
             final Path javacLogFilePath = this.o.getTmpDirectoryPath().resolve("javac-log-wrapper-" + i + ".txt");
-            final String[] javacParameters = { "-cp", this.classpathCompilationWrapper, "-d", this.o.getTmpBinDirectoryPath().toString(), wrapperFilePath.toString() };
+            final String[] javacParameters = { "-cp", this.classpathCompilationWrapper, "-d", this.o.getTmpBinDirectoryPath().toString(), "-source", "8", "-target", "8", wrapperFilePath.toString() };
             try (final OutputStream w = new BufferedOutputStream(Files.newOutputStream(javacLogFilePath))) {
                 final int success = this.compiler.run(null, w, w, javacParameters);
                 if (success != 0) {
@@ -562,7 +562,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         if (this.o.getEvosuiteNoDependency()) {
             retVal.add("-Dno_runtime_dependency");
         }
-        retVal.add("-Dmax_subclasses_per_class=10");
+        retVal.add("-Dmax_subclasses_per_class=1");
         retVal.add("-Dcrossover_function=SUSHI_HYBRID");
         retVal.add("-Dalgorithm=DYNAMOSA");
         retVal.add("-generateMOSuite");
@@ -622,7 +622,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         if (this.o.getEvosuiteNoDependency()) {
             retVal.add("-Dno_runtime_dependency");
         }
-        retVal.add("-Dmax_subclasses_per_class=10");
+        retVal.add("-Dmax_subclasses_per_class=1");
         retVal.add("-Dpath_condition_evaluators_dir=" + this.o.getTmpBinDirectoryPath().toString());
         retVal.add("-Demit_tests_incrementally=true");
         retVal.add("-Dcrossover_function=SUSHI_HYBRID");
