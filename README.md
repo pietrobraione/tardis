@@ -12,11 +12,11 @@ Right now TARDIS can be installed only by building it from source. Formal releas
 
 ## Building TARDIS
 
-TARDIS is composed by several projects, some of which are imported as git submodules, and is built with Gradle. First, you should ensure that all the dependencies are present, including Z3 (see section "Dependencies"). Then, you should clone the TARDIS git repository and init/update its submodules. If you work from the command line, this means running first `git clone`, and then `git submodule init && git submodule update`. Once done all this, run the build Gradle task by invoking `gradlew build`. 
+TARDIS is composed by several projects, some of which are imported as git submodules, and is built with Gradle version 6.7.1, that is included in the repository. First, ensure that all the dependencies are present, including Z3 (see section "Dependencies"). Then, clone the TARDIS git repository and init/update its submodules. If you work from the command line, this means running first `git clone`, and then `git submodule init && git submodule update`. Then perform the fix to the test suite of the JBSE subproject, fix that is described in the "Building JBSE" section of the README.md file of the JBSE project. Once done all this, run the build Gradle task by invoking `gradlew build`. 
 
 ## Dependencies
 
-TARDIS has many dependencies. It must be built using a JDK version 8 - neither less, nor more. The Gradle wrapper `gradlew` included in the repository will take care to select the right version of Gradle. Gradle will automatically resolve and use the following compile-time-only dependencies:
+TARDIS has many dependencies. It must be built using a JDK version 8 - neither less, nor more. We suggest to use the latest [AdoptOpenJDK](https://adoptopenjdk.net/) v8 with HotSpot JVM (note that the JDK with the OpenJ9 JVM currently does not work, because there are some slight differences in the standard library classes). The Gradle wrapper `gradlew` included in the repository will take care to select the right version of Gradle. Gradle will automatically resolve and use the following compile-time-only dependencies:
 
 * [JavaCC](https://javacc.org) is used in the JBSE submodule for compiling the parser for the JBSE settings files.
 * [JUnit](http://junit.org) is used in the JBSE submodule for running the test suite that comes with JBSE (in future TARDIS might come with a test suite of its own).
@@ -46,7 +46,7 @@ Gradle will download them to compile SUSHI-Lib, but you can avoid to deploy them
 
 ## Working under Eclipse
 
-If you want to work (as us) under Eclipse 2020-12 for Java Developers, you are lucky: All the plugins that are necessary to import TARDIS under Eclipse and make it work are already present in the distribution. The only caveat is that, since starting from version 2020-09 Eclipse requires at least Java 11 to run, you will need to install both Java 11 and Java 8. Gradle will automatically select the right version of Java when building JBSE. Note that If you use a different flavor, or an earlier version, of Eclipse you might need to install the egit and the Buildship plugins, both available in the Eclipse Marketplace. After that, you are ready to import TARDIS under Eclipse:
+If you want to modify and build TARDIS by using (as we do) Eclipse 2020-12 for Java Developers, you are lucky: All the Eclipse plugins that are necessary to import and build TARDIS are already present in the distribution. The only caveat is that, since starting from version 2020-09 Eclipse requires at least Java 11 to run, your development machine will need to have both a Java 11 (to run Eclipse) and a Java 8 setup (to build TARDIS). Gradle will automatically select the right version of Java when building TARDIS. If you use a different flavor, or an earlier version, of Eclipse you might need to install the egit and the Buildship plugins, both available from the Eclipse Marketplace. After that, to import TARDIS under Eclipse follow these steps:
 
 * To avoid conflicts we advise to import TARDIS under an empty workspace.
 * Be sure that the default Eclipse JRE is the JRE subdirectory of a full JDK 8 setup, *not* a standalone (i.e., not part of a JDK) JRE.
