@@ -31,6 +31,7 @@ shadowJar {
     relocate 'org.jacoco', 'tardis.org.jacoco'
     relocate 'org.objectweb', 'tardis.org.objectweb'
     relocate 'org.kohsuke', 'tardis.org.kohsuke'
+    relocate 'org.apache.logging.log4j', 'tardis.org.apache.logging.log4j'
     relocate 'sushi', 'tardis'
 }
 
