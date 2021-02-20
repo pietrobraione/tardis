@@ -12,7 +12,7 @@ Right now TARDIS can be installed only by building it from source. Formal releas
 
 ## Building TARDIS
 
-TARDIS is composed by several projects, some of which are imported as git submodules, and is built with Gradle version 6.7.1, that is included in the repository. First, ensure that all the dependencies are present, including Z3 (see section "Dependencies"). Then, clone the TARDIS git repository and init/update its submodules. If you work from the command line, this means running first `git clone`, and then `git submodule init && git submodule update`. Then perform the fix to the test suite of the JBSE subproject, fix that is described in the "Building JBSE" section of the README.md file of the JBSE project. Once done all this, run the build Gradle task by invoking `gradlew build`. 
+TARDIS is composed by several projects, some of which are imported as git submodules, and is built with Gradle version 6.7.1, that is included in the repository. First, ensure that all the dependencies are present, including Z3 (see section "Dependencies"). Then, clone the TARDIS git repository and init/update its submodules. If you work from the command line, this means running first `git clone`, and then `git submodule init && git submodule update`. Then, follow the instructions described in the  explained in the section "Patching the tests" section of the README.md file of the JBSE subproject. Finally, run the build Gradle task, e.g. by invoking `gradlew build` from the command line. 
 
 ## Dependencies
 
@@ -64,7 +64,7 @@ In the end, your Eclipse workspace should contain these projects:
 
 ## Deploying TARDIS
 
-Deploying TARDIS to be used outside Eclipse is tricky. The `gradlew build` command will produce a SUSHI-Lib jar `runtime/build/libs/sushi-lib-<VERSION>.jar`, the JBSE jars in `jbse/build/libs` (refer to the JBSE project's README file for more information on them), and a jar for the main TARDIS application `master/build/libs/tardis-master-<VERSION>.jar`. You need to deploy them and all their dependencies. Moreover, `gradlew build` will produce an uber-jar `master/build/libs/tardis-master-<VERSION>-shaded.jar` containing all the runtime dependencies excluded EvoSuite, `tools.jar`, and the native files (Z3). Deploying based on the uber-jar is easier, but to our experience a setup based on the uber-jar is more crash-prone (on the other hand, using the uber-jar for JBSE is safe). 
+Deploying TARDIS outside the build environment to a target machine is tricky. The `gradlew build` command will produce a SUSHI-Lib jar `runtime/build/libs/sushi-lib-<VERSION>.jar`, the JBSE jars in `jbse/build/libs` (refer to the JBSE project's README file for more information on them), and a jar for the main TARDIS application `master/build/libs/tardis-master-<VERSION>.jar`. You need to deploy them and all their dependencies. Moreover, `gradlew build` will produce an uber-jar `master/build/libs/tardis-master-<VERSION>-shaded.jar` containing all the runtime dependencies excluded EvoSuite, `tools.jar`, and the native files (Z3). Deploying based on the uber-jar is easier, but to our experience a setup based on the uber-jar is more crash-prone (on the other hand, using the uber-jar for JBSE is safe). 
 
 Here follow detailed instructions for deploying TARDIS based on the plain jars:
 
