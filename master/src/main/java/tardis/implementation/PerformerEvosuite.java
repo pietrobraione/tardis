@@ -552,7 +552,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         retVal.add("-Dtest_dir=" + this.o.getTmpTestsDirectoryPath().toString());
         retVal.add("-Dvirtual_fs=false");
         retVal.add("-Dselection_function=ROULETTEWHEEL");
-        retVal.add("-Dcriterion=BRANCH");                
+        retVal.add("-Dcriterion=BRANCH");
         retVal.add("-Dinline=false");
         retVal.add("-Dsushi_modifiers_local_search=true");
         retVal.add("-Duse_minimizer_during_crossover=true");
