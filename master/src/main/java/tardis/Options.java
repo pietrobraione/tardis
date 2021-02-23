@@ -408,6 +408,14 @@ public final class Options implements Cloneable {
     public void setJava8Home(Path java8Home) {
         this.java8Home = java8Home;
     }
+    
+    public String getJava8Command() {
+        if (getJava8Home() == null) {
+            return "java";
+        } else {
+            return getJava8Home().resolve("bin/java").toAbsolutePath().toString();
+        }
+    }
 
     public Path getEvosuitePath() {
         return this.evosuitePath;
