@@ -109,8 +109,9 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
     private final String classpathCompilationWrapper;
     private int testCount;
     private volatile boolean stopForSeeding;
+    private final TreePath treePath;
     
-    public PerformerEvosuite(Options o, InputBuffer<JBSEResult> in, OutputBuffer<EvosuiteResult> out) 
+    public PerformerEvosuite(Options o, InputBuffer<JBSEResult> in, OutputBuffer<EvosuiteResult> out, TreePath treePath) 
     throws NoJavaCompilerException, PerformerEvosuiteInitException {
         super(in, out, o.getNumOfThreadsEvosuite(), o.getNumMOSATargets(), o.getThrottleFactorEvosuite(), o.getTimeoutMOSATaskCreationDuration(), o.getTimeoutMOSATaskCreationUnit());
         try {
@@ -139,6 +140,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         this.classpathCompilationWrapper = classesPathString + File.pathSeparator + this.o.getSushiLibPath().toString();
         this.testCount = (o.getInitialTestCase() == null ? 0 : 1);
         this.stopForSeeding = false;
+        this.treePath = treePath;
     }
     
     private static URL toURL(Path path) {
@@ -324,7 +326,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
 
             //launches a thread that waits for tests and schedules 
             //JBSE for exploring them
-            final TestDetector tdJBSE = new TestDetector(testCount, subItems, evosuiteLogFilePath);
+            final TestDetector tdJBSE = new TestDetector(testCount, subItems, evosuiteLogFilePath, treePath);
             final Thread tJBSE = new Thread(tdJBSE);
             tJBSE.start();
             threads.add(tJBSE);
@@ -1039,6 +1041,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         private final List<JBSEResult> items;
         private final Path evosuiteLogFilePath;
         public volatile boolean ended;
+        private final TreePath treePath;
 
         /**
          * Constructor.
@@ -1048,12 +1051,14 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
          *        will be numbered {@code testCountInitial + i}.
          * @param items a {@link List}{@code <}{@link JBSEResult}{@code >}, results of symbolic execution.
          * @param evosuiteLogFilePath the {@link Path} of the EvoSuite log file.
+         * @param treePath 
          */
-        public TestDetector(int testCountInitial, List<JBSEResult> items, Path evosuiteLogFilePath) {
+        public TestDetector(int testCountInitial, List<JBSEResult> items, Path evosuiteLogFilePath, TreePath treePath) {
             this.testCountInitial = testCountInitial;
             this.items = items;
             this.evosuiteLogFilePath = evosuiteLogFilePath;
             this.ended = false;
+            this.treePath = treePath;
         }
 
         @Override
@@ -1112,6 +1117,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
             for (JBSEResult item : this.items) {
                 if (!generated.contains(testCount)) {
                     LOGGER.info("Failed to generate a test case for path condition: %s, log file: %s, wrapper: EvoSuiteWrapper_%d", stringifyPathCondition(shorten(item.getFinalState().getPathCondition())), this.evosuiteLogFilePath.toString(), testCount);
+                    this.treePath.PCToBloomFilterEvosuite(item.getFinalState().getPathCondition(), false);
                 }
                 ++testCount;
             }
@@ -1193,6 +1199,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
             LOGGER.info("Generated test case %s, depth: %d, path condition: %s", testCaseClassName, depth, pathCondition);
             final TestCase newTestCase = new TestCase(testCaseClassName, "()V", "test0", this.o.getTmpTestsDirectoryPath(), (testCaseScaff != null));
             this.getOutputBuffer().add(new EvosuiteResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), newTestCase, depth + 1));
+            this.treePath.PCToBloomFilterEvosuite(pathConditionClauses, true);
         } catch (NoSuchMethodException e) { 
             //EvoSuite failed to generate the test case, thus we just ignore it 
             LOGGER.warn("Failed to generate the test case %s for path condition: %s: the generated files does not contain a test method (perhaps EvoSuite must be blamed)", testCaseClassName, pathCondition);

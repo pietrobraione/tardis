@@ -1,12 +1,16 @@
 package tardis.implementation;
 
+import static tardis.implementation.Util.shorten;
+
 import java.util.ArrayList;
+import java.util.BitSet;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -30,7 +34,14 @@ public final class TreePath {
     /** Map used to track the times the tests hit a branch. */
     private final HashMap<String, Integer> hitsCounterMap = new HashMap<>(); //TODO ConcurrentHashMap?
     
+    /** Queue used as training set to calculate the infeasibility index. */
+    public final LinkedBlockingQueue<TrainigSetItem> trainingSet = new LinkedBlockingQueue<>();
+    
     private enum NodeStatus { ATTEMPTED, COVERED };
+    
+    /** The size of the bloom filter structures. */
+    private final int N_ROWS = 16;
+	private final int N_COLUMNS = 64;
     
     /**
      * A node in the {@link TreePath}.
@@ -58,6 +69,8 @@ public final class TreePath {
          * calculate the improvability index.
          */
         private HashSet<String> neighborFrontierBranches = new HashSet<>();
+        
+        private BitSet[] bloomFilterStructure = new BitSet[N_ROWS];
 
         /**
          * Constructor for a nonroot node.
@@ -109,6 +122,13 @@ public final class TreePath {
             return retVal;
         }
 
+		public BitSet[] getBloomFilterStructure() {
+			return bloomFilterStructure;
+		}
+
+		public void setBloomFilterStructure(BitSet[] bloomFilterStructure) {
+			this.bloomFilterStructure = bloomFilterStructure;
+		}
     }
 
     /**
@@ -195,6 +215,9 @@ public final class TreePath {
             if (index == path.size() - 1) {
                 currentInTree.coveredBranches.addAll(coveredBranches);
                 currentInTree.neighborFrontierBranches.addAll(neighborFrontierBranches);
+                if (!covered) {
+                	currentInTree.setBloomFilterStructure(PCToBloomFilter(path));
+                }
             }
             ++index;
         }
@@ -361,5 +384,201 @@ public final class TreePath {
         }
         final int minimum = Collections.min(hitsCounters);
         return minimum > 9 ? 10 : minimum;
+    }
+    
+    /**
+     * Calculates the infeasibility index of a given path.
+     * 
+     * @param path an {@link Iterable}{@code <}{@link Clause}{@code >}. 
+     *        The first is the closest to the root, the last is the leaf.
+     * @return the infeasibility index (an {@code int} between {@code 0} 
+     *         and {@code 3}) -->
+     *         3: feasible(1) with voting 3,
+     *         2: feasible(1) with voting 2,
+     *         1: infeasible(0) with voting 2,
+     *         0: infeasible(0) with voting 3
+     */
+    synchronized int getInfeasibilityIndex(Iterable<Clause> path) {
+    	int index = 0;
+    	if (trainingSet.size() >= 3) {
+    		Object[] result = Knn.knn(trainingSet, getInfeasibilityIndexBloomFilterStructure(path));
+    		final int label = (int) result[0];
+    		final int voting = (int) result[1];
+    		final double average = (double) result[2];
+
+    		if (label == 1) {
+    			if (voting == 3) {
+    				index = 3;
+    			}
+    			else {
+    				index = 2;
+    			}
+    		}
+    		else {
+    			if (voting == 2) {
+    				index = 1;
+    			}
+    			else {
+    				index = 0;
+    			}	
+    		}
+    	}
+
+    	return index;
+    }
+    
+    /**
+     * Returns the bloom filter structure previously saved in the TreePath of
+     * a modified path condition, used to calculate the infeasibility index.
+     * 
+     * @param path an {@link Iterable}{@code <}{@link Clause}{@code >}. 
+     *        The first is the closest to the root, the last is the leaf.
+     * @return The bloomFilterStructure an array of BitSet.
+     */
+    synchronized BitSet[] getInfeasibilityIndexBloomFilterStructure(Iterable<Clause> path) {
+    	Node currentInTree = this.root;
+
+        for (Clause currentInPath : path) {
+            final Node child = currentInTree.findChild(currentInPath);
+            if (child == null) {
+                return null;
+            }
+            currentInTree = child;
+        }
+        return currentInTree.getBloomFilterStructure();
+    }
+    
+    /**
+     * Calculates the bloom filter structure of a modified path condition,
+     * used to calculate the infeasibility index.
+     * 
+     * @param path an {@link Iterable}{@code <}{@link Clause}{@code >}. 
+     *        The first is the closest to the root, the last is the leaf.
+     * @return The bloomFilterStructure an array of BitSet.
+     */
+    synchronized BitSet[] PCToBloomFilter(Collection<Clause> path) {
+    	if(path != null) {
+    		Object[] clauseArray = shorten(path).toArray();
+    		String PathToString = Util.stringifyPathCondition(shorten(path));
+    		//split pc clauses into array
+    		String[] generalArray = PathToString.split(" && ");
+    		String[] specificArray = PathToString.split(" && ");
+    		//generate general clauses
+    		for (int i=0; i < generalArray.length; i++){
+    			generalArray[i]=generalArray[i].replaceAll("[0-9]", "");
+    		}
+    		//Slicing call
+    		Object[] outputSliced = SlicingManager.Slicing(specificArray, clauseArray, generalArray);
+    		String[] specificArraySliced = (String[]) outputSliced[0];
+    		String[] generalArraySliced = (String[]) outputSliced[1];
+    		BitSet[] bloomFilterStructure = bloomFilter(specificArraySliced, generalArraySliced);
+    		return bloomFilterStructure;
+    	}
+    	else {
+    		BitSet[] bloomFilterStructure = new BitSet[N_ROWS];
+    		return bloomFilterStructure;
+    	}
+    }
+    
+    /**
+     * Adds the bloom filter structure of a path condition already taken as input by EvoSuite
+     * to the training set with the correct label. Used to calculate the infeasibility index.
+     * 
+     * @param path an {@link Iterable}{@code <}{@link Clause}{@code >}. 
+     *        The first is the closest to the root, the last is the leaf.
+     * @param evosuiteResult a boolean true if EvoSuite generated a test case from path,
+     *        false otherwise.
+     */
+    synchronized void PCToBloomFilterEvosuite(Collection<Clause> path, boolean evosuiteResult) {
+  		if(path != null) {
+  			BitSet[] bloomFilterStructure = getInfeasibilityIndexBloomFilterStructure(path);
+  			//TODO controllare se è null? non dovrebbe servire
+  			//add to trainingSet
+  			if (evosuiteResult) {
+  				trainingSet.add(new TrainigSetItem(bloomFilterStructure, 1));
+  			}
+  			else {
+  				trainingSet.add(new TrainigSetItem(bloomFilterStructure, 0));
+  			}
+  		}
+  	}
+    
+    /**
+     * Calculates the bloom filter structure of a path condition generated by an EvoSuite seed test.
+     * Adds the bloom filter structure to the training set with the feasible label. Used to
+     * calculate the infeasibility index.
+     * 
+     * @param path an {@link Iterable}{@code <}{@link Clause}{@code >}. 
+     *        The first is the closest to the root, the last is the leaf.
+     * @param evosuiteResult a boolean true if EvoSuite generated a test case from path,
+     *        false otherwise.
+     */
+    synchronized void PCToBloomFilterEvosuiteSeed(Collection<Clause> path) {
+  		if(path != null) {
+  			Object[] clauseArray = shorten(path).toArray();
+  			String PathToString = Util.stringifyPathCondition(shorten(path));
+  			//split pc clauses into array
+  			String[] generalArray = PathToString.split(" && ");
+  			String[] specificArray = PathToString.split(" && ");
+  			//generate general clauses
+  			for (int i=0; i < generalArray.length; i++){
+  				generalArray[i]=generalArray[i].replaceAll("[0-9]", "");
+  			}
+  			//Slicing call
+  			Object[] outputSliced = SlicingManager.Slicing(specificArray, clauseArray, generalArray);
+  			String[] specificArraySliced = (String[]) outputSliced[0];
+  			String[] generalArraySliced = (String[]) outputSliced[1];
+  			BitSet[] bloomFilterStructure = bloomFilter(specificArraySliced, generalArraySliced);
+  			//add to trainingSet
+  			trainingSet.add(new TrainigSetItem(bloomFilterStructure, 1));
+  			
+  			//remove the last clause and rerun the workflow
+  			for (int i=specificArray.length - 1; i > 0; i--) {
+  				String[] specificArrayNoLast = new String[i];
+  				Object[] clauseArrayNoLast = new Object[i];
+  				String[] generalArrayNoLast = new String[i];
+  				System.arraycopy(specificArray, 0, specificArrayNoLast, 0, i);
+  				System.arraycopy(clauseArray, 0, clauseArrayNoLast, 0, i);
+  				System.arraycopy(generalArray, 0, generalArrayNoLast, 0, i);
+  				
+  				//Slicing call
+  				Object[] outputSlicedNoLast = SlicingManager.Slicing(specificArrayNoLast, clauseArrayNoLast, generalArrayNoLast);
+  				String[] specificArraySlicedNoLast = (String[]) outputSlicedNoLast[0];
+  				String[] generalArraySlicedNoLast = (String[]) outputSlicedNoLast[1];
+  				BitSet[] bloomFilterStructureNoLast = bloomFilter(specificArraySlicedNoLast, generalArraySlicedNoLast);
+  				trainingSet.add(new TrainigSetItem(bloomFilterStructureNoLast, 1));
+  			}
+  		}
+  	}
+
+    //generates the bloomFilter structure using the concrete and abstract path conditions
+    synchronized BitSet[] bloomFilter(String[] specificArray, String[] generalArray) {
+    	//creates empty bloom filter structure
+    	BitSet[] bloomFilterStructure = new BitSet[N_ROWS];
+    	for (int i=0; i < bloomFilterStructure.length; i++){
+    		bloomFilterStructure[i] =  new BitSet(N_COLUMNS);
+    	}
+    	int[] primeNumber = new int[] {7, 11, 13};
+    	
+    	for (int i = 0; i < specificArray.length; i++) {
+    		//scorro i vari numeri primi per applicare differenti funzioni di hash alla condizione generale e specifica
+    		for (int j = 0; j < primeNumber.length; j++) {
+    			long hashGeneral = primeNumber[j];
+    			long hashSpecific = primeNumber[j];
+    			//uso la funzione hashCode applicata direttamente all'intera stringa della condizione generale e specifica
+    			hashGeneral = 31*hashGeneral + generalArray[i].hashCode();
+    			hashSpecific = 31*hashSpecific + specificArray[i].hashCode();
+    			long hashToPositiveGeneral = Math.abs(hashGeneral);
+    			long hashToPositiveSpecific = Math.abs(hashSpecific);
+    			//faccio modulo per riportare gli hash generati nel range della dimensione dell'array bidimensionale
+    			int indexGeneral = (int) (hashToPositiveGeneral%64);
+    			int indexSpecific = (int) (hashToPositiveSpecific%15);
+    			//setto ad 1 il bit corrispondente all'indice generale sulla prima riga
+    			//setto ad 1 il bit corrispondente all'indice specifico sulla colonna del bit generale precedente
+    			bloomFilterStructure[0].set(indexGeneral);
+    			bloomFilterStructure[indexSpecific+1].set(indexGeneral);
+    		}  
+    	}
+    	return bloomFilterStructure;
     }
 }

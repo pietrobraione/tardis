@@ -16,6 +16,8 @@ import tardis.framework.OutputBuffer;
 public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult>, OutputBuffer<JBSEResult> {
     private static final int[] INDEX_VALUES = new int[] {10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0};
     private static final int[] PROBABILITY_VALUES = new int[] {50, 12, 9, 7, 6, 5, 4, 3, 2, 1, 1};
+    private final int THRESHOLD = 20;
+    private int OLD_TRAININGSET_SIZE = 0;
     
     private final HashMap<Integer, LinkedBlockingQueue<JBSEResult>> map = new HashMap<>();
     private final TreePath treePath;
@@ -29,6 +31,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
 
     @Override
     public synchronized boolean add(JBSEResult item) {
+    	//final int infeasibilityIndex = this.treePath.getInfeasibilityIndex(item.getFinalState().getPathCondition());
         //just improvability index by now
         final int index = this.treePath.getImprovabilityIndex(item.getFinalState().getPathCondition());
         if (index < 0) {
@@ -49,6 +52,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
             sum = sum + PROBABILITY_VALUES[j++];
         }
 
+        //updateInfeasibilityIndex();
         synchronized (this) {
             //extracts the item
             for (int i = j - 1; i < INDEX_VALUES.length; ++i) {
@@ -118,5 +122,23 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
             }
         }
     }                    
+    
+    synchronized void updateInfeasibilityIndex() {
+    	synchronized (this.treePath) {
+			//Update all the index only if the trainingSet is increased by THRESHOLD elements,
+			//i.e. reclassify everything only if the trainingSet has grown by a significant value.
+    		if (this.treePath.trainingSet.size() > OLD_TRAININGSET_SIZE+THRESHOLD && !this.isEmpty()) {
+    			for (int index : this.map.keySet()) {
+    				for (JBSEResult bufferedJBSEResult : this.map.get(index)) {
+    					this.map.get(index).remove(bufferedJBSEResult);
+    					final List<Clause> pathCondition = bufferedJBSEResult.getFinalState().getPathCondition();
+    					final int newIndex = this.treePath.getInfeasibilityIndex(pathCondition);
+    					this.map.get(newIndex).add(bufferedJBSEResult);
+    					OLD_TRAININGSET_SIZE = this.treePath.trainingSet.size();
+    				}
+    			}
+    		}
+    	}
+    }
 }
 
