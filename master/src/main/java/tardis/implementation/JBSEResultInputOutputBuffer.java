@@ -16,7 +16,7 @@ import tardis.framework.OutputBuffer;
 public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult>, OutputBuffer<JBSEResult> {
     private static final int[] INDEX_VALUES = new int[] {10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0};
     private static final int[] PROBABILITY_VALUES = new int[] {50, 12, 9, 7, 6, 5, 4, 3, 2, 1, 1};
-    private final int THRESHOLD = 20;
+    private final int THRESHOLD = 200;
     private int OLD_TRAININGSET_SIZE = 0;
     
     private final HashMap<Integer, LinkedBlockingQueue<JBSEResult>> map = new HashMap<>();

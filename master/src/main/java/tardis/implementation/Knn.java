@@ -7,6 +7,12 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.LinkedBlockingQueue;
 
+/**
+ * Class that predicts the possible label of a given path condition by comparing the
+ * bloom filter structure of the item to be classified with all the items in the training set.
+ * Class uses Jaccard's distance and the top 3 elements of the training set to perform the
+ * classification; used to calculate the infeasibility index.
+ */
 public class Knn {
 
 	public static Object[] knn(LinkedBlockingQueue<TrainigSetItem> trainingset, BitSet[] query) {

@@ -22,8 +22,11 @@ import jbse.val.SymbolicMember;
 import jbse.val.WideningConversion;
 
 /**
- * Class that applies the Slicing procedure to the concrete and
- * abstract path conditions starting from the last clause.
+ * Class that performs data preprocessing: applies the Slicing procedure to the
+ * concrete and abstract path conditions starting from the last clause; i.e. a
+ * transitive closure of the dependencies between the clauses of a path condition
+ * in relation to the last clause of the path condition itself, where the dependencies
+ * are managed according to variables and origins in a transitive way.
  */
 
 public class SlicingManager {
@@ -125,12 +128,14 @@ public class SlicingManager {
      * Finds containers of all elements of the ClauseAssume clause and add them to the set;
      * Workflow: if operand is an expression, go deeper
      */
+	//TODO probably doesn't handle all cases
 	public static HashSet<String> getContainer (Primitive p, HashSet<String> set) {
 		if (((Expression) p).isUnary()) {
 			Primitive op = ((Expression) p).getOperand();
 			if (op instanceof Simplex) {
 				//do nothing
 			}
+			//special case for arrays
 			else if (op instanceof PrimitiveSymbolicMemberArrayLength || op instanceof PrimitiveSymbolicMemberArray) {
 				set.add(op.toString());
 			}
@@ -149,7 +154,6 @@ public class SlicingManager {
 				}
 				catch (Exception e) {
 					//give up
-					//set.add(((Symbolic) op).asOriginString());
 					set.add(splitByDot(((Symbolic) op).asOriginString()));
 				}
 			}
@@ -160,6 +164,7 @@ public class SlicingManager {
 			if (firstOp instanceof Simplex) {
 				//do nothing
 			}
+			//special case for arrays
 			else if (firstOp instanceof PrimitiveSymbolicMemberArrayLength || firstOp instanceof PrimitiveSymbolicMemberArray) {
 				set.add(firstOp.toString());
 			}
@@ -178,7 +183,6 @@ public class SlicingManager {
 				}
 				catch (Exception e) {
 					//give up
-					//set.add(((Symbolic) firstOp).asOriginString());
 					set.add(splitByDot(((Symbolic) firstOp).asOriginString()));
 				}
 			}
@@ -186,6 +190,7 @@ public class SlicingManager {
 			if (secondOp instanceof Simplex) {
 				//do nothing
 			}
+			//special case for arrays
 			else if (secondOp instanceof PrimitiveSymbolicMemberArrayLength || secondOp instanceof PrimitiveSymbolicMemberArray) {
 				set.add(secondOp.toString());
 			}
@@ -204,7 +209,6 @@ public class SlicingManager {
 				}
 				catch (Exception e) {
 					//give up
-					//set.add(((Symbolic) secondOp).asOriginString());
 					set.add(splitByDot(((Symbolic) secondOp).asOriginString()));
 				}
 			}
@@ -214,6 +218,7 @@ public class SlicingManager {
 	
 	//find containers of all elements of the ClauseAssume clause in the case of the operator is instance of WideningConversion
 	public static HashSet<String> getContainerWideningConversion (Primitive operator, HashSet<String> set) {
+		//special case for arrays
 		if (((WideningConversion) operator).getArg() instanceof PrimitiveSymbolicMemberArrayLength || ((WideningConversion) operator).getArg() instanceof PrimitiveSymbolicMemberArray) {
 			set.add(operator.toString());
 		}
@@ -232,7 +237,6 @@ public class SlicingManager {
 			}
 			catch (Exception e) {
 				//give up
-				//set.add(((Symbolic) operator).asOriginString());
 				set.add(splitByDot(((Symbolic) operator).asOriginString()));
 			}
 		}
@@ -241,6 +245,7 @@ public class SlicingManager {
 	
 	//find containers of all elements of the ClauseAssume clause in the case of the operator is instance of NarrowingConversion
 	public static HashSet<String> getContainerNarrowingConversion (Primitive operator, HashSet<String> set) {
+		//special case for arrays
 		if (((NarrowingConversion) operator).getArg() instanceof PrimitiveSymbolicMemberArrayLength || ((NarrowingConversion) operator).getArg() instanceof PrimitiveSymbolicMemberArray) {
 			set.add(operator.toString());
 		}
@@ -259,7 +264,6 @@ public class SlicingManager {
 			}
 			catch (Exception e) {
 				//give up
-				//set.add(((Symbolic) operator).asOriginString());
 				set.add(splitByDot(((Symbolic) operator).asOriginString()));
 			}
 		}
