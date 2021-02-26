@@ -326,6 +326,7 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
         return s
         .replace("(", "\\(")
         .replace(")", "\\)")
+        .replace("[", "\\[")
         .replace("$", "\\$");
     }
     
