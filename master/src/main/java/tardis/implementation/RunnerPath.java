@@ -78,6 +78,12 @@ import jbse.val.Value;
 import jbse.val.exc.InvalidTypeException;
 import tardis.Options;
 
+/**
+ * A class that exploits JBSE to perform guided symbolic execution
+ * of a test and possibly explore its frontier at multiple depths.
+ *  
+ * @author Pietro Braione
+ */
 final class RunnerPath implements AutoCloseable {
     private static final Logger LOGGER = LogManager.getFormatterLogger(RunnerPath.class);
     

@@ -110,13 +110,9 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
     private volatile boolean stopForSeeding;
     
     public PerformerEvosuite(Options o, InputBuffer<JBSEResult> in, OutputBuffer<EvosuiteResult> out) 
-    throws NoJavaCompilerException, PerformerEvosuiteInitException {
+    throws NoJavaCompilerException, ClassNotFoundException, MalformedURLException, SecurityException {
         super(in, out, o.getNumOfThreadsEvosuite(), o.getNumMOSATargets(), o.getThrottleFactorEvosuite(), o.getTimeoutMOSATaskCreationDuration(), o.getTimeoutMOSATaskCreationUnit());
-        try {
-            this.visibleTargetMethods = getTargets(o);
-        } catch (ClassNotFoundException | MalformedURLException | SecurityException e) {
-            throw new PerformerEvosuiteInitException(e);
-        }
+        this.visibleTargetMethods = getTargets(o);
         this.compiler = ToolProvider.getSystemJavaCompiler();
         if (this.compiler == null) {
             throw new NoJavaCompilerException();
@@ -132,7 +128,11 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         try {
             this.classpathTestURLClassLoader = stream(classpathTestPath).map(PerformerEvosuite::toURL).toArray(URL[]::new);
         } catch (RuntimeException e) {
-            throw new PerformerEvosuiteInitException(e);
+            if (e.getCause() instanceof MalformedURLException) {
+                throw (MalformedURLException) e.getCause();
+            } else {
+                throw e;
+            }
         }
         this.classpathCompilationTest = this.o.getTmpBinDirectoryPath().toString() + File.pathSeparator + classesPathString + File.pathSeparator + this.o.getJBSELibraryPath().toString() + File.pathSeparator + this.o.getSushiLibPath().toString() + File.pathSeparator + this.o.getEvosuitePath().toString();
         this.classpathCompilationWrapper = classesPathString + File.pathSeparator + this.o.getSushiLibPath().toString();

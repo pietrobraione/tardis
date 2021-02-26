@@ -44,6 +44,13 @@ import tardis.Options;
 import tardis.framework.InputBuffer;
 import tardis.framework.Performer;
 
+/**
+ * A {@link Performer} that consumes {@link EvosuiteResult}s by invoking JBSE
+ * to build path conditions from tests. Upon success the produced path conditions 
+ * are emitted as {@link JBSEResult}s.
+ * 
+ * @author Pietro Braione
+ */
 public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
     private static final Logger LOGGER = LogManager.getFormatterLogger(PerformerJBSE.class);
     

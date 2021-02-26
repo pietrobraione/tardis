@@ -7,7 +7,7 @@ package tardis.implementation;
  * @author Pietro Braione
  *
  */
-public class NoTargetHitException extends Exception {
+final class NoTargetHitException extends Exception {
 
     /**
      * 

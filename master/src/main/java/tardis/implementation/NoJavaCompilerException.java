@@ -5,7 +5,7 @@ package tardis.implementation;
  * 
  * @author Pietro Braione
  */
-public class NoJavaCompilerException extends Exception {
+public final class NoJavaCompilerException extends Exception {
     /**
      * The serial version UID of the {@link NoJavaCompilerException} objects.
      */

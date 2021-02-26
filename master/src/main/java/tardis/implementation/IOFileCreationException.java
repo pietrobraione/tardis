@@ -8,7 +8,7 @@ import java.nio.file.Path;
  * 
  * @author Pietro Braione
  */
-class IOFileCreationException extends Exception {
+final class IOFileCreationException extends Exception {
     final IOException e;
     final Path file;
     

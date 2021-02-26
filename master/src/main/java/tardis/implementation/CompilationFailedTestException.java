@@ -7,7 +7,7 @@ import java.nio.file.Path;
  * 
  * @author Pietro Braione
  */
-class CompilationFailedTestException extends Exception {
+final class CompilationFailedTestException extends Exception {
     final Path file;
     
     /**

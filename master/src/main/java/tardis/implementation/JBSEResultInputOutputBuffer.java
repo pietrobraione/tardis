@@ -13,6 +13,14 @@ import jbse.mem.Clause;
 import tardis.framework.InputBuffer;
 import tardis.framework.OutputBuffer;
 
+/**
+ * An {@link InputBuffer} and {@link OutputBuffer} for {@link JBSEResult}s that
+ * prioritizes {@link JBSEResult}s based on several heuristics.
+ * 
+ * @author Pietro Braione
+ *
+ * @param <E> the type of the items stored in the buffer.
+ */
 public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult>, OutputBuffer<JBSEResult> {
     private static final int[] INDEX_VALUES = new int[] {10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0};
     private static final int[] PROBABILITY_VALUES = new int[] {50, 12, 9, 7, 6, 5, 4, 3, 2, 1, 1};

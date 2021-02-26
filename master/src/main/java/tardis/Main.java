@@ -10,6 +10,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.MalformedURLException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -37,6 +38,7 @@ import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.ParserProperties;
 
+import tardis.framework.QueueInputOutputBuffer;
 import tardis.framework.TerminationManager;
 import tardis.implementation.EvosuiteResult;
 import tardis.implementation.JBSEResult;
@@ -45,9 +47,7 @@ import tardis.implementation.NoJava8JVMException;
 import tardis.implementation.NoJava8ToolsJarException;
 import tardis.implementation.NoJavaCompilerException;
 import tardis.implementation.PerformerEvosuite;
-import tardis.implementation.PerformerEvosuiteInitException;
 import tardis.implementation.PerformerJBSE;
-import tardis.implementation.QueueInputOutputBuffer;
 import tardis.implementation.TestCase;
 import tardis.implementation.TreePath;
 
@@ -134,25 +134,34 @@ public final class Main {
             //logs a final message and returns
             LOGGER.info("%s ends", getName());
             return 0;
-        } catch (NoJavaCompilerException e) {
-            LOGGER.error("Failed to find a system Java compiler for Java version 8.");
-            return 1;
         } catch (NoJava8JVMException e) {
             LOGGER.error("Failed to find a Java version 8 JDK (no JVM).");
             return 1;
         } catch (NoJava8ToolsJarException e) {
             LOGGER.error("Failed to find a Java version 8 JDK (no tools.jar).");
             return 1;
-        } catch (PerformerEvosuiteInitException e) {
-            LOGGER.error("Unable to create the Evosuite performer");
-            LOGGER.error("Message: %s", e.toString());
+        } catch (NoJavaCompilerException e) {
+            LOGGER.error("Failed to find a system Java compiler for Java version 8.");
+            return 1;
+        } catch (ClassNotFoundException e) {
+            LOGGER.error("Failed to find the target class on the classpath.");
+            return 1;
+        } catch (MalformedURLException e) {
+            LOGGER.error("Malformed URL in the target application classpath.");
+            return 1;
+        } catch (SecurityException e) {
+            LOGGER.error("Security exception when trying to access the target class or the default classloader.");
+            return 1;
+        } catch (IOJavaCompilerException e) {
+            LOGGER.error("Unexpected I/O error while trying to run the Java compiler");
+            LOGGER.error("Message: %s", e.e.toString());
             LOGGER.error("Stack trace:");
-            for (StackTraceElement elem : e.getStackTrace()) {
+            for (StackTraceElement elem : e.e.getStackTrace()) {
                 LOGGER.error("%s", elem.toString());
             }
             return 1;
         } catch (IOException e) {
-            LOGGER.error("Unexpected I/O error");
+            LOGGER.error("Unexpected I/O error while creating the directories for the temporary files");
             LOGGER.error("Message: %s", e.toString());
             LOGGER.error("Stack trace:");
             for (StackTraceElement elem : e.getStackTrace()) {
@@ -160,15 +169,15 @@ public final class Main {
             }
             return 1;
         } catch (JavaCompilerException e) {
-            LOGGER.error("Internal error: Unexpected I/O error while creating test case compilation log file");
+            LOGGER.error("Unexpected I/O error while creating test case compilation log file");
             LOGGER.error("Message: %s", e.toString());
             LOGGER.error("Stack trace:");
             for (StackTraceElement elem : e.getStackTrace()) {
                 LOGGER.error("%s", elem.toString());
             }
-            return 2;
+            return 1;
         } catch (InterruptedException e) {
-            LOGGER.error("Internal error: Unexpected interruption when waiting for termination of application");
+            LOGGER.error("Internal error: Unexpected interruption of a thread or process");
             LOGGER.error("Message: %s", e.toString());
             LOGGER.error("Stack trace:");
             for (StackTraceElement elem : e.getStackTrace()) {
@@ -216,7 +225,9 @@ public final class Main {
      * @throws NoJava8JVMException if no Java 8 JVM is installed.
      * @throws NoJava8ToolsJarException if no Java 8 tools.jar is installed.
      */
-    private void checkPrerequisites() throws NoJavaCompilerException, IOException, InterruptedException, NoJava8JVMException, NoJava8ToolsJarException {
+    private void checkPrerequisites() 
+    throws NoJavaCompilerException, IOJavaCompilerException, 
+    NoJava8JVMException, NoJava8ToolsJarException, InterruptedException {
         //looks for a Java compiler for version 8 source files
         final JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
         if (compiler == null) {
@@ -235,14 +246,18 @@ public final class Main {
         }
         commandLine.add("-version");
         final ProcessBuilder pb = new ProcessBuilder(commandLine).redirectErrorStream(true);
-        final Process pr = pb.start();
-        final InputStream prInput = pr.getInputStream();
         final StringBuilder buf = new StringBuilder();
-        int datum;
-        while ((datum = prInput.read()) != -1) {
-            buf.append((char) datum);
+        try {
+            final Process pr = pb.start();
+            final InputStream prInput = pr.getInputStream();
+            int datum;
+            while ((datum = prInput.read()) != -1) {
+                buf.append((char) datum);
+            }
+            pr.waitFor();
+        } catch (IOException e) {
+            throw new IOJavaCompilerException(e);
         }
-        pr.waitFor();
         final int first = buf.indexOf("\"");
         final int last = buf.indexOf("\"", first + 1);
         if (first == -1 || last == -1 || !buf.subSequence(first + 1, last).toString().startsWith("1.8.")) {
