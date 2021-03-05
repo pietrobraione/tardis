@@ -7,7 +7,7 @@ import java.nio.file.Path;
  * 
  * @author Pietro Braione
  */
-class CompilationFailedWrapperException extends Exception {
+final class CompilationFailedWrapperException extends Exception {
     final Path file;
     
     /**

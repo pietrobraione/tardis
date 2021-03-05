@@ -5,7 +5,7 @@ package tardis.implementation;
  * 
  * @author Pietro Braione
  */
-public class NoJava8ToolsJarException extends Exception {
+public final class NoJava8ToolsJarException extends Exception {
     /**
      * The serial version UID of the {@link NoJava8ToolsJarException} objects.
      */

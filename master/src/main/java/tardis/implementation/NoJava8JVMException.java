@@ -5,7 +5,7 @@ package tardis.implementation;
  * 
  * @author Pietro Braione
  */
-public class NoJava8JVMException extends Exception {
+public final class NoJava8JVMException extends Exception {
     /**
      * The serial version UID of the {@link NoJava8JVMException} objects.
      */

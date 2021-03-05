@@ -7,7 +7,7 @@ import java.nio.file.Path;
  * 
  * @author Pietro Braione
  */
-class NoTestFileScaffoldingException extends Exception {
+final class NoTestFileScaffoldingException extends Exception {
     final Path file;
     final String pathCondition;
    

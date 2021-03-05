@@ -280,7 +280,26 @@ public abstract class Performer<I,O> {
      * empty.
      */
     final boolean isIdle() {
-        return this.stopped || (this.in.isEmpty() && (this.items == null || this.items.isEmpty()) && this.threadPool.isIdle());
+        if (this.stopped) {
+            return true;
+        }
+        if (this.threadPool.isIdle() && this.in.isEmpty()) {
+            if (this.items == null) {
+                return true;
+            }
+            //since this method can be invoked without synchronization, 
+            //between the previous check and the next statement this.items
+            //can suddenly become null
+            try {
+                if (this.items.isEmpty()) {
+                    return true;
+                }
+            } catch (NullPointerException e) {
+                //this.items is null
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

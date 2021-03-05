@@ -194,14 +194,14 @@ public final class Util {
      *         methods (if {@code o.}{@link Options#getVisibility() getVisibility}{@code () == }{@link Visibility#PUBLIC}, 
      *         only the signatures public methods are returned, otherwise all the signatures of the methods with 
      *         nonprivate visibility are returned). 
-     * @throws ClassNotFoundException if the class is not in {@code o.}{@link Options#getClassesPath() getClassesPath()}.
+     * @throws ClassNotFoundException if the target class is not in {@code o.}{@link Options#getClassesPath() getClassesPath()}.
      * @throws SecurityException if a security violation arises.
-     * @throws MalformedURLException if some path in {@code o.}{@link Options#getClassesPath() getClassesPath()} does not exist.
+     * @throws MalformedURLException if some path in {@code o.}{@link Options#getClassesPath() getClassesPath()} is malformed.
      */
     static List<List<String>> getTargets(Options o) 
     throws ClassNotFoundException, MalformedURLException, SecurityException {
-        final String className = o.getTargetClass();
         final List<List<String>> retVal = new ArrayList<>();
+        final String className = o.getTargetClass();
         if (className == null) {
             retVal.add(o.getTargetMethod());
         } else {

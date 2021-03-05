@@ -9,7 +9,7 @@ import java.util.List;
  * 
  * @author Pietro Braione
  */
-public class EvosuiteResult {
+public final class EvosuiteResult {
     /**
      * The name of the class
      * where the target method is defined.

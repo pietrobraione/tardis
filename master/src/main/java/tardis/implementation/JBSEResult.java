@@ -15,7 +15,7 @@ import jbse.mem.State;
  * 
  * @author Pietro Braione
  */
-public class JBSEResult {
+public final class JBSEResult {
     /**
      * The name of the target class, or {@code null}
      * if the target is a method.

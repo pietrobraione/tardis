@@ -10,7 +10,7 @@ import tardis.Options;
  * 
  * @author Pietro Braione
  */
-public class TestCase {
+public final class TestCase {
     /**
      * The name of the class of the test method.
      */

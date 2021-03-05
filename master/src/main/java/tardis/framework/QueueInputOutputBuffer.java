@@ -1,10 +1,7 @@
-package tardis.implementation;
+package tardis.framework;
 
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
-
-import tardis.framework.InputBuffer;
-import tardis.framework.OutputBuffer;
 
 /**
  * An {@link InputBuffer} and {@link OutputBuffer} whose implementation is based on 

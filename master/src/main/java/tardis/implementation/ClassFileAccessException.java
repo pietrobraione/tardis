@@ -5,7 +5,7 @@ package tardis.implementation;
  * 
  * @author Pietro Braione
  */
-class ClassFileAccessException extends Exception {
+final class ClassFileAccessException extends Exception {
     final Throwable e;
     final String className;
     
