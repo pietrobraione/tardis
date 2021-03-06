@@ -170,7 +170,8 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             if (newCoveredBranchesTarget.size() > 0) {
                 this.out.updateImprovabilityIndex(newCoveredBranchesTarget);
             }
-            //TODO this.out.updateNoveltyIndex(newCoveredBranches? newCoveredBranchesTarget?), nel caso in cui tale insieme abbia dimensione > 0;
+            //TODO find a condition to update this index less frequently?
+            this.out.updateNoveltyIndex(rp.getCoverage());
 
             //produces feedback and emits the test
             final Coverage coverage = this.o.getCoverage();

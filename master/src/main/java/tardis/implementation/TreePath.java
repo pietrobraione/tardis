@@ -71,6 +71,12 @@ public final class TreePath {
         private HashSet<String> neighborFrontierBranches = new HashSet<>();
         
         private BitSet[] bloomFilterStructure = new BitSet[N_ROWS];
+        
+        private int improvabilityIndex;
+        
+        private int noveltyIndex;
+        
+        private int infeasibilityIndex;
 
         /**
          * Constructor for a nonroot node.
@@ -128,6 +134,30 @@ public final class TreePath {
 
 		public void setBloomFilterStructure(BitSet[] bloomFilterStructure) {
 			this.bloomFilterStructure = bloomFilterStructure;
+		}
+
+		public int getImprovabilityIndex() {
+			return improvabilityIndex;
+		}
+
+		public void setImprovabilityIndex(int improvabilityIndex) {
+			this.improvabilityIndex = improvabilityIndex;
+		}
+
+		public int getNoveltyIndex() {
+			return noveltyIndex;
+		}
+
+		public void setNoveltyIndex(int noveltyIndex) {
+			this.noveltyIndex = noveltyIndex;
+		}
+
+		public int getInfeasibilityIndex() {
+			return infeasibilityIndex;
+		}
+
+		public void setInfeasibilityIndex(int infeasibilityIndex) {
+			this.infeasibilityIndex = infeasibilityIndex;
 		}
     }
 
@@ -281,6 +311,75 @@ public final class TreePath {
     }
     
     /**
+     * Saves the values of the heuristic indices associated to a given
+     * path in this {@link TreePath} for future use.
+     * 
+     * @param indexValue an int. The value to be stored.
+     * @param path a sequence (more precisely, an {@link Iterable}) 
+     *        of {@link Clause}s. The first in the sequence is the closer
+     *        to the root, the last is the leaf.
+     * @param indexName a String. The name of the heuristic index:
+     *        improvability, novelty or infeasibility.
+     */
+    synchronized void cacheIndices(int indexValue, Collection<Clause> path, String indexName) {
+    	int index = 0;
+    	Node currentInTree = this.root;
+
+        for (Clause currentInPath : path) {
+            final Node child = currentInTree.findChild(currentInPath);
+            if (child == null) {
+                return;
+            }
+            currentInTree = child;
+            if (index == path.size() - 1) {
+            	switch (indexName) {
+            	case "improvability":
+            		currentInTree.setImprovabilityIndex(indexValue);
+            		break;
+            	case "novelty":
+            		currentInTree.setNoveltyIndex(indexValue);
+            		break;
+            	case "infeasibility":
+            		currentInTree.setInfeasibilityIndex(indexValue);
+            		break;
+            	}
+            }
+            ++index;
+        }
+    }
+    
+    /**
+     * Retrieves the values of the heuristic indices associated to a
+     * given path previously saved in this {@link TreePath}.
+     * 
+     * @param path a sequence (more precisely, an {@link Iterable}) 
+     *        of {@link Clause}s. The first in the sequence is the closer
+     *        to the root, the last is the leaf.
+     * @param indexName a String. The name of the heuristic index:
+     *        improvability, novelty or infeasibility.
+     */
+    synchronized int getCachedIndices(Collection<Clause> path, String indexName) {
+    	Node currentInTree = this.root;
+
+        for (Clause currentInPath : path) {
+            final Node child = currentInTree.findChild(currentInPath);
+            if (child == null) {
+                return -1;
+            }
+            currentInTree = child;
+        }
+        switch (indexName) {
+    	case "improvability":
+    		return currentInTree.getImprovabilityIndex();
+    	case "novelty":
+    		return currentInTree.getNoveltyIndex();
+    	case "infeasibility":
+    		return currentInTree.getInfeasibilityIndex();
+    	}
+        return -1;
+    }
+    
+    /**
      * Returns the covered branches associated to a given path.
      * 
      * @param path an {@link Iterable}{@code <}{@link Clause}{@code >}. 
@@ -357,6 +456,7 @@ public final class TreePath {
             return -1;
         }
         final int retVal = (branches.size() > 9 ? 10 : branches.size());
+        cacheIndices(retVal, (Collection<Clause>) path, "improvability");
         return retVal;
     }
     
@@ -383,7 +483,9 @@ public final class TreePath {
             }
         }
         final int minimum = Collections.min(hitsCounters);
-        return minimum > 9 ? 10 : minimum;
+        final int retVal = minimum > 9 ? 10 : minimum;
+        cacheIndices(retVal, (Collection<Clause>) path, "novelty");
+        return retVal;
     }
     
     /**
@@ -401,7 +503,11 @@ public final class TreePath {
     synchronized int getInfeasibilityIndex(Iterable<Clause> path) {
     	int index = 0;
     	if (trainingSet.size() >= 3) {
-    		Object[] result = Knn.knn(trainingSet, getInfeasibilityIndexBloomFilterStructure(path));
+    		final BitSet[] bloomFilterStructure = getInfeasibilityIndexBloomFilterStructure(path);
+    		if (bloomFilterStructure == null) {
+                return -1;
+            }
+    		Object[] result = Knn.knn(trainingSet, bloomFilterStructure);
     		final int label = (int) result[0];
     		final int voting = (int) result[1];
     		//average not used by now
@@ -420,6 +526,7 @@ public final class TreePath {
     			index = 0;
     		}
     	}
+    	cacheIndices(index, (Collection<Clause>) path, "infeasibility");
     	return index;
     }
     
