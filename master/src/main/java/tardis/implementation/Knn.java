@@ -4,8 +4,8 @@ import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
-import java.util.concurrent.LinkedBlockingQueue;
 
 /**
  * Class that predicts the possible label of a given path condition by comparing the
@@ -15,7 +15,7 @@ import java.util.concurrent.LinkedBlockingQueue;
  */
 public class Knn {
 
-	public static Object[] knn(LinkedBlockingQueue<TrainigSetItem> trainingset, BitSet[] query) {
+	public static Object[] knn(HashSet<TrainigSetItem> trainingset, BitSet[] query) {
 		int k = 3;
 		List<Result> resultList = new ArrayList<Result>();
 		int countLabel0 = 0;

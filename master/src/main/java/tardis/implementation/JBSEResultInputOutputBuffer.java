@@ -66,8 +66,6 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
             sum = sum + PROBABILITY_VALUES[j++];
         }
 
-        //TODO is there a better place in the code to update this index?
-        updateInfeasibilityIndex();
         synchronized (this) {
             //extracts the item
             for (int i = j - 1; i < INDEX_VALUES.length; ++i) {

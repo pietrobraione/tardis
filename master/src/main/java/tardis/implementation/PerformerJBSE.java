@@ -172,6 +172,8 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             }
             //TODO find a condition to update this index less frequently?
             this.out.updateNoveltyIndex(rp.getCoverage());
+            //TODO is there a better place in the code to update this index?
+            this.out.updateInfeasibilityIndex();
 
             //produces feedback and emits the test
             final Coverage coverage = this.o.getCoverage();

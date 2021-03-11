@@ -10,7 +10,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -34,8 +33,8 @@ public final class TreePath {
     /** Map used to track the times the tests hit a branch. */
     private final HashMap<String, Integer> hitsCounterMap = new HashMap<>(); //TODO ConcurrentHashMap?
     
-    /** Queue used as training set to calculate the infeasibility index. */
-    public final LinkedBlockingQueue<TrainigSetItem> trainingSet = new LinkedBlockingQueue<>();
+    /** Set used as training set to calculate the infeasibility index. */
+    public final HashSet<TrainigSetItem> trainingSet = new HashSet<>();
     
     private enum NodeStatus { ATTEMPTED, COVERED };
     
@@ -671,6 +670,7 @@ public final class TreePath {
     			hashSpecific = 31*hashSpecific + specificArray[i].hashCode();
     			long hashToPositiveGeneral = Math.abs(hashGeneral);
     			long hashToPositiveSpecific = Math.abs(hashSpecific);
+    			//TODO find a way to improve hash functions and reduce collision
     			//resize the hashes in the range of the dimension of the two-dimensional array
     			int indexGeneral = (int) (hashToPositiveGeneral%64);
     			int indexSpecific = (int) (hashToPositiveSpecific%15);
