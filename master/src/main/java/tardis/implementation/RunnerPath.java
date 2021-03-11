@@ -66,7 +66,10 @@ import jbse.mem.exc.HeapMemoryExhaustedException;
 import jbse.mem.exc.InvalidNumberOfOperandsException;
 import jbse.mem.exc.ThreadStackEmptyException;
 import jbse.rewr.CalculatorRewriting;
-import jbse.rewr.RewriterOperationOnSimplex;
+import jbse.rewr.RewriterNegationElimination;
+import jbse.rewr.RewriterExpressionOrConversionOnSimplex;
+import jbse.rewr.RewriterFunctionApplicationOnSimplex;
+import jbse.rewr.RewriterZeroUnit;
 import jbse.rules.ClassInitRulesRepo;
 import jbse.rules.LICSRulesRepo;
 import jbse.tree.StateTree.BranchPoint;
@@ -672,7 +675,10 @@ final class RunnerPath implements AutoCloseable {
     private void completeParameters(RunnerParameters pGuided, RunnerParameters pGuiding) throws DecisionException {
         //sets the calculator
         final CalculatorRewriting calc = new CalculatorRewriting();
-        calc.addRewriter(new RewriterOperationOnSimplex());
+        calc.addRewriter(new RewriterExpressionOrConversionOnSimplex());
+        calc.addRewriter(new RewriterFunctionApplicationOnSimplex());
+        calc.addRewriter(new RewriterZeroUnit());
+        calc.addRewriter(new RewriterNegationElimination());
         if (pGuiding == null) {
             //nothing
         } else {
