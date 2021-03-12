@@ -3,8 +3,12 @@ package tardis.implementation;
 import static jbse.algo.Util.valueString;
 import static jbse.apps.run.DecisionProcedureGuidanceJDI.countNonRecursiveHits;
 import static jbse.bc.ClassLoaders.CLASSLOADER_BOOT;
+import static jbse.bc.Signatures.JAVA_CHARSEQUENCE;
 import static jbse.bc.Signatures.JAVA_OBJECT;
 import static jbse.bc.Signatures.JAVA_STRING;
+import static jbse.common.Type.BOOLEAN;
+import static jbse.common.Type.REFERENCE;
+import static jbse.common.Type.TYPEEND;
 import static tardis.implementation.Util.bytecodeJump;
 import static tardis.implementation.Util.bytecodeLoad;
 
@@ -146,6 +150,10 @@ final class RunnerPath implements AutoCloseable {
         if (o.getCountScope() > 0) {
             this.commonParamsGuided.setCountScope(o.getCountScope());
         }
+        this.commonParamsGuided.addUninterpreted(JAVA_STRING, "(" + REFERENCE + JAVA_OBJECT + TYPEEND + ")" + BOOLEAN, "equals");
+        this.commonParamsGuided.addUninterpreted(JAVA_STRING, "(" + REFERENCE + JAVA_CHARSEQUENCE + TYPEEND + ")" + BOOLEAN, "contains");
+        this.commonParamsGuided.addUninterpreted(JAVA_STRING, "(" + REFERENCE + JAVA_STRING + TYPEEND + ")" + BOOLEAN, "endsWith");
+        this.commonParamsGuided.addUninterpreted(JAVA_STRING, "(" + REFERENCE + JAVA_STRING + TYPEEND + ")" + BOOLEAN, "startsWith");
         for (List<String> unint : o.getUninterpreted()) {
             this.commonParamsGuided.addUninterpreted(unint.get(0), unint.get(1), unint.get(2));
         }
