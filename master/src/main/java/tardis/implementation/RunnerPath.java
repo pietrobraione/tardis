@@ -359,7 +359,7 @@ final class RunnerPath implements AutoCloseable {
         private int testDepth;
         private HashMap<Long, String> stringLiteralsCurrent;
         private HashSet<Long> stringOthersCurrent;
-        private boolean firstPostFrontierToDo = false;
+        private boolean firstPostFrontierToDo = true;
         private boolean contradictory = false;
         private boolean atJump = false;
         private int jumpPC = 0;
@@ -511,8 +511,10 @@ final class RunnerPath implements AutoCloseable {
             final Calculator calc = engine.getExecutionContext().getCalculator();
             final ClassFile cfJAVA_OBJECT = currentState.getClassHierarchy().getClassFileClassArray(CLASSLOADER_BOOT, JAVA_OBJECT);
             final List<ReferenceSymbolic> partiallyResolvedReferences = engine.getPartiallyResolvedReferences();
-            LOGGER.warn("References %s were partially resolved, artificially generating constraints for attempting their expansion",
-            String.join(", ", partiallyResolvedReferences.stream().map(ReferenceSymbolic::asOriginString).toArray(String[]::new)));
+            LOGGER.warn("Reference%s %s %s partially resolved, artificially generating constraints for attempting their expansion",
+            (partiallyResolvedReferences.size() == 1 ? "" : "s"),
+            String.join(", ", partiallyResolvedReferences.stream().map(ReferenceSymbolic::asOriginString).toArray(String[]::new)),
+            (partiallyResolvedReferences.size() == 1 ? "was" : "were"));
             
             for (ReferenceSymbolic partiallyResolvedReference : partiallyResolvedReferences) {
                 final State stateForExpansion = engine.getExecutionContext().getStateStart();
