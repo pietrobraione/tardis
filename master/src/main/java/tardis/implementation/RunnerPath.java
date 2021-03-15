@@ -82,7 +82,6 @@ import jbse.val.Reference;
 import jbse.val.ReferenceConcrete;
 import jbse.val.ReferenceSymbolic;
 import jbse.val.Value;
-import jbse.val.exc.InvalidTypeException;
 import tardis.Options;
 
 /**
@@ -203,6 +202,7 @@ final class RunnerPath implements AutoCloseable {
         private final HashMap<Long, String> stringLiterals = new HashMap<>();
         private final HashSet<Long> stringOthers = new HashSet<>();
         private final HashSet<String> coverage = new HashSet<>();
+        private boolean contradictory = false;
 
         public ActionsRunnerPreFrontier(DecisionProcedureGuidance guid) {
             this.guid = guid;
@@ -334,6 +334,12 @@ final class RunnerPath implements AutoCloseable {
                 return super.atPathEnd();
             }
         }
+        
+        @Override
+        public boolean atContradictionException(ContradictionException e) {
+            this.contradictory = true;
+            return true;
+        }
     }
 
     /**
@@ -350,9 +356,11 @@ final class RunnerPath implements AutoCloseable {
         private final ArrayList<HashMap<Long, String>> stringLiteralsList = new ArrayList<>();
         private final ArrayList<HashSet<Long>> stringOthersList = new ArrayList<>();
         private final ArrayList<String> branchList = new ArrayList<>();
+        private int testDepth;
         private HashMap<Long, String> stringLiteralsCurrent;
         private HashSet<Long> stringOthersCurrent;
-        private int testDepth;
+        private boolean firstPostFrontierToDo = false;
+        private boolean contradictory = false;
         private boolean atJump = false;
         private int jumpPC = 0;
         private boolean atLoadConstant = false;
@@ -405,103 +413,24 @@ final class RunnerPath implements AutoCloseable {
         public boolean atStepPost() {
             final State currentState = getEngine().getCurrentState();
 
-            //manages string literals (they might be useful to EvoSuite)
+            //saves string constants
             if (currentState.phase() != Phase.PRE_INITIAL && this.atLoadConstant) {
-                try {
-                    if (this.loadConstantStackSize == currentState.getStackSize()) {
-                        final Value operand = currentState.getCurrentFrame().operands(1)[0];
-                        if (operand instanceof Reference) {
-                            final Reference r = (Reference) operand;
-                            final Objekt o = currentState.getObject(r);
-                            if (o != null && JAVA_STRING.equals(o.getType().getClassName())) {
-                                final long heapPosition = (r instanceof ReferenceConcrete ? ((ReferenceConcrete) r).getHeapPosition() : currentState.getResolution((ReferenceSymbolic) r));
-                                final String s = valueString(currentState, r);
-                                if (s == null) {
-                                    this.stringOthersCurrent.add(heapPosition);
-                                } else {
-                                    this.stringLiteralsCurrent.put(heapPosition, s);
-                                }
-                            } //TODO: constants for Integer, Float, Double ... boxed types; add generic stateful object graphs produced by pure methods
-                        }                                       
-                    }
-                } catch (FrozenStateException | InvalidNumberOfOperandsException | ThreadStackEmptyException e) {
-                    //this should never happen
-                    LOGGER.error("Internal error when attempting to manage String literals");
-                    LOGGER.error("Message: %s", e.toString());
-                    LOGGER.error("Stack trace:");
-                    for (StackTraceElement elem : e.getStackTrace()) {
-                        LOGGER.error("%s", elem.toString());
-                    }
-                    throw new RuntimeException(e); //TODO throw better exception
-                }
+                possiblySaveStringConstant(currentState);
             }
 
             if (currentState.getDepth() == this.testDepth + 1) {
-                //we are at the first post-frontier state
+                //we are at a post-frontier state (including the first one)
                 recordState(currentState);
                 
-                final Engine engine = getEngine();
-                final Calculator calc = engine.getExecutionContext().getCalculator();
-                final ClassFile cfJAVA_OBJECT = currentState.getClassHierarchy().getClassFileClassArray(CLASSLOADER_BOOT, JAVA_OBJECT);
-                
-                //if some references were partially resolved adds foo states with expansion
+                //if some references were partially resolved adds states with expansion
                 //clauses in the path condition, hoping that EvoSuite will discover a
                 //concrete class for them
-                if (engine.someReferencePartiallyResolved()) {
-                    LOGGER.warn("References %s were partially resolved, artificially generating constraints for attempting their expansion",
-                    String.join(", ",getEngine().getPartiallyResolvedReferences().stream().map(ReferenceSymbolic::asOriginString).toArray(String[]::new)));
-                    
-                    for (ReferenceSymbolic nonExpandedReference : engine.getPartiallyResolvedReferences()) {
-                        final State stateForExpansion = engine.getExecutionContext().getStateStart();
-                        final int commonClauses = stateForExpansion.getPathCondition().size();
-                        int currentClause = 0;
-                        for (Clause c : currentState.getPathCondition()) {
-                            try {
-                                ++currentClause;
-                                if (currentClause <= commonClauses) {
-                                    continue;
-                                }
-                                if (c instanceof ClauseAssumeReferenceSymbolic && 
-                                ((ClauseAssumeReferenceSymbolic) c).getReference().equals(nonExpandedReference)) {
-                                    stateForExpansion.assumeExpands(calc, nonExpandedReference, cfJAVA_OBJECT);
-                                } else if (c instanceof ClauseAssume) {
-                                    stateForExpansion.assume(((ClauseAssume) c).getCondition());
-                                } else if (c instanceof ClauseAssumeClassInitialized) {
-                                    final ClauseAssumeClassInitialized cc = (ClauseAssumeClassInitialized) c;
-                                    if (stateForExpansion.getKlass(cc.getClassFile()) == null) {
-                                        stateForExpansion.ensureKlassSymbolic(calc, cc.getClassFile());
-                                    }
-                                    stateForExpansion.assumeClassInitialized(cc.getClassFile(), stateForExpansion.getKlass(cc.getClassFile()));
-                                } else if (c instanceof ClauseAssumeClassNotInitialized) {
-                                    stateForExpansion.assumeClassNotInitialized(((ClauseAssumeClassNotInitialized) c).getClassFile());
-                                } else if (c instanceof ClauseAssumeNull) {
-                                    stateForExpansion.assumeNull(((ClauseAssumeNull) c).getReference());
-                                } else if (c instanceof ClauseAssumeExpands) {
-                                    final ClauseAssumeExpands cc = (ClauseAssumeExpands) c;
-                                    stateForExpansion.assumeExpands(calc, cc.getReference(), cc.getObjekt().getType());
-                                } else if (c instanceof ClauseAssumeAliases) {
-                                    final ClauseAssumeAliases cc = (ClauseAssumeAliases) c;
-                                    stateForExpansion.assumeAliases(cc.getReference(), cc.getObjekt().getOrigin());
-                                }
-                            } catch (CannotAssumeSymbolicObjectException | InvalidInputException |
-                            InvalidTypeException | ContradictionException e) {
-                                LOGGER.error("Internal error when attempting to artificially generate an expansion constraint");
-                                LOGGER.error("Message: %s", e.toString());
-                                LOGGER.error("Stack trace:");
-                                for (StackTraceElement elem : e.getStackTrace()) {
-                                    LOGGER.error("%s", elem.toString());
-                                }
-                                throw new RuntimeException(e); //TODO throw better exception
-                            } catch (HeapMemoryExhaustedException e) {
-                                LOGGER.error("Symbolic execution heap memory exhausted when attempting to artificially generate an expansion constraint");
-                                throw new RuntimeException(e); //TODO throw better exception
-                            }
-                        }
-                        recordState(stateForExpansion);
-                    }
+                if (this.firstPostFrontierToDo && getEngine().someReferencePartiallyResolved()) {
+                    recordStatesForExpansion(currentState);
                 }
+                this.firstPostFrontierToDo = false;
                 
-                engine.stopCurrentPath();
+                getEngine().stopCurrentPath();
             }
             
             return super.atStepPost();
@@ -511,7 +440,7 @@ final class RunnerPath implements AutoCloseable {
         public boolean atBacktrackPost(BranchPoint bp) {
             final State currentState = getEngine().getCurrentState();
             if (currentState.getDepth() == this.testDepth + 1) {
-                //we are at another post-frontier state
+                //we are at a post-frontier state (excluding the first one)
                 recordState(currentState);
                 getEngine().stopCurrentPath();            
                 return super.atBacktrackPost(bp);
@@ -522,29 +451,126 @@ final class RunnerPath implements AutoCloseable {
             }
         }
         
+        @Override
+        public boolean atContradictionException(ContradictionException e) {
+            this.contradictory = true;
+            return false;
+        }
+        
         private void recordState(State s) {
-            this.stateList.add(s.clone());
-            this.stringLiteralsList.add(this.stringLiteralsCurrent);
-            this.stringOthersList.add(this.stringOthersCurrent);
-            this.stringLiteralsCurrent = new HashMap<>(this.stringLiteralsAtFrontier);
-            this.stringOthersCurrent = new HashSet<>(this.stringOthersAtFrontier);
-            if (this.atJump) {
-                try {
-                    this.branchList.add(s.getCurrentMethodSignature().toString() + ":" + this.jumpPC + ":" + s.getCurrentProgramCounter());
-                } catch (ThreadStackEmptyException e) {
-                    //this should never happen
-                    throw new RuntimeException(e); //TODO better exception!
+            if (!this.contradictory) {
+                this.stateList.add(s.clone());
+                this.stringLiteralsList.add(this.stringLiteralsCurrent);
+                this.stringOthersList.add(this.stringOthersCurrent);
+                this.stringLiteralsCurrent = new HashMap<>(this.stringLiteralsAtFrontier);
+                this.stringOthersCurrent = new HashSet<>(this.stringOthersAtFrontier);
+                if (this.atJump) {
+                    try {
+                        this.branchList.add(s.getCurrentMethodSignature().toString() + ":" + this.jumpPC + ":" + s.getCurrentProgramCounter());
+                    } catch (ThreadStackEmptyException e) {
+                        //this should never happen
+                        throw new RuntimeException(e); //TODO better exception!
+                    }
+                } //else, do nothing
+            }
+            this.contradictory = false;
+        }
+        
+        private void possiblySaveStringConstant(State currentState) {
+            try {
+                if (this.loadConstantStackSize == currentState.getStackSize()) {
+                    final Value operand = currentState.getCurrentFrame().operands(1)[0];
+                    if (operand instanceof Reference) {
+                        final Reference r = (Reference) operand;
+                        final Objekt o = currentState.getObject(r);
+                        if (o != null && JAVA_STRING.equals(o.getType().getClassName())) {
+                            final long heapPosition = (r instanceof ReferenceConcrete ? ((ReferenceConcrete) r).getHeapPosition() : currentState.getResolution((ReferenceSymbolic) r));
+                            final String s = valueString(currentState, r);
+                            if (s == null) {
+                                this.stringOthersCurrent.add(heapPosition);
+                            } else {
+                                this.stringLiteralsCurrent.put(heapPosition, s);
+                            }
+                        } //TODO: constants for Integer, Float, Double ... boxed types; add generic stateful object graphs produced by pure methods
+                    }                                       
                 }
-            } //else, do nothing
+            } catch (FrozenStateException | InvalidNumberOfOperandsException | ThreadStackEmptyException e) {
+                //this should never happen
+                LOGGER.error("Internal error when attempting to manage String literals");
+                LOGGER.error("Message: %s", e.toString());
+                LOGGER.error("Stack trace:");
+                for (StackTraceElement elem : e.getStackTrace()) {
+                    LOGGER.error("%s", elem.toString());
+                }
+                throw new RuntimeException(e); //TODO throw better exception
+            }
+        }
+        
+        private void recordStatesForExpansion(State currentState) {
+            final Engine engine = getEngine();
+            final Calculator calc = engine.getExecutionContext().getCalculator();
+            final ClassFile cfJAVA_OBJECT = currentState.getClassHierarchy().getClassFileClassArray(CLASSLOADER_BOOT, JAVA_OBJECT);
+            final List<ReferenceSymbolic> partiallyResolvedReferences = engine.getPartiallyResolvedReferences();
+            LOGGER.warn("References %s were partially resolved, artificially generating constraints for attempting their expansion",
+            String.join(", ", partiallyResolvedReferences.stream().map(ReferenceSymbolic::asOriginString).toArray(String[]::new)));
+            
+            for (ReferenceSymbolic partiallyResolvedReference : partiallyResolvedReferences) {
+                final State stateForExpansion = engine.getExecutionContext().getStateStart();
+                final int commonClauses = stateForExpansion.getPathCondition().size();
+                int currentClause = 0;
+                for (Clause c : currentState.getPathCondition()) {
+                    try {
+                        ++currentClause;
+                        if (currentClause <= commonClauses) {
+                            continue;
+                        }
+                        if (c instanceof ClauseAssumeReferenceSymbolic && 
+                        ((ClauseAssumeReferenceSymbolic) c).getReference().equals(partiallyResolvedReference)) {
+                            stateForExpansion.assumeExpands(calc, partiallyResolvedReference, cfJAVA_OBJECT);
+                        } else if (c instanceof ClauseAssume) {
+                            stateForExpansion.assume(((ClauseAssume) c).getCondition());
+                        } else if (c instanceof ClauseAssumeClassInitialized) {
+                            final ClauseAssumeClassInitialized cc = (ClauseAssumeClassInitialized) c;
+                            if (stateForExpansion.getKlass(cc.getClassFile()) == null) {
+                                stateForExpansion.ensureKlassSymbolic(calc, cc.getClassFile());
+                            }
+                            stateForExpansion.assumeClassInitialized(cc.getClassFile(), stateForExpansion.getKlass(cc.getClassFile()));
+                        } else if (c instanceof ClauseAssumeClassNotInitialized) {
+                            stateForExpansion.assumeClassNotInitialized(((ClauseAssumeClassNotInitialized) c).getClassFile());
+                        } else if (c instanceof ClauseAssumeNull) {
+                            stateForExpansion.assumeNull(((ClauseAssumeNull) c).getReference());
+                        } else if (c instanceof ClauseAssumeExpands) {
+                            final ClauseAssumeExpands cc = (ClauseAssumeExpands) c;
+                            stateForExpansion.assumeExpands(calc, cc.getReference(), cc.getObjekt().getType());
+                        } else if (c instanceof ClauseAssumeAliases) {
+                            final ClauseAssumeAliases cc = (ClauseAssumeAliases) c;
+                            stateForExpansion.assumeAliases(cc.getReference(), cc.getObjekt().getOrigin());
+                        }
+                    } catch (CannotAssumeSymbolicObjectException | InvalidInputException |
+                    ContradictionException e) {
+                        LOGGER.error("Internal error when attempting to artificially generate an expansion constraint");
+                        LOGGER.error("Message: %s", e.toString());
+                        LOGGER.error("Stack trace:");
+                        for (StackTraceElement elem : e.getStackTrace()) {
+                            LOGGER.error("%s", elem.toString());
+                        }
+                        throw new RuntimeException(e); //TODO throw better exception
+                    } catch (HeapMemoryExhaustedException e) {
+                        LOGGER.error("Symbolic execution heap memory exhausted when attempting to artificially generate an expansion constraint");
+                        throw new RuntimeException(e); //TODO throw better exception
+                    }
+                }
+                recordState(stateForExpansion);
+            }
         }
     }
 
     /**
      * Performs symbolic execution of the target method guided by a test case,
-     * and returns the final state. Equivalent to {@link #runProgram(int) runProgram}{@code (-1).}
-     * {@link List#get(int) get}{@code (0)}.
+     * and returns the final state.
      *
-     * @return the final {@link State}.
+     * @return the final {@link State}, or {@code null} if there is no final 
+     *         {@link State} because of a contradiction.
      * @throws DecisionException
      * @throws CannotBuildEngineException
      * @throws InitializationException
@@ -564,7 +590,8 @@ final class RunnerPath implements AutoCloseable {
     ClasspathException, CannotBacktrackException, CannotManageStateException, 
     ThreadStackEmptyException, ContradictionException, EngineStuckException, 
     FailureException {
-        return runProgram(-1).get(0); //depth -1 == never stop guidance
+        final List<State> endStates = runProgram(-1); //depth -1 == never stop guidance
+        return (endStates.size() == 0 ? null : endStates.get(0));
     }
     
     private Runner runnerPreFrontier = null;
@@ -612,9 +639,11 @@ final class RunnerPath implements AutoCloseable {
         if (testDepth < 0) {
             //there is no frontier, and the runnerPreFrontier's final
             //state is the final state of the guided execution: return it
-            final State finalState = this.runnerPreFrontier.getEngine().getCurrentState();
             final ArrayList<State> retVal = new ArrayList<>();
-            retVal.add(finalState.clone());
+            if (!this.actionsRunnerPreFrontier.contradictory) {
+                final State finalState = this.runnerPreFrontier.getEngine().getCurrentState().clone();
+                retVal.add(finalState);
+            }
             return retVal;
         } else {
             //steps to all the post-frontier states and gathers them
