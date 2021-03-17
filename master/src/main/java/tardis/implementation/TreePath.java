@@ -668,9 +668,8 @@ public final class TreePath {
     			long hashSpecific = primeNumber[j];
     			hashGeneral = 31*hashGeneral + generalArray[i].hashCode();
     			hashSpecific = 31*hashSpecific + specificArray[i].hashCode();
-    			long hashToPositiveGeneral = Math.abs(hashGeneral);
-    			long hashToPositiveSpecific = Math.abs(hashSpecific);
-    			//TODO find a way to improve hash functions and reduce collision
+    			long hashToPositiveGeneral = hash(Math.abs(hashGeneral));
+    			long hashToPositiveSpecific = hash(Math.abs(hashSpecific));
     			//resize the hashes in the range of the dimension of the two-dimensional array
     			int indexGeneral = (int) (hashToPositiveGeneral%64);
     			int indexSpecific = (int) (hashToPositiveSpecific%15);
@@ -681,5 +680,15 @@ public final class TreePath {
     		}  
     	}
     	return bloomFilterStructure;
+    }
+    
+    /**
+     * Applies a supplemental hash function to a given hashCode, which defends
+     * against poor quality hash functions and tries to reduce collisions.
+     */
+    //source: https://hg.openjdk.java.net/jdk7/jdk7/jdk/file/9b8c96f96a0f/src/share/classes/java/util/HashMap.java#l264
+    static long hash(long h) {
+        h ^= (h >>> 20) ^ (h >>> 12);
+        return h ^ (h >>> 7) ^ (h >>> 4);
     }
 }
