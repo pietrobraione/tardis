@@ -651,7 +651,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
             for (JBSEResult item : this.items) {
                 if (!generated.contains(testCount)) {
                     LOGGER.info("Failed to generate a test case for path condition: %s, log file: %s, wrapper: EvoSuiteWrapper_%d", stringifyPathCondition(shorten(item.getFinalState().getPathCondition())), this.evosuiteLogFilePath.toString(), testCount);
-                    this.treePath.PCToBloomFilterEvosuite(item.getFinalState().getPathCondition(), false);
+                    this.treePath.learnPathConditionFeasibility(item.getFinalState().getPathCondition(), false);
                 }
                 ++testCount;
             }
@@ -1255,8 +1255,8 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
     private void checkTestCompileAndScheduleJBSE(int testCount, JBSEResult item) 
     throws NoTestFileException, NoTestFileScaffoldingException, NoTestMethodException, IOFileCreationException, 
     CompilationFailedTestException, CompilationFailedTestScaffoldingException, ClassFileAccessException {
-        final List<Clause> pathConditionClauses = (item.getFinalState() == null ? null : item.getFinalState().getPathCondition());
-        final String pathCondition = (pathConditionClauses == null ? "true" : stringifyPathCondition(shorten(pathConditionClauses)));
+        final List<Clause> pathCondition = (item.getFinalState() == null ? null : item.getFinalState().getPathCondition());
+        final String pathConditionString = (pathCondition == null ? "true" : stringifyPathCondition(shorten(pathCondition)));
         
         //checks if EvoSuite generated the files
         final String testCaseClassName = (item.hasTargetMethod() ? item.getTargetMethodClassName() : item.getTargetClassName()) + "_" + testCount + "_Test";
@@ -1292,12 +1292,12 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         try {
             checkTestExists(testCaseClassName);
             final int depth = item.getDepth();
-            LOGGER.info("Generated test case %s, depth: %d, path condition: %s", testCaseClassName, depth, pathCondition);
+            LOGGER.info("Generated test case %s, depth: %d, path condition: %s", testCaseClassName, depth, pathConditionString);
             final TestCase newTestCase = new TestCase(testCaseClassName, "()V", "test0", this.o.getTmpTestsDirectoryPath(), (testCaseScaff != null));
             this.getOutputBuffer().add(new EvosuiteResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), newTestCase, depth + 1));
-            this.treePath.PCToBloomFilterEvosuite(pathConditionClauses, true);
+            this.treePath.learnPathConditionFeasibility(pathCondition, true);
         } catch (NoSuchMethodException e) { 
-            throw new NoTestMethodException(testCase, pathCondition);
+            throw new NoTestMethodException(testCase, pathConditionString);
         } catch (SecurityException | NoClassDefFoundError | ClassNotFoundException e) {
             throw new ClassFileAccessException(e, testCaseClassName);
         }
