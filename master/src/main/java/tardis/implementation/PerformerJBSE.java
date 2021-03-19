@@ -133,13 +133,19 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             return;
         }
         try (final RunnerPath rp = new RunnerPath(this.o, item, possiblyGetInitialStateCached(item))) {
-            //runs the test case up to the final state, and takes the initial state, 
-            //the coverage set, and the final state's path condition
+            final TestCase tc = item.getTestCase();
+            
+            //runs the test case up to the final state, and takes the 
+            //final state's path condition
             final State tcFinalState = rp.runProgram();
+            if (tcFinalState == null) {
+                //the execution violated some assumption: prints some feedback
+                LOGGER.info("Run test case %s, the test case violated an assumption", tc.getClassName());
+                return;
+            }
             final Collection<Clause> tcFinalPC = tcFinalState.getPathCondition();
 
             //prints some feedback
-            final TestCase tc = item.getTestCase();
             LOGGER.info("Run test case %s, path condition %s", tc.getClassName(), stringifyPathCondition(shorten(tcFinalPC)));
             
             //skips the test case if its path was already covered,
@@ -243,6 +249,11 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
                 //checks shutdown of the performer
                 if (Thread.interrupted()) {
                     return;
+                }
+                
+                //gives some feedback if detects a contradiction
+                if (newStates.isEmpty()) {
+                    LOGGER.info("Test case %s, detected contradiction while generating path conditions at depth %d", tc.getClassName(), currentDepth);
                 }
 
                 //selects post-frontier branches in the target class or the target method

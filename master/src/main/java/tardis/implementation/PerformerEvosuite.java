@@ -479,10 +479,21 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
 
             //launches a thread that waits for tests and schedules 
             //JBSE for exploring them
-            final TestDetector tdJBSE = new TestDetector(testCount, subItems, evosuiteLogFilePath, treePath);
-            final Thread tJBSE = new Thread(tdJBSE);
-            tJBSE.start();
-            threads.add(tJBSE);
+            final TestDetector tdJBSE;
+            try {
+                tdJBSE = new TestDetector(testCount, subItems, evosuiteLogFilePath);
+                final Thread tJBSE = new Thread(tdJBSE);
+                tJBSE.start();
+                threads.add(tJBSE);
+            } catch (IOException e) {
+                LOGGER.error("Unexpected I/O error while opening the EvoSuite output file");
+                LOGGER.error("Message: %s", e.toString());
+                LOGGER.error("Stack trace:");
+                for (StackTraceElement elem : e.getStackTrace()) {
+                    LOGGER.error("%s", elem.toString());
+                }
+                return;
+            }
 
             //launches another thread that waits for EvoSuite to end
             //and then alerts the previous thread
@@ -493,7 +504,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
                     //the performer was shut down: kill the EvoSuite job
                     processEvosuite.destroy();
                 }
-                tdJBSE.ended = true;
+                tdJBSE.end();
             });
             tEvosuiteEnd.start();
             threads.add(tEvosuiteEnd);
@@ -528,8 +539,9 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         private final int testCountInitial;
         private final List<JBSEResult> items;
         private final Path evosuiteLogFilePath;
-        public volatile boolean ended;
         private final TreePath treePath;
+        private final BufferedReader evosuiteLogFileReader;
+        private volatile boolean ended;
 
         /**
          * Constructor.
@@ -539,11 +551,13 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
          *        will be numbered {@code testCountInitial + i}.
          * @param items a {@link List}{@code <}{@link JBSEResult}{@code >}, results of symbolic execution.
          * @param evosuiteLogFilePath the {@link Path} of the EvoSuite log file.
+         * @throws IOException if opening a reader to the Evosuite log file fails.
          */
         public TestDetector(int testCountInitial, List<JBSEResult> items, Path evosuiteLogFilePath, TreePath treePath) {
             this.testCountInitial = testCountInitial;
             this.items = items;
             this.evosuiteLogFilePath = evosuiteLogFilePath;
+            this.evosuiteLogFileReader = Files.newBufferedReader(this.evosuiteLogFilePath);
             this.ended = false;
             this.treePath = treePath;
         }
@@ -551,6 +565,15 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         @Override
         public void run() {
             detectTestsAndScheduleJBSE();
+        }
+        
+        public void end() {
+            this.ended = true;
+            try {
+                this.evosuiteLogFileReader.close(); //avoids this thread being stuck in a blocking call to readLine()
+            } catch (IOException e) {
+                //nothing to do
+            }
         }
 
         /**
@@ -560,19 +583,14 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         private void detectTestsAndScheduleJBSE() {
             final Pattern patternEmittedTest = Pattern.compile("^.*\\* EMITTED TEST CASE: .*EvoSuiteWrapper_(\\d+), \\w+\\z");
             final HashSet<Integer> generated = new HashSet<>();
-            try (final BufferedReader r = Files.newBufferedReader(this.evosuiteLogFilePath)) {
+            try {
                 //modified from https://stackoverflow.com/a/154588/450589
-                while (true) {
-                    final String line = r.readLine();
+                while (!this.ended) {
+                    final String line = evosuiteLogFileReader.readLine();
                     if (line == null) { 
-                        //no lines in the file
-                        if (this.ended) {
-                            break;
-                        } else {
-                            //possibly more lines in the future: wait a little bit
-                            //and retry
-                            Thread.sleep(2000);
-                        }
+                        //possibly more lines in the future: wait a little bit
+                        //and retry
+                        Thread.sleep(2000);
                     } else {
                         //check if the read line reports the emission of a test case
                         //and in the positive case schedule JBSE to analyze it
@@ -622,13 +640,8 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
                 //the performer was shut down:
                 //just fall through
             } catch (IOException e) {
-                LOGGER.error("Unexpected I/O error while reading EvoSuite log file %s", this.evosuiteLogFilePath);
-                LOGGER.error("Message: %s", e.toString());
-                LOGGER.error("Stack trace:");
-                for (StackTraceElement elem : e.getStackTrace()) {
-                    LOGGER.error("%s", elem.toString());
-                }
-                //fall through
+                //the evosuite log file reader was closed:
+                //just fall through
             }
 
             //ended reading EvoSuite log file: warns about tests that 
