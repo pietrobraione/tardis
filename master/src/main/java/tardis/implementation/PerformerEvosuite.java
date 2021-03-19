@@ -481,7 +481,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
             //JBSE for exploring them
             final TestDetector tdJBSE;
             try {
-                tdJBSE = new TestDetector(testCount, subItems, evosuiteLogFilePath);
+                tdJBSE = new TestDetector(testCount, subItems, evosuiteLogFilePath, this.treePath);
                 final Thread tJBSE = new Thread(tdJBSE);
                 tJBSE.start();
                 threads.add(tJBSE);
@@ -551,9 +551,10 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
          *        will be numbered {@code testCountInitial + i}.
          * @param items a {@link List}{@code <}{@link JBSEResult}{@code >}, results of symbolic execution.
          * @param evosuiteLogFilePath the {@link Path} of the EvoSuite log file.
+         * @param treePath the {@link TreePath}.
          * @throws IOException if opening a reader to the Evosuite log file fails.
          */
-        public TestDetector(int testCountInitial, List<JBSEResult> items, Path evosuiteLogFilePath, TreePath treePath) {
+        public TestDetector(int testCountInitial, List<JBSEResult> items, Path evosuiteLogFilePath, TreePath treePath) throws IOException {
             this.testCountInitial = testCountInitial;
             this.items = items;
             this.evosuiteLogFilePath = evosuiteLogFilePath;
