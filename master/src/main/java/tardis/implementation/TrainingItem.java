@@ -6,7 +6,7 @@ package tardis.implementation;
  * calculate the infeasibility index.
  */
 
-class TrainingItem {
+final class TrainingItem {
     private final BloomFilter bloomFilter;
     private final boolean label;
     private final int hashCode;

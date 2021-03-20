@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Class that predicts the possible label of a given path condition by comparing the
@@ -16,11 +17,14 @@ import java.util.HashSet;
  */
 final class ClassifierKNN {
     private final int k;
-    private final HashSet<TrainingItem> trainingSet;
+    private final HashSet<TrainingItem> trainingSet = new HashSet<>();
     
-    public ClassifierKNN(int k, HashSet<TrainingItem> trainingSet) {
+    public ClassifierKNN(int k) {
         this.k = k;
-        this.trainingSet = trainingSet;
+    }
+    
+    public void train(Set<TrainingItem> newTrainingSet) {
+        this.trainingSet.addAll(newTrainingSet);
     }
 
     public ClassificationResult classify(BloomFilter query) {

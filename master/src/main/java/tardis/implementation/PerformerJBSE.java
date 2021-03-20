@@ -158,11 +158,6 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
                 newCoveredBranches = this.treePath.insertPath(tcFinalPC, rp.getCoverage(), Collections.emptySet(), true);
             }
 
-            //checks if the test case is a seed one
-            if (startDepth == 0) {
-            	this.treePath.learnSeedPathConditions(tcFinalPC);
-            }
-            
             //possibly caches the initial state
             final State initialState = rp.getInitialState();
             possiblySetInitialStateCached(item, initialState);
@@ -171,14 +166,15 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             final Set<String> newCoveredBranchesTarget = filterBranchesTarget(newCoveredBranches);            
             final Set<String> newCoveredBranchesUnsafe = filterBranchesUnsafe(newCoveredBranches);
             
-            //recalculates indices of items in output queue
-            if (newCoveredBranchesTarget.size() > 0) {
-                this.out.updateImprovabilityIndex(newCoveredBranchesTarget);
-            }
-            //TODO find a condition to update this index less frequently?
-            this.out.updateNoveltyIndex(rp.getCoverage());
-            //TODO is there a better place in the code to update this index?
-            this.out.updateInfeasibilityIndex();
+            //learns for update of indices
+            this.out.learnCoverageForImprovabilityIndex(newCoveredBranchesTarget);
+            this.out.learnCoverageForNoveltyIndex(newCoveredBranchesTarget);
+            this.out.learnPathConditionForInfeasibilityIndex(tcFinalPC, true);
+            
+            //TODO possibly lazier updates of indices
+            this.out.updateIndexImprovabilityAndReclassify();
+            this.out.updateIndexNoveltyAndReclassify();
+            this.out.updateIndexInfeasibilityAndReclassify();
 
             //produces feedback and emits the test
             final Coverage coverage = this.o.getCoverage();

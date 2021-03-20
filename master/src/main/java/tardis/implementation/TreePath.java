@@ -1,37 +1,31 @@
 package tardis.implementation;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import jbse.mem.Clause;
-import tardis.implementation.ClassifierKNN.ClassificationResult;
 
 /**
  * Stores the tree of the explored and yet-to-explored paths, 
  * with information about their path conditions, covered branches, 
- * and neighbor branches. Used to calculate heuristic indices.
+ * hit counts, and neighbor branches.
  * 
  * @author Pietro Braione
  * @author Matteo Modonato
  */
 public final class TreePath {
-    /**
-     * The covered items.
-     */
+    /** The covered items. */
     private final HashSet<String> coverage = new HashSet<>();
 
     /** Map used to track the times the tests hit a branch. */
     private final HashMap<String, Integer> hitsCounterMap = new HashMap<>(); //TODO ConcurrentHashMap?
-
-    /** Set used as training set to calculate the infeasibility index. */
-    public final HashSet<TrainingItem> trainingSet = new HashSet<>();
 
     private enum NodeStatus { ATTEMPTED, COVERED };
 
@@ -43,6 +37,12 @@ public final class TreePath {
     private final class Node {
         /** The {@link Clause} associated to this node. */
         private final Clause clause;
+
+        /** 
+         * The {@link BloomFilter} of the path condition from 
+         * the root to this node. 
+         */
+        private final BloomFilter bloomFilter;
 
         /** The children nodes. */
         private final List<Node> children = new ArrayList<>();
@@ -62,22 +62,33 @@ public final class TreePath {
          */
         private NodeStatus status = NodeStatus.ATTEMPTED;
 
-        private BloomFilter bloomFilter;
+        /** 
+         * The improvability index of this node (i.e., of the 
+         * path condition from the root to this node).
+         */
+        private int indexImprovability;
 
-        private int improvabilityIndex;
+        /** 
+         * The novelty index of this node (i.e., of the 
+         * path condition from the root to this node).
+         */
+        private int indexNovelty;
 
-        private int noveltyIndex;
-
-        private int infeasibilityIndex;
+        /** 
+         * The infeasibility index of this node (i.e., of the 
+         * path condition from the root to this node).
+         */
+        private int indexInfeasibility;
 
         /**
          * Constructor for a nonroot node.
          * 
-         * @param clause The {@link Clause} stored
-         *        in the node.
+         * @param path a {@link List}{@code <}{@link Clause}{@code >}, 
+         *        the path condition from the root to this node.
          */
-        Node(Clause clause) {
-            this.clause = clause;
+        Node(List<Clause> path) {
+            this.clause = (path == null ? null : path.get(path.size() - 1));
+            this.bloomFilter = (path == null ? null : new BloomFilter(path));
         }
 
         /** 
@@ -110,12 +121,13 @@ public final class TreePath {
         /**
          * Adds a child to this {@link Node}.
          * 
-         * @param newChild a {@link Clause}.
+         * @param path a {@link List}{@code <}{@link Clause}{@code >}, 
+         *        the path condition from the root to this node.
          * @return the created child {@link Node}, 
          *         that will store {@code newChild}.
          */
-        Node addChild(Clause newChild) {
-            final Node retVal = new Node(newChild);
+        Node addChild(List<Clause> path) {
+            final Node retVal = new Node(path);
             this.children.add(retVal);
             return retVal;
         }
@@ -191,10 +203,11 @@ public final class TreePath {
             currentInTree.status = NodeStatus.COVERED;
         }
 
-        for (Clause currentInPath : path) {
+        for (int i = 0; i < path.size(); ++i) {
+            final Clause currentInPath = path.get(i);
             final Node possibleChild = currentInTree.findChild(currentInPath);
             if (possibleChild == null) {
-                currentInTree = currentInTree.addChild(currentInPath);
+                currentInTree = currentInTree.addChild(path.subList(0, i + 1));
             } else {
                 currentInTree = possibleChild;
             }
@@ -204,9 +217,6 @@ public final class TreePath {
             if (index == path.size() - 1) {
                 currentInTree.coveredBranches.addAll(coveredBranches);
                 currentInTree.neighborFrontierBranches.addAll(neighborFrontierBranches);
-                if (!covered) {
-                    currentInTree.bloomFilter = new BloomFilter(path);
-                }
             }
             ++index;
         }
@@ -226,7 +236,7 @@ public final class TreePath {
      * 
      * @param coveredBranches a {@link Set}{@code <}{@link String}{@code >}.
      */
-    private synchronized void increaseHits(Set<String> coveredBranches) {
+    private void increaseHits(Set<String> coveredBranches) {
         for (String branch : coveredBranches) {
             final Integer hitsCounter = this.hitsCounterMap.get(branch);
             if (hitsCounter == null) {
@@ -267,83 +277,17 @@ public final class TreePath {
         }
         return true;
     }
-
+    
     /**
-     * Saves the values of the heuristic indices associated to a given
-     * path in this {@link TreePath} for future use.
-     * 
-     * @param indexValue an int. The value to be stored.
-     * @param path a {@link List}{@code <}{@link Clause}{@code >}. 
-     *        The first is the closest to the root, the last is the leaf.
-     * @param indexName a String. The name of the heuristic index:
-     *        improvability, novelty or infeasibility.
-     */
-    synchronized void cacheIndices(int indexValue, List<Clause> path, String indexName) {
-        int index = 0;
-        Node currentInTree = this.root;
-
-        for (Clause currentInPath : path) {
-            final Node child = currentInTree.findChild(currentInPath);
-            if (child == null) {
-                return;
-            }
-            currentInTree = child;
-            if (index == path.size() - 1) {
-                switch (indexName) {
-                case "improvability":
-                    currentInTree.improvabilityIndex = indexValue;
-                    break;
-                case "novelty":
-                    currentInTree.noveltyIndex = indexValue;
-                    break;
-                case "infeasibility":
-                    currentInTree.infeasibilityIndex = indexValue;
-                    break;
-                }
-            }
-            ++index;
-        }
-    }
-
-    /**
-     * Retrieves the values of the heuristic indices associated to a
-     * given path previously saved in this {@link TreePath}.
+     * Finds a node in the tree.
      * 
      * @param path a {@link List}{@code <}{@link Clause}{@code >}. 
-     *        The first is the closest to the root, the last is the leaf.
-     * @param indexName a String. The name of the heuristic index:
-     *        improvability, novelty or infeasibility.
+     *        The first is the closest to the root, the last is the 
+     *        clause of the node to find.
+     * @return the {@link Node}, or {@code null} if {@code path} 
+     *         does not belong to the tree.
      */
-    synchronized int getCachedIndices(List<Clause> path, String indexName) {
-        Node currentInTree = this.root;
-
-        for (Clause currentInPath : path) {
-            final Node child = currentInTree.findChild(currentInPath);
-            if (child == null) {
-                return -1;
-            }
-            currentInTree = child;
-        }
-        switch (indexName) {
-        case "improvability":
-            return currentInTree.improvabilityIndex;
-        case "novelty":
-            return currentInTree.noveltyIndex;
-        case "infeasibility":
-            return currentInTree.infeasibilityIndex;
-        }
-        return -1;
-    }
-
-    /**
-     * Returns the covered branches associated to a given path.
-     * 
-     * @param path a {@link List}{@code <}{@link Clause}{@code >}. 
-     *        The first is the closest to the root, the last is the leaf.
-     * @return a {@link Set}{@code <}{@link String}{@code >} containing 
-     *         the branches covered by the path.
-     */
-    synchronized Set<String> getCoveredBranches(List<Clause> path) {
+    private Node findNode(List<Clause> path) {
         Node currentInTree = this.root;
 
         for (Clause currentInPath : path) {
@@ -353,7 +297,169 @@ public final class TreePath {
             }
             currentInTree = child;
         }
-        return currentInTree.coveredBranches;
+        return currentInTree;
+    }
+
+    /**
+     * Returns the bloom filter associated to a given path.
+     * 
+     * @param path a {@link List}{@code <}{@link Clause}{@code >}. 
+     *        The first is the closest to the root, the last is the leaf.
+     * @return a {@link BloomFilter}, or {@code null} if
+     *         {@code path} does not belong to the tree.
+     */
+    synchronized BloomFilter getBloomFilter(List<Clause> path) {
+        final Node nodePath = findNode(path);
+        return (nodePath == null ? null : nodePath.bloomFilter);
+    }
+
+    /**
+     * Returns the improvability index associated to a given path.
+     * 
+     * @param path a {@link List}{@code <}{@link Clause}{@code >}. 
+     *        The first is the closest to the root, the last is the leaf.
+     * @return the improvability index (an {@code int} between {@code 0} 
+     *         and {@code 10}), or {@code -1} if
+     *         {@code path} does not belong to the tree.
+     */
+    synchronized int getIndexImprovability(List<Clause> path) {
+        final Node nodePath = findNode(path);
+        return (nodePath == null ? -1 : nodePath.indexImprovability);
+    }
+
+    /**
+     * Sets the improvability index associated to a given path, 
+     * if the path belongs to the tree.
+     * 
+     * @param path a {@link List}{@code <}{@link Clause}{@code >}. 
+     *        The first is the closest to the root, the last is the leaf.
+     * @param indexImprovability the improvability index (an {@code int} between {@code 0} 
+     *         and {@code 10}).
+     */
+    synchronized void setIndexImprovability(List<Clause> path, int indexImprovability) {
+        //TODO check the range of indexImprovability?
+        final Node nodePath = findNode(path);
+        if (nodePath == null) {
+            return; //TODO throw an exception?
+        }
+        nodePath.indexImprovability = indexImprovability;
+    }
+
+    /**
+     * Returns the novelty index associated to a given path.
+     * 
+     * @param path a {@link List}{@code <}{@link Clause}{@code >}. 
+     *        The first is the closest to the root, the last is the leaf.
+     * @return The novelty index (an {@code int} between {@code 0} 
+     *         and {@code 10}), or {@code -1} if
+     *         {@code path} does not belong to the tree.
+     */
+    synchronized int getIndexNovelty(List<Clause> path) {
+        final Node nodePath = findNode(path);
+        return (nodePath == null ? -1 : nodePath.indexNovelty);
+    }
+
+    /**
+     * Sets the novelty index associated to a given path, 
+     * if the path belongs to the tree.
+     * 
+     * @param path a {@link List}{@code <}{@link Clause}{@code >}. 
+     *        The first is the closest to the root, the last is the leaf.
+     * @param indexNovelty the novelty index (an {@code int} between {@code 0} 
+     *         and {@code 10}).
+     */
+    synchronized void setIndexNovelty(List<Clause> path, int indexNovelty) {
+        //TODO check the range of indexImprovability?
+        final Node nodePath = findNode(path);
+        if (nodePath == null) {
+            return; //TODO throw an exception?
+        }
+        nodePath.indexNovelty = indexNovelty;
+    }
+
+    /**
+     * Returns the infeasibility index associated to a given path.
+     * 
+     * @param path a {@link List}{@code <}{@link Clause}{@code >}. 
+     *        The first is the closest to the root, the last is the leaf.
+     * @return the infeasibility index, an {@code int} between {@code 0} 
+     *         and {@code 3} with the following meaning:
+     *         <ul>
+     *         <li>{@code 3}: feasible with voting 3;</li>
+     *         <li>{@code 2}: feasible with voting 2;</li>
+     *         <li>{@code 1}: infeasible with voting 2;</li>
+     *         <li>{@code 0}: infeasible with voting 3, or inconclusive voting.</li>
+     *         </ul>
+     *         If {@code path} does not belong to the tree returns {@code -1}.
+     */
+    synchronized int getIndexInfeasibility(List<Clause> path) {
+        final Node nodePath = findNode(path);
+        return (nodePath == null ? -1 : nodePath.indexInfeasibility);
+    }
+
+    /**
+     * Sets the novelty index associated to a given path, 
+     * if the path belongs to the tree.
+     * 
+     * @param path a {@link List}{@code <}{@link Clause}{@code >}. 
+     *        The first is the closest to the root, the last is the leaf.
+     * @param indexInfeasibility the novelty index, an {@code int} between {@code 0} 
+     *         and {@code 3} with the following meaning:
+     *         <ul>
+     *         <li>{@code 3}: feasible with voting 3;</li>
+     *         <li>{@code 2}: feasible with voting 2;</li>
+     *         <li>{@code 1}: infeasible with voting 2;</li>
+     *         <li>{@code 0}: infeasible with voting 3, or inconclusive voting.</li>
+     *         </ul>
+     */
+    synchronized void setIndexInfeasibility(List<Clause> path, int indexInfeasibility) {
+        //TODO check the range of indexInfeasibility?
+        final Node nodePath = findNode(path);
+        if (nodePath == null) {
+            return; //TODO throw an exception?
+        }
+        nodePath.indexInfeasibility = indexInfeasibility;
+    }
+
+    /**
+     * Returns the covered branches associated to a given path.
+     * 
+     * @param path a {@link List}{@code <}{@link Clause}{@code >}. 
+     *        The first is the closest to the root, the last is the leaf.
+     * @return a {@link Set}{@code <}{@link String}{@code >} containing 
+     *         the branches covered by the path, or {@code null} if
+     *         {@code path} does not belong to the tree.
+     */
+    synchronized Set<String> getCoveredBranches(List<Clause> path) {
+        final Node nodePath = findNode(path);
+        return (nodePath == null ? null : nodePath.coveredBranches);
+    }
+
+    /**
+     * Returns the hit counts of the branches associated to a given path.
+     * 
+     * @param path a {@link List}{@code <}{@link Clause}{@code >}. 
+     *        The first is the closest to the root, the last is the leaf.
+     * @return a {@link Map}{@code <}{@link String}{@code , }{@link Integer}{@code >} 
+     *         mapping the branches covered by the path to the corresponding number
+     *         of hits, or {@code null} if {@code path} does not belong to the tree.
+     */
+    synchronized Map<String, Integer> getHits(List<Clause> path) {
+        final Set<String> branches = getCoveredBranches(path);
+        if (branches == null) {
+            return null;
+        }
+        final HashMap<String, Integer> retVal = new HashMap<>();
+        for (String branch : branches) {
+            Integer hitsCount = this.hitsCounterMap.get(branch);
+            if (hitsCount == null) {
+                //a branch without hit counter has not yet
+                //been executed: Set its counter to zero
+                hitsCount = Integer.valueOf(0);
+            }
+            retVal.put(branch, hitsCount);
+        }
+        return retVal;
     }
 
     /**
@@ -364,19 +470,11 @@ public final class TreePath {
      *        The first is the closest to the root, the last is the leaf.
      * @return a {@link Set}{@code <}{@link String}{@code >} containing 
      *         the branches used to calculate the improvability index, or
-     *         {@code null} if {@code path} is not present in this {@link TreePath}.
+     *         {@code null} if {@code path} does not belong to the tree.
      */
     synchronized Set<String> getNeighborFrontierBranches(List<Clause> path) {
-        Node currentInTree = this.root;
-
-        for (Clause currentInPath : path) {
-            final Node child = currentInTree.findChild(currentInPath);
-            if (child == null) {
-                return null;
-            }
-            currentInTree = child;
-        }
-        return currentInTree.neighborFrontierBranches;
+        final Node nodePath = findNode(path);
+        return (nodePath == null ? null : nodePath.neighborFrontierBranches);
     }
 
     /**
@@ -395,155 +493,5 @@ public final class TreePath {
             return;
         }
         branches.removeAll(coveredBranches);
-    }
-
-    /**
-     * Calculates the improvability index of a given path.
-     * 
-     * @param path a {@link List}{@code <}{@link Clause}{@code >}. 
-     *        The first is the closest to the root, the last is the leaf.
-     * @return the improvability index (an {@code int} between {@code 0} 
-     *         and {@code 10}) or {@code -1} if {@code path} is not 
-     *         present in this {@link TreePath}.
-     */
-    synchronized int getImprovabilityIndex(List<Clause> path) {
-        final Set<String> branches = getNeighborFrontierBranches(path);
-        if (branches == null) {
-            return -1;
-        }
-        final int retVal = (branches.size() > 9 ? 10 : branches.size());
-        cacheIndices(retVal, path, "improvability");
-        return retVal;
-    }
-
-    /**
-     * Calculates the minimum of the values relating to how many times
-     * the code branches of a particular path were hit by the tests.
-     * 
-     * @param path a {@link List}{@code <}{@link Clause}{@code >}. 
-     *        The first is the closest to the root, the last is the leaf.
-     * @return The novelty index (an {@code int} between {@code 0} 
-     *         and {@code 10}) or {@code -1} if {@code path} is not 
-     *         present in this {@link TreePath}.
-     */
-    synchronized int getNoveltyIndex(List<Clause> path) {
-        final Set<String> branches = getCoveredBranches(path);
-        if (branches == null) {
-            return -1;
-        }
-        final HashSet<Integer> hitsCounters = new HashSet<>();
-        for (String branch : branches) {
-            final Integer hitsCount = this.hitsCounterMap.get(branch);
-            if (hitsCount != null) {
-                hitsCounters.add(hitsCount);
-            }
-        }
-        final int minimum = Collections.min(hitsCounters);
-        final int retVal = minimum > 9 ? 10 : minimum;
-        cacheIndices(retVal, path, "novelty");
-        return retVal;
-    }
-    
-    private static final int K = 3;
-
-    /**
-     * Calculates the infeasibility index of a given path.
-     * 
-     * @param path a {@link List}{@code <}{@link Clause}{@code >}. 
-     *        The first is the closest to the root, the last is the leaf.
-     * @return the infeasibility index, an {@code int} between {@code 0} 
-     *         and {@code 3} with the following meaning
-     *         <ul>
-     *         <li>3: feasible with voting 3;</li>
-     *         <li>2: feasible with voting 2;</li>
-     *         <li>1: infeasible with voting 2;</li>
-     *         <li>0: infeasible with voting 3, or inconclusive voting.</li>
-     *         </ul>
-     */
-    synchronized int getInfeasibilityIndex(List<Clause> path) {
-        final int index;
-        if (this.trainingSet.size() >= K) {
-            final BloomFilter bloomFilter = getBloomFilter(path);
-            if (bloomFilter == null) {
-                index = -1;
-            } else {
-                final ClassifierKNN classifier = new ClassifierKNN(K, this.trainingSet);
-                final ClassificationResult result = classifier.classify(bloomFilter);
-
-                final boolean unknown = result.isUnknown();
-                final boolean feasible = result.getLabel();
-                final int voting = result.getVoting();
-                //averageDistance not used by now
-
-                if (unknown || (!feasible && voting == K)) {
-                    index = 0;
-                } else if (!feasible && voting < K) {
-                    index = 1;
-                } else if (feasible && voting < K) {
-                    index = 2;
-                } else { //feasible && voting == K
-                    index = 3;
-                }
-            }
-        } else {
-            index = 0;
-        }
-        cacheIndices(index, path, "infeasibility");
-        return index;
-    }
-
-    /**
-     * Returns the bloom filter structure previously saved in the TreePath of
-     * a modified path condition, used to calculate the infeasibility index.
-     * 
-     * @param path a {@link List}{@code <}{@link Clause}{@code >}. 
-     *        The first is the closest to the root, the last is the leaf.
-     * @return a {@link BloomFilter}.
-     */
-    private BloomFilter getBloomFilter(List<Clause> path) {
-        Node currentInTree = this.root;
-
-        for (Clause currentInPath : path) {
-            final Node child = currentInTree.findChild(currentInPath);
-            if (child == null) {
-                return null;
-            }
-            currentInTree = child;
-        }
-        return currentInTree.bloomFilter;
-    }
-
-    /**
-     * Adds the bloom filter structure of a path condition already taken as input by EvoSuite
-     * to the training set with the correct label. Used to calculate the infeasibility index.
-     * 
-     * @param path a {@link List}{@code <}{@link Clause}{@code >}. 
-     *        The first is the closest to the root, the last is the leaf.
-     * @param solved a {@code boolean}, {@code true} if the path
-     *        condition was solved, {@code false} otherwise.
-     */
-    synchronized void learnPathConditionFeasibility(List<Clause> path, boolean solved) {
-        if (path != null) {
-            final BloomFilter bloomFilter = getBloomFilter(path);
-            this.trainingSet.add(new TrainingItem(bloomFilter, solved));
-        }
-    }
-
-    /**
-     * Calculates multiple bloom filter structures from a path condition 
-     * generated by an EvoSuite seed test. Adds the bloom filter structures 
-     * to the training set with the feasible label. Used to calculate the 
-     * infeasibility index.
-     * 
-     * @param path a {@link List}{@code <}{@link Clause}{@code >}. 
-     *        The first is the closest to the root, the last is the leaf.
-     */
-    synchronized void learnSeedPathConditions(List<Clause> path) {
-        if (path != null) {
-            for (int i = path.size(); i > 0; --i) {
-                final BloomFilter bloomFilter = new BloomFilter(path.subList(0, i));
-                this.trainingSet.add(new TrainingItem(bloomFilter, true));
-            }
-        }
     }
 }
