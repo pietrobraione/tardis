@@ -180,25 +180,14 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
      */
     private void generateTestsAndScheduleJBSESeed(int testCountInitial, JBSEResult item) {
         try {
-            final boolean isTargetAMethod = (item.getTargetClassName() == null);
-
-            if (isTargetAMethod) {
+            final boolean targetIsAMethod = (item.getTargetClassName() == null);
+            if (targetIsAMethod) {
                 //builds the EvoSuite wrapper
                 try {
-                    final Classpath cp = new Classpath(this.o.getJBSELibraryPath(),
-                                                       Paths.get(System.getProperty("java.home", "")), 
-                                                       new ArrayList<>(Arrays.stream(System.getProperty("java.ext.dirs", "").split(File.pathSeparator))
-                                                       .map(s -> Paths.get(s)).collect(Collectors.toList())), 
-                                                       this.o.getClassesPath());
-                    final State initialState = new State(true, HistoryPoint.startingPreInitial(true), 1_000, 100_000, cp, ClassFileFactoryJavassist.class, new HashMap<>(), new HashMap<>(), new SymbolFactory());
-                    final ClassFile cf = initialState.getClassHierarchy().loadCreateClass(CLASSLOADER_APP, item.getTargetMethodClassName(), true);
-                    initialState.pushFrameSymbolic(cf, new Signature(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName()));
-                    final State finalState = initialState.clone();
-                    final Map<Long, String> stringLiterals = Collections.emptyMap();
-                    final Set<Long> stringOthers = Collections.emptySet();
-                    emitAndCompileEvoSuiteWrapper(testCountInitial, initialState, finalState, stringLiterals, stringOthers);
+                    emitAndCompileEvoSuiteWrapperSeedTargetMethod(testCountInitial, item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName());
                 } catch (CompilationFailedWrapperException e) {
                     LOGGER.error("Internal error: EvoSuite wrapper %s compilation failed", e.file.toAbsolutePath().toString());
+                    return;
                 } catch (IOFileCreationException e) { 
                     LOGGER.error("Unexpected I/O error during EvoSuite wrapper creation/compilation while creating file %s", e.file.toAbsolutePath().toString());
                     LOGGER.error("Message: %s", e.toString());
@@ -420,6 +409,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         //launches an EvoSuite process for each sublist
         final ArrayList<TestDetector> testDetectors = new ArrayList<>();
         final ArrayList<Thread> threads = new ArrayList<>();
+        final ArrayList<Process> processes = new ArrayList<>();
         int testCountStart = testCountInitial;
         for (List<JBSEResult> subItems : splitItems.values()) {
             final int testCount = testCountStart; //copy into final variable to keep compiler happy
@@ -429,12 +419,8 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
             final ArrayList<JBSEResult> compiled = new ArrayList<>();
             int i = testCount;
             for (JBSEResult item : subItems) {
-                final State initialState = item.getInitialState();
-                final State finalState = item.getFinalState();
-                final Map<Long, String> stringLiterals = item.getStringLiterals();
-                final Set<Long> stringOthers = item.getStringOthers();
                 try {
-                    emitAndCompileEvoSuiteWrapper(i, initialState, finalState, stringLiterals, stringOthers);
+                    emitAndCompileEvoSuiteWrapper(i, item.getInitialState(), item.getFinalState(), item.getStringLiterals(), item.getStringOthers());
                     compiled.add(item);
                     //continue
                 } catch (CompilationFailedWrapperException e) {
@@ -468,6 +454,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
             final Process evosuiteProcess;
             try {
                 evosuiteProcess = launchProcess(evosuiteCommand);
+                processes.add(evosuiteProcess);
                 LOGGER.info("Launched EvoSuite process, command line: %s", evosuiteCommand.stream().reduce("", (s1, s2) -> { return s1 + " " + s2; }));
             } catch (IOException e) {
                 LOGGER.error("Unexpected I/O error while running EvoSuite process");
@@ -514,7 +501,21 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
                 interrupted = true;
                 thread.interrupt();
             }
-        }        
+        }
+        
+        //same for processes (safety net)
+        for (Process process : processes) {
+            try {
+                if (interrupted) {
+                    process.destroy();
+                } else {
+                    process.waitFor();
+                }
+            } catch (InterruptedException e) {
+                interrupted = true;
+                process.destroy();
+            }
+        }
     }
 
     /**
@@ -652,6 +653,27 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
             }
         }
     }
+    
+    private void emitAndCompileEvoSuiteWrapperSeedTargetMethod(int testCount, String targetMethodClassName, String targetMethodDescriptor, String targetMethodName) 
+    throws IOException, InvalidClassFileFactoryClassException, InvalidInputException, ClassFileNotFoundException, 
+    ClassFileIllFormedException, ClassFileNotAccessibleException, IncompatibleClassFileException, 
+    PleaseLoadClassException, BadClassFileVersionException, RenameUnsupportedException, WrongClassNameException, 
+    CannotAssumeSymbolicObjectException, MethodNotFoundException, MethodCodeNotFoundException, HeapMemoryExhaustedException, 
+    IOFileCreationException, CompilationFailedWrapperException {
+        final Classpath cp = new Classpath(this.o.getJBSELibraryPath(),
+                                           Paths.get(System.getProperty("java.home", "")), 
+                                           new ArrayList<>(Arrays.stream(System.getProperty("java.ext.dirs", "").split(File.pathSeparator))
+                                           .map(s -> Paths.get(s)).collect(Collectors.toList())), 
+                                           this.o.getClassesPath());
+        final State initialState = new State(true, HistoryPoint.startingPreInitial(true), 1_000, 100_000, cp, ClassFileFactoryJavassist.class, new HashMap<>(), new HashMap<>(), new SymbolFactory());
+        final ClassFile cf = initialState.getClassHierarchy().loadCreateClass(CLASSLOADER_APP, targetMethodClassName, true);
+        initialState.pushFrameSymbolic(cf, new Signature(targetMethodClassName, targetMethodDescriptor, targetMethodName));
+        final State finalState = initialState.clone();
+        final Map<Long, String> stringLiterals = Collections.emptyMap();
+        final Set<Long> stringOthers = Collections.emptySet();
+        emitAndCompileEvoSuiteWrapper(testCount, initialState, finalState, stringLiterals, stringOthers);
+    }
+
     
     /**
      * Emits and compiles the EvoSuite wrapper for the path condition of some state.
