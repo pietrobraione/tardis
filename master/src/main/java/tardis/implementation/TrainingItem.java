@@ -57,7 +57,7 @@ final class TrainingItem {
             if (other.bloomFilter != null) {
                 return false;
             }
-        } else if (this.bloomFilter.equals(other.bloomFilter)) {
+        } else if (!this.bloomFilter.equals(other.bloomFilter)) {
             return false;
         }
         if (this.label != other.label) {
