@@ -12,6 +12,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 
 import jbse.mem.Clause;
+import tardis.Options;
 import tardis.framework.InputBuffer;
 import tardis.framework.OutputBuffer;
 import tardis.implementation.ClassifierKNN.ClassificationResult;
@@ -25,8 +26,8 @@ import tardis.implementation.ClassifierKNN.ClassificationResult;
  * @param <E> the type of the items stored in the buffer.
  */
 public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult>, OutputBuffer<JBSEResult> {
-    private static final int[] INDEX_VALUES = {3, 2, 1, 0};
-    private static final int[] PROBABILITY_VALUES = {50, 30, 15, 5};
+    private static int[] INDEX_VALUES;
+    private static int[] PROBABILITY_VALUES;
     
     /** The maximum value for the index of improvability. */
     private static final int INDEX_IMPROVABILITY_MAX = 10;
@@ -38,7 +39,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
     private static final int K = 3;
     
     /** The minimum size of the training set necessary for retraining. */
-    private static final int TRAINING_SET_MINIMUM_THRESHOLD = 200;
+    private static int TRAINING_SET_MINIMUM_THRESHOLD;
 
     /** The queues where the {@link JBSEResult}s are stored. */
     private final HashMap<Integer, LinkedBlockingQueue<JBSEResult>> queues = new HashMap<>();
@@ -57,8 +58,14 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
     
     /** The {@link TreePath} used to store information about the path conditions. */
     private final TreePath treePath;
+    
+    private final Options o;
 
-    public JBSEResultInputOutputBuffer(TreePath treePath) {
+    public JBSEResultInputOutputBuffer(TreePath treePath, Options o) {
+    	this.o = o;
+    	INDEX_VALUES = setBuffer(true);
+    	PROBABILITY_VALUES = setBuffer(false);
+    	TRAINING_SET_MINIMUM_THRESHOLD = this.o.getInfeasibilityIndexThreshold();
         for (int i = 0; i < INDEX_VALUES.length; ++i) {
             this.queues.put(i, new LinkedBlockingQueue<>());
         }
@@ -68,9 +75,15 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
     @Override
     public synchronized boolean add(JBSEResult item) {
         final List<Clause> path = item.getFinalState().getPathCondition();
-        updateIndexImprovability(path);
-        updateIndexNovelty(path);
-        updateIndexInfeasibility(path);
+        if (this.o.getUseImprovabilityIndex()) {
+        	updateIndexImprovability(path);
+        }
+        if (this.o.getUseNoveltyIndex()) {
+        	updateIndexNovelty(path);
+        }
+        if (this.o.getUseInfeasibilityIndex()) {
+        	updateIndexInfeasibility(path);
+        }
         final int queueNumber = calculateQueueNumber(path);
         final LinkedBlockingQueue<JBSEResult> queueInMap = this.queues.get(queueNumber);
         return queueInMap.add(item);
@@ -240,10 +253,19 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
      *         whose associated path condition is {@code path}. 
      */
     private int calculateQueueNumber(List<Clause> path) {
+    	int indexImprovability = -2;
+    	int indexNovelty = -2;
+    	int indexInfeasibility = -2;
         //gets the indices
-        final int indexImprovability = this.treePath.getIndexImprovability(path);
-        final int indexNovelty = this.treePath.getIndexNovelty(path);
-        final int indexInfeasibility = this.treePath.getIndexInfeasibility(path);
+    	if (this.o.getUseImprovabilityIndex()) {
+    		indexImprovability = this.treePath.getIndexImprovability(path);
+    	}
+    	if (this.o.getUseNoveltyIndex()) {
+    		indexNovelty = this.treePath.getIndexNovelty(path);
+    	}
+    	if (this.o.getUseInfeasibilityIndex()) {
+    		indexInfeasibility = this.treePath.getIndexInfeasibility(path);
+    	}
         
         //detects the index that pass a threshold
         final boolean thresholdImprovability = indexImprovability > 0;
@@ -251,14 +273,99 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
         final boolean thresholdInfeasibility = indexInfeasibility > 1;
         
         //counts the passed thresholds
+        final int[] indices = {indexImprovability, indexNovelty, indexInfeasibility};
         final boolean[] thresholds = {thresholdImprovability, thresholdNovelty, thresholdInfeasibility};
         int count = 0;
-        for (boolean threshold : thresholds) {
-            if (threshold) {
+        for (int i = 0; i < thresholds.length; ++i) {
+            if (indices[i] != -2 && thresholds[i]) {
                 ++count;
             }
         }
+        
+        if (count == 1) {
+        	//only improvability index is used
+    		if (this.o.getUseImprovabilityIndex() && !this.o.getUseNoveltyIndex() && !this.o.getUseInfeasibilityIndex()) {
+				count = indexImprovability;
+			}
+			//only novelty index is used
+			else if (!this.o.getUseImprovabilityIndex() && this.o.getUseNoveltyIndex() && !this.o.getUseInfeasibilityIndex()) {
+				count = indexNovelty;
+			}
+			//only infeasibility index is used
+			else if (!this.o.getUseImprovabilityIndex() && !this.o.getUseNoveltyIndex() && this.o.getUseInfeasibilityIndex()) {
+				count = indexInfeasibility;
+			}
+    	}
         return count;
+    }
+    
+    /**
+     * Sets the buffer to work with different numbers of indices (3, 2, 1 or 0).
+     * If only one index is used, sets the buffer to work with queues and probabilities
+     * of this specific index.
+     * If multiple indices are used, sets the buffer to work with binary representations
+     * of the indices.
+     * 
+     * @param INDEX_VALUES a boolean. True to set index values, false to set probability values.
+     * @return the array witch contains the index values, if INDEX_VALUES is true, otherwise the
+     *         array witch contains the probabilities values.
+     */
+    synchronized int[] setBuffer(boolean INDEX_VALUES) {
+    	int count = 0;
+    	final boolean[] useIndices = new boolean[] {this.o.getUseImprovabilityIndex(), this.o.getUseNoveltyIndex(), this.o.getUseInfeasibilityIndex()};
+    	for (boolean useIndex : useIndices) {
+    		if (useIndex) {
+    			++count;
+    		}
+    	}
+    	if (INDEX_VALUES) {
+    		switch (count) {
+    		case 3:
+    			return new int[] {3, 2, 1, 0};
+    		case 2:
+    			return new int[] {2, 1, 0};
+    		case 1:
+    			//only improvability index is used
+    			if (this.o.getUseImprovabilityIndex() && !this.o.getUseNoveltyIndex() && !this.o.getUseInfeasibilityIndex()) {
+    				return new int[] {10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0};
+    			}
+    			//only novelty index is used
+    			else if (!this.o.getUseImprovabilityIndex() && this.o.getUseNoveltyIndex() && !this.o.getUseInfeasibilityIndex()) {
+    				return new int[] {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+    			}
+    			//only infeasibility index is used
+    			else if (!this.o.getUseImprovabilityIndex() && !this.o.getUseNoveltyIndex() && this.o.getUseInfeasibilityIndex()) {
+    				return new int[] {3, 2, 1, 0};
+    			}
+    		case 0:
+    			return new int[] {0};
+    		}
+    		throw new Error("The number of active indices used to set up JBSEResultInputOutputBuffer is not valid value (should be between 0 and 3)");
+    	}
+    	else {
+    		switch (count) {
+    		case 3:
+    			return new int[] {50, 30, 15, 5};
+    		case 2:
+    			return new int[] {60, 30, 10};
+    		case 1:
+    			//only improvability index is used
+    			if (this.o.getUseImprovabilityIndex() && !this.o.getUseNoveltyIndex() && !this.o.getUseInfeasibilityIndex()) {
+    				return new int[] {50, 12, 9, 7, 6, 5, 4, 3, 2, 1, 1};
+    			}
+    			//only novelty index is used
+    			else if (!this.o.getUseImprovabilityIndex() && this.o.getUseNoveltyIndex() && !this.o.getUseInfeasibilityIndex()) {
+    				return new int[] {50, 12, 9, 7, 6, 5, 4, 3, 2, 1, 1};
+    			}
+    			//only infeasibility index is used
+    			else if (!this.o.getUseImprovabilityIndex() && !this.o.getUseNoveltyIndex() && this.o.getUseInfeasibilityIndex()) {
+    				return new int[] {50, 30, 15, 5};
+    			}
+    		case 0:
+    			return new int[] {100};
+    		}
+    		throw new Error("The number of active indices used to set up JBSEResultInputOutputBuffer is not valid value (should be between 0 and 3)");
+    	}
     }
 
     /**
@@ -270,7 +377,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
     private void updateIndexImprovability(List<Clause> path) {
         final Set<String> branches = this.treePath.getNeighborFrontierBranches(path);
         if (branches == null) {
-            throw new AssertionError("Attempted to update the novelty index of a path condition that was not yet inserted in the TreePath.");
+            throw new AssertionError("Attempted to update the improvability index of a path condition that was not yet inserted in the TreePath.");
         }
         final int indexImprovability = Math.min(branches.size(), INDEX_IMPROVABILITY_MAX);
         this.treePath.setIndexImprovability(path, indexImprovability);
@@ -302,7 +409,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
     private void updateIndexInfeasibility(List<Clause> path) {
         final BloomFilter bloomFilter = this.treePath.getBloomFilter(path);
         if (bloomFilter == null) {
-            throw new AssertionError("Attempted to update the novelty index of a path condition that was not yet inserted in the TreePath.");
+            throw new AssertionError("Attempted to update the infeasibility index of a path condition that was not yet inserted in the TreePath.");
         }
         final ClassificationResult result = this.classifier.classify(bloomFilter);
         final boolean unknown = result.isUnknown();

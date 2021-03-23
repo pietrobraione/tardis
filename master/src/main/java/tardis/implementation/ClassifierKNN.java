@@ -28,6 +28,10 @@ final class ClassifierKNN {
     }
 
     public ClassificationResult classify(BloomFilter query) {
+    	if (this.trainingSet.size() < k) {
+    		final ClassificationResult trainingSetTooSmallOutput = ClassificationResult.unknown();
+    		return trainingSetTooSmallOutput;
+    	}
         //fills the list of neighbors (training set items with their Jaccard 
         //distance to query) and sorts it by Jaccard distance (in descending order)
         final ArrayList<Neighbor> neighborRanking = new ArrayList<>();

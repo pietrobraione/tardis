@@ -187,6 +187,22 @@ public final class Options implements Cloneable {
     @Option(name = "-max_simple_array_length",
             usage = "Maximum size of arrays with simple representation")
     private int maxSimpleArrayLength = 100_000;
+    
+    @Option(name = "-use_improvability_index",
+            usage = "Whether to use the improvability index for path conditions selection in the JBSEResultInputOutputBuffer")
+    private boolean useImprovabilityIndex = true;
+    
+    @Option(name = "-use_novelty_index",
+            usage = "Whether to use the novelty index for path conditions selection in the JBSEResultInputOutputBuffer")
+    private boolean useNoveltyIndex = true;
+    
+    @Option(name = "-use_infeasibility_index",
+            usage = "Whether to use the infeasibility index for path conditions selection in the JBSEResultInputOutputBuffer")
+    private boolean useInfeasibilityIndex = true;
+    
+    @Option(name = "-infeasibility_index_threshold",
+            usage = "The minimum size of the training set necessary for retraining.")
+    private int infeasibilityIndexThreshold = 200;
 
     public boolean getHelp() {
         return this.help;
@@ -472,6 +488,38 @@ public final class Options implements Cloneable {
 
     public void setGlobalTimeBudgetDuration(long globalTimeBudgetDuration) {
         this.globalTimeBudgetDuration = globalTimeBudgetDuration;
+    }
+    
+    public boolean getUseImprovabilityIndex() {
+        return this.useImprovabilityIndex;
+    }
+    
+    public void setUseImprovabilityIndex(boolean useImprovabilityIndex) {
+        this.useImprovabilityIndex = useImprovabilityIndex;
+    }
+    
+    public boolean getUseNoveltyIndex() {
+        return this.useNoveltyIndex;
+    }
+    
+    public void setUseNoveltyIndex(boolean useNoveltyIndex) {
+        this.useNoveltyIndex = useNoveltyIndex;
+    }
+    
+    public boolean getUseInfeasibilityIndex() {
+        return this.useInfeasibilityIndex;
+    }
+    
+    public void setUseInfeasibilityIndex(boolean useInfeasibilityIndex) {
+        this.useInfeasibilityIndex = useInfeasibilityIndex;
+    }
+    
+    public int getInfeasibilityIndexThreshold() {
+        return this.infeasibilityIndexThreshold;
+    }
+    
+    public void setInfeasibilityIndexThreshold(int infeasibilityIndexThreshold) {
+        this.infeasibilityIndexThreshold = infeasibilityIndexThreshold;
     }
 
     public TimeUnit getGlobalTimeBudgetUnit() {
