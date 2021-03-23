@@ -219,6 +219,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
                 this.trainingSet.clear();
                 forAllQueuedItems((queueNumber, bufferedJBSEResult) -> {
                     final List<Clause> pathCondition = bufferedJBSEResult.getFinalState().getPathCondition();
+                    updateIndexInfeasibility(pathCondition);
                     final int queueNumberNew = calculateQueueNumber(pathCondition);
                     if (queueNumberNew != queueNumber) {
                         this.queues.get(queueNumber).remove(bufferedJBSEResult);
