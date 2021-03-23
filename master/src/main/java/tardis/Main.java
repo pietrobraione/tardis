@@ -102,7 +102,7 @@ public final class Main {
             final TreePath treePath = new TreePath();
 
             //...the communication buffers...
-            final JBSEResultInputOutputBuffer pathConditionBuffer = new JBSEResultInputOutputBuffer(treePath);
+            final JBSEResultInputOutputBuffer pathConditionBuffer = new JBSEResultInputOutputBuffer(treePath, this.o);
             final QueueInputOutputBuffer<EvosuiteResult> testCaseBuffer = new QueueInputOutputBuffer<>();
 
             //...the performers and the termination manager

@@ -167,14 +167,26 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             final Set<String> newCoveredBranchesUnsafe = filterBranchesUnsafe(newCoveredBranches);
             
             //learns for update of indices
-            this.out.learnCoverageForImprovabilityIndex(newCoveredBranchesTarget);
-            this.out.learnCoverageForNoveltyIndex(newCoveredBranchesTarget);
-            this.out.learnPathConditionForInfeasibilityIndex(tcFinalPC, true);
+            if (this.o.getUseImprovabilityIndex()) {
+            	this.out.learnCoverageForImprovabilityIndex(newCoveredBranchesTarget);
+            }
+            if (this.o.getUseNoveltyIndex()) {
+            	this.out.learnCoverageForNoveltyIndex(rp.getCoverage());
+            }
+            if (this.o.getUseInfeasibilityIndex()) {
+            	this.out.learnPathConditionForInfeasibilityIndex(tcFinalPC, true);
+            }
             
             //TODO possibly lazier updates of indices
-            this.out.updateIndexImprovabilityAndReclassify();
-            this.out.updateIndexNoveltyAndReclassify();
-            this.out.updateIndexInfeasibilityAndReclassify();
+            if (this.o.getUseImprovabilityIndex()) {
+            	this.out.updateIndexImprovabilityAndReclassify();
+            }
+            if (this.o.getUseNoveltyIndex()) { 
+            	this.out.updateIndexNoveltyAndReclassify();
+            }
+            if (this.o.getUseInfeasibilityIndex()) {
+            	this.out.updateIndexInfeasibilityAndReclassify();
+            }
 
             //produces feedback and emits the test
             final Coverage coverage = this.o.getCoverage();

@@ -470,7 +470,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
             //JBSE for exploring them
             final TestDetector tdJBSE;
             try {
-                tdJBSE = new TestDetector(testCount, subItems, evosuiteProcess.getInputStream(), evosuiteLogFilePath, this.in);
+                tdJBSE = new TestDetector(this.o, testCount, subItems, evosuiteProcess.getInputStream(), evosuiteLogFilePath, this.in);
                 final Thread tJBSE = new Thread(tdJBSE);
                 tJBSE.start();
                 testDetectors.add(tdJBSE);
@@ -526,6 +526,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
      * @author Pietro Braione
      */
     private final class TestDetector implements Runnable {
+    	private final Options o;
         private final int testCountInitial;
         private final List<JBSEResult> items;
         private final BufferedReader evosuiteBufferedReader;
@@ -546,8 +547,9 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
          *        path conditions EvoSuite fails to solve.
          * @throws IOException if opening a writer to the Evosuite log file fails.
          */
-        public TestDetector(int testCountInitial, List<JBSEResult> items, InputStream evosuiteInputStream, Path evosuiteLogFilePath, JBSEResultInputOutputBuffer in) throws IOException {
-            this.testCountInitial = testCountInitial;
+        public TestDetector(Options o, int testCountInitial, List<JBSEResult> items, InputStream evosuiteInputStream, Path evosuiteLogFilePath, JBSEResultInputOutputBuffer in) throws IOException {
+        	this.o = o;
+        	this.testCountInitial = testCountInitial;
             this.items = items;
             this.evosuiteBufferedReader = new BufferedReader(new InputStreamReader(evosuiteInputStream));
             this.evosuiteLogFilePath = evosuiteLogFilePath;
@@ -644,10 +646,14 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
                     LOGGER.info("Failed to generate a test case for path condition: %s, log file: %s, wrapper: EvoSuiteWrapper_%d", stringifyPathCondition(shorten(item.getFinalState().getPathCondition())), this.evosuiteLogFilePath.toString(), testCount);
                     
                     //learns for update of indices
-                    this.in.learnPathConditionForInfeasibilityIndex(item.getFinalState().getPathCondition(), false);
+                    if (this.o.getUseInfeasibilityIndex()) {
+                    	this.in.learnPathConditionForInfeasibilityIndex(item.getFinalState().getPathCondition(), false);
+                    }
 
                     //TODO possibly lazier updates of index
-                    this.in.updateIndexInfeasibilityAndReclassify();
+                    if (this.o.getUseInfeasibilityIndex()) {
+                    	this.in.updateIndexInfeasibilityAndReclassify();
+                    }
                 }
                 ++testCount;
             }
