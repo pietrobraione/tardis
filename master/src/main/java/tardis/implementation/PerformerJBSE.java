@@ -175,7 +175,7 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
                 }
 
                 //creates all the output jobs
-                noOutputJobGenerated = noOutputJobGenerated && createOutputJobsForFrontier(rp, statesPostFrontier, item, tc, initialState, currentDepth);
+                noOutputJobGenerated = createOutputJobsForFrontier(rp, statesPostFrontier, item, tc, initialState, currentDepth) && noOutputJobGenerated;
             }
 
             if (noOutputJobGenerated) {
