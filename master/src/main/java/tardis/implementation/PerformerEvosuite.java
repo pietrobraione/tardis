@@ -646,12 +646,12 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
                     LOGGER.info("Failed to generate a test case for path condition: %s, log file: %s, wrapper: EvoSuiteWrapper_%d", stringifyPathCondition(shorten(item.getFinalState().getPathCondition())), this.evosuiteLogFilePath.toString(), testCount);
                     
                     //learns for update of indices
-                    if (this.o.getUseInfeasibilityIndex()) {
-                    	this.in.learnPathConditionForInfeasibilityIndex(item.getFinalState().getPathCondition(), false);
+                    if (this.o.getUseIndexInfeasibility()) {
+                    	this.in.learnPathConditionForIndexInfeasibility(item.getFinalState().getPathCondition(), false);
                     }
 
                     //TODO possibly lazier updates of index
-                    if (this.o.getUseInfeasibilityIndex()) {
+                    if (this.o.getUseIndexInfeasibility()) {
                     	this.in.updateIndexInfeasibilityAndReclassify();
                     }
                 }

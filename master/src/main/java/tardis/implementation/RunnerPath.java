@@ -1,34 +1,24 @@
 package tardis.implementation;
 
-import static jbse.algo.Util.valueString;
 import static jbse.apps.run.DecisionProcedureGuidanceJDI.countNonRecursiveHits;
-import static jbse.bc.ClassLoaders.CLASSLOADER_BOOT;
 import static jbse.bc.Signatures.JAVA_CHARSEQUENCE;
 import static jbse.bc.Signatures.JAVA_OBJECT;
 import static jbse.bc.Signatures.JAVA_STRING;
 import static jbse.common.Type.BOOLEAN;
 import static jbse.common.Type.REFERENCE;
 import static jbse.common.Type.TYPEEND;
-import static tardis.implementation.Util.bytecodeJump;
-import static tardis.implementation.Util.bytecodeLoad;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-
 import jbse.algo.exc.CannotManageStateException;
 import jbse.algo.exc.NotYetImplementedException;
-import jbse.apps.run.DecisionProcedureGuidance;
 import jbse.apps.run.DecisionProcedureGuidanceJDI;
-import jbse.apps.run.GuidanceException;
-import jbse.bc.ClassFile;
 import jbse.bc.Signature;
 import jbse.bc.exc.InvalidClassFileFactoryClassException;
 import jbse.common.exc.ClasspathException;
@@ -39,35 +29,17 @@ import jbse.dec.DecisionProcedureClassInit;
 import jbse.dec.DecisionProcedureLICS;
 import jbse.dec.DecisionProcedureSMTLIB2_AUFNIRA;
 import jbse.dec.exc.DecisionException;
-import jbse.jvm.Runner;
-import jbse.jvm.RunnerBuilder;
 import jbse.jvm.RunnerParameters;
-import jbse.jvm.Engine;
 import jbse.jvm.EngineParameters.BreadthMode;
 import jbse.jvm.EngineParameters.StateIdentificationMode;
-import jbse.jvm.Runner.Actions;
 import jbse.jvm.exc.CannotBacktrackException;
 import jbse.jvm.exc.CannotBuildEngineException;
 import jbse.jvm.exc.EngineStuckException;
 import jbse.jvm.exc.FailureException;
 import jbse.jvm.exc.InitializationException;
 import jbse.jvm.exc.NonexistingObservedVariablesException;
-import jbse.mem.Clause;
-import jbse.mem.ClauseAssume;
-import jbse.mem.ClauseAssumeAliases;
-import jbse.mem.ClauseAssumeClassInitialized;
-import jbse.mem.ClauseAssumeClassNotInitialized;
-import jbse.mem.ClauseAssumeExpands;
-import jbse.mem.ClauseAssumeNull;
-import jbse.mem.ClauseAssumeReferenceSymbolic;
-import jbse.mem.Objekt;
 import jbse.mem.State;
-import jbse.mem.State.Phase;
-import jbse.mem.exc.CannotAssumeSymbolicObjectException;
 import jbse.mem.exc.ContradictionException;
-import jbse.mem.exc.FrozenStateException;
-import jbse.mem.exc.HeapMemoryExhaustedException;
-import jbse.mem.exc.InvalidNumberOfOperandsException;
 import jbse.mem.exc.ThreadStackEmptyException;
 import jbse.rewr.CalculatorRewriting;
 import jbse.rewr.RewriterNegationElimination;
@@ -76,12 +48,6 @@ import jbse.rewr.RewriterFunctionApplicationOnSimplex;
 import jbse.rewr.RewriterZeroUnit;
 import jbse.rules.ClassInitRulesRepo;
 import jbse.rules.LICSRulesRepo;
-import jbse.tree.StateTree.BranchPoint;
-import jbse.val.Calculator;
-import jbse.val.Reference;
-import jbse.val.ReferenceConcrete;
-import jbse.val.ReferenceSymbolic;
-import jbse.val.Value;
 import tardis.Options;
 
 /**
@@ -91,8 +57,6 @@ import tardis.Options;
  * @author Pietro Braione
  */
 final class RunnerPath implements AutoCloseable {
-    private static final Logger LOGGER = LogManager.getFormatterLogger(RunnerPath.class);
-    
     private static final String SWITCH_CHAR = System.getProperty("os.name").toLowerCase().contains("windows") ? "/" : "-";
 
     private final String z3Path;
@@ -100,10 +64,13 @@ final class RunnerPath implements AutoCloseable {
     private final String targetMethodDescriptor;
     private final String targetMethodName;
     private final TestCase testCase;
-    private final RunnerParameters commonParamsGuided;
-    private final RunnerParameters commonParamsGuiding;
+    private final RunnerParameters commonParamsSymbolic;
+    private final RunnerParameters commonParamsConcrete;
     private final int numberOfHits;
-
+    private RunnerPreFrontier runnerPreFrontier = null;
+    private State statePreFrontier = null;
+    private RunnerPostFrontier runnerPostFrontier = null;
+    
     public RunnerPath(Options o, EvosuiteResult item, State initialState) 
     throws DecisionException, CannotBuildEngineException, InitializationException, InvalidClassFileFactoryClassException, 
     NonexistingObservedVariablesException, ClasspathException, ContradictionException, CannotBacktrackException, 
@@ -116,8 +83,8 @@ final class RunnerPath implements AutoCloseable {
 
         //builds the template parameters object for the guided (symbolic) 
         //and the guiding (concrete) executions
-        this.commonParamsGuided = new RunnerParameters();
-        this.commonParamsGuiding = new RunnerParameters();
+        this.commonParamsSymbolic = new RunnerParameters();
+        this.commonParamsConcrete = new RunnerParameters();
         fillCommonParams(o, item, initialState);
 
         //calculates the number of hits
@@ -134,437 +101,55 @@ final class RunnerPath implements AutoCloseable {
         _classpath.addAll(o.getClassesPath().stream().map(Object::toString).collect(Collectors.toList()));
         //builds the template parameters object for the guided (symbolic) execution
         if (initialState == null) {
-            this.commonParamsGuided.setJBSELibPath(o.getJBSELibraryPath());
-            this.commonParamsGuided.addUserClasspath(_classpath.toArray(new String[0]));
-            this.commonParamsGuided.setMethodSignature(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName());
+            this.commonParamsSymbolic.setJBSELibPath(o.getJBSELibraryPath());
+            this.commonParamsSymbolic.addUserClasspath(_classpath.toArray(new String[0]));
+            this.commonParamsSymbolic.setMethodSignature(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName());
         } else {
-            this.commonParamsGuided.setStartingState(initialState);
+            this.commonParamsSymbolic.setStartingState(initialState);
         }
-        this.commonParamsGuided.setBreadthMode(BreadthMode.ALL_DECISIONS_SYMBOLIC);
+        this.commonParamsSymbolic.setBreadthMode(BreadthMode.ALL_DECISIONS_SYMBOLIC);
         if (o.getHeapScope() != null) {
             for (Map.Entry<String, Integer> e : o.getHeapScope().entrySet()) {
-                this.commonParamsGuided.setHeapScope(e.getKey(), e.getValue());
+                this.commonParamsSymbolic.setHeapScope(e.getKey(), e.getValue());
             }
         }
         if (o.getCountScope() > 0) {
-            this.commonParamsGuided.setCountScope(o.getCountScope());
+            this.commonParamsSymbolic.setCountScope(o.getCountScope());
         }
-        this.commonParamsGuided.addUninterpreted(JAVA_STRING, "(" + REFERENCE + JAVA_OBJECT + TYPEEND + ")" + BOOLEAN, "equals");
-        this.commonParamsGuided.addUninterpreted(JAVA_STRING, "(" + REFERENCE + JAVA_CHARSEQUENCE + TYPEEND + ")" + BOOLEAN, "contains");
-        this.commonParamsGuided.addUninterpreted(JAVA_STRING, "(" + REFERENCE + JAVA_STRING + TYPEEND + ")" + BOOLEAN, "endsWith");
-        this.commonParamsGuided.addUninterpreted(JAVA_STRING, "(" + REFERENCE + JAVA_STRING + TYPEEND + ")" + BOOLEAN, "startsWith");
+        this.commonParamsSymbolic.addUninterpreted(JAVA_STRING, "(" + REFERENCE + JAVA_OBJECT + TYPEEND + ")" + BOOLEAN, "equals");
+        this.commonParamsSymbolic.addUninterpreted(JAVA_STRING, "(" + REFERENCE + JAVA_CHARSEQUENCE + TYPEEND + ")" + BOOLEAN, "contains");
+        this.commonParamsSymbolic.addUninterpreted(JAVA_STRING, "(" + REFERENCE + JAVA_STRING + TYPEEND + ")" + BOOLEAN, "endsWith");
+        this.commonParamsSymbolic.addUninterpreted(JAVA_STRING, "(" + REFERENCE + JAVA_STRING + TYPEEND + ")" + BOOLEAN, "startsWith");
         for (List<String> unint : o.getUninterpreted()) {
-            this.commonParamsGuided.addUninterpreted(unint.get(0), unint.get(1), unint.get(2));
+            this.commonParamsSymbolic.addUninterpreted(unint.get(0), unint.get(1), unint.get(2));
         }
 
         //builds the template parameters object for the guiding (concrete) execution
         _classpath.add(o.getJBSELibraryPath().toString());
-        this.commonParamsGuiding.addUserClasspath(_classpath.toArray(new String[0]));
-        this.commonParamsGuiding.setStateIdentificationMode(StateIdentificationMode.COMPACT);
+        this.commonParamsConcrete.addUserClasspath(_classpath.toArray(new String[0]));
+        this.commonParamsConcrete.setStateIdentificationMode(StateIdentificationMode.COMPACT);
 
         //more settings to the template parameters objects:
         //1- accelerate things by bypassing standard loading
         if (initialState == null) {
-            this.commonParamsGuided.setBypassStandardLoading(true);
+            this.commonParamsSymbolic.setBypassStandardLoading(true);
         }
-        this.commonParamsGuiding.setBypassStandardLoading(true); //this has no effect with JDI guidance (unfortunately introduces misalignments between the two)
+        this.commonParamsConcrete.setBypassStandardLoading(true); //this has no effect with JDI guidance (unfortunately introduces misalignments between the two)
 
         //2- disallow aliasing to static, pre-initial objects (too hard)
-        this.commonParamsGuided.setMakePreInitClassesSymbolic(false);
-        this.commonParamsGuiding.setMakePreInitClassesSymbolic(false);
+        this.commonParamsSymbolic.setMakePreInitClassesSymbolic(false);
+        this.commonParamsConcrete.setMakePreInitClassesSymbolic(false);
 
         //3- set the maximum length of arrays with simple representation
-        this.commonParamsGuided.setMaxSimpleArrayLength(o.getMaxSimpleArrayLength());
-        this.commonParamsGuiding.setMaxSimpleArrayLength(o.getMaxSimpleArrayLength());
+        this.commonParamsSymbolic.setMaxSimpleArrayLength(o.getMaxSimpleArrayLength());
+        this.commonParamsConcrete.setMaxSimpleArrayLength(o.getMaxSimpleArrayLength());
 
         //4- set the guiding method (to be executed concretely)
-        this.commonParamsGuiding.setMethodSignature(this.testCase.getClassName(), this.testCase.getMethodDescriptor(), this.testCase.getMethodName());
+        this.commonParamsConcrete.setMethodSignature(this.testCase.getClassName(), this.testCase.getMethodDescriptor(), this.testCase.getMethodName());
         
         //5- set the executions to execute the static initializer
-        this.commonParamsGuiding.addClassInvariantAfterInitializationPattern(".*");
-        this.commonParamsGuided.addClassInvariantAfterInitializationPattern(".*");
-    }
-
-    /**
-     * The {@link Actions} for the {@link Runner} that runs the guided symbolic execution
-     * up to the pre-frontier for a given depth.
-     * 
-     * @author Pietro Braione
-     *
-     */
-    private static class ActionsRunnerPreFrontier extends Actions {
-        private final DecisionProcedureGuidance guid;
-        private int testDepth = 0;
-        private boolean atJump = false;
-        private int jumpPC = 0;
-        private boolean atLoadConstant = false;
-        private int loadConstantStackSize = 0;
-        private final HashMap<Long, String> stringLiterals = new HashMap<>();
-        private final HashSet<Long> stringOthers = new HashSet<>();
-        private final HashSet<String> coverage = new HashSet<>();
-        private boolean contradictory = false;
-
-        public ActionsRunnerPreFrontier(DecisionProcedureGuidance guid) {
-            this.guid = guid;
-        }
-        
-        public void setTestDepth(int testDepth) {
-            this.testDepth = testDepth;
-        }
-
-        @Override
-        public boolean atInitial() {
-            if (this.testDepth == 0) {
-                return true;
-            } else {
-                return super.atInitial();
-            }
-        }
-
-        @Override
-        public boolean atStepPre() {
-            final State currentState = getEngine().getCurrentState();
-            if (currentState.phase() != Phase.PRE_INITIAL) {
-                try {
-                    final int currentProgramCounter = currentState.getCurrentProgramCounter();
-                    final byte currentInstruction = currentState.getInstruction();
-                    
-                    //if at entry of a method, add the entry point to coverage 
-                    if (currentProgramCounter == 0) {
-                        this.coverage.add(currentState.getCurrentMethodSignature().toString() + ":0:0");
-                    }
-
-                    //if at a jump bytecode, saves the start program counter
-                    this.atJump = bytecodeJump(currentInstruction);
-                    if (this.atJump) {
-                        this.jumpPC = currentProgramCounter;
-                    }
-
-                    //if at a load constant bytecode, saves the stack size
-                    this.atLoadConstant = bytecodeLoad(currentInstruction);
-                    if (this.atLoadConstant) {
-                        this.loadConstantStackSize = currentState.getStackSize();
-                    }
-                } catch (ThreadStackEmptyException | FrozenStateException e) {
-                    //this should never happen
-                    LOGGER.error("Internal error when attempting to inspect the state before bytecode instruction execution");
-                    LOGGER.error("Message: %s", e.toString());
-                    LOGGER.error("Stack trace:");
-                    for (StackTraceElement elem : e.getStackTrace()) {
-                        LOGGER.error("%s", elem.toString());
-                    }
-                    throw new RuntimeException(e); //TODO throw better exception
-                }
-            }
-            
-            //stops if at the pre-frontier
-            if (currentState.getDepth() == this.testDepth) {
-                return true;
-            } else {
-                return super.atStepPre();
-            }
-        }
-
-        @Override
-        public boolean atStepPost() {
-            final State currentState = getEngine().getCurrentState();
-
-            //steps guidance
-            try {
-                this.guid.step(currentState);
-            } catch (GuidanceException e) {
-                throw new RuntimeException(e); //TODO better exception!
-            }
-            
-            //manages jumps
-            if (currentState.phase() != Phase.PRE_INITIAL && this.atJump) {
-                try {
-                    this.coverage.add(currentState.getCurrentMethodSignature().toString() + ":" + this.jumpPC + ":" + currentState.getCurrentProgramCounter());
-                } catch (ThreadStackEmptyException e) {
-                    //this should never happen
-                    LOGGER.error("Internal error when attempting to update coverage");
-                    LOGGER.error("Message: %s", e.toString());
-                    LOGGER.error("Stack trace:");
-                    for (StackTraceElement elem : e.getStackTrace()) {
-                        LOGGER.error("%s", elem.toString());
-                    }
-                    throw new RuntimeException(e); //TODO throw better exception
-                }
-            }
-
-            //manages string literals (they might be useful to EvoSuite)
-            if (currentState.phase() != Phase.PRE_INITIAL && this.atLoadConstant) {
-                try {
-                    if (this.loadConstantStackSize == currentState.getStackSize()) {
-                        final Value operand = currentState.getCurrentFrame().operands(1)[0];
-                        if (operand instanceof Reference) {
-                            final Reference r = (Reference) operand;
-                            final Objekt o = currentState.getObject(r);
-                            if (o != null && JAVA_STRING.equals(o.getType().getClassName())) {
-                                final long heapPosition = (r instanceof ReferenceConcrete ? ((ReferenceConcrete) r).getHeapPosition() : currentState.getResolution((ReferenceSymbolic) r));
-                                final String s = valueString(currentState, r);
-                                if (s == null) {
-                                    this.stringOthers.add(heapPosition);
-                                } else {
-                                    this.stringLiterals.put(heapPosition, s);
-                                }
-                            } //TODO: constants for Integer, Float, Double ... boxed types; add generic stateful object graphs produced by pure methods
-                        }					
-                    }
-                } catch (FrozenStateException | InvalidNumberOfOperandsException | ThreadStackEmptyException e) {
-                    //this should never happen
-                    LOGGER.error("Internal error when attempting to manage String literals");
-                    LOGGER.error("Message: %s", e.toString());
-                    LOGGER.error("Stack trace:");
-                    for (StackTraceElement elem : e.getStackTrace()) {
-                        LOGGER.error("%s", elem.toString());
-                    }
-                    throw new RuntimeException(e); //TODO throw better exception
-                }
-            }
-
-            return super.atStepPost();
-        }
-
-        @Override
-        public boolean atPathEnd() {
-            if (this.testDepth < 0) { //running a test up to the end
-                return true;
-            } else {
-                return super.atPathEnd();
-            }
-        }
-        
-        @Override
-        public boolean atContradictionException(ContradictionException e) {
-            this.contradictory = true;
-            return true;
-        }
-    }
-
-    /**
-     * The {@link Actions} for the {@link Runner} that runs the guided symbolic execution
-     * to the post-frontier and gathers the post-frontier states.
-     * 
-     * @author Pietro Braione
-     *
-     */
-    private static class ActionsRunnerPostFrontier extends Actions {
-        private final HashMap<Long, String> stringLiteralsAtFrontier;
-        private final HashSet<Long> stringOthersAtFrontier;
-        private final ArrayList<State> stateList = new ArrayList<>();
-        private final ArrayList<HashMap<Long, String>> stringLiteralsList = new ArrayList<>();
-        private final ArrayList<HashSet<Long>> stringOthersList = new ArrayList<>();
-        private final ArrayList<String> branchList = new ArrayList<>();
-        private int testDepth;
-        private HashMap<Long, String> stringLiteralsCurrent;
-        private HashSet<Long> stringOthersCurrent;
-        private boolean firstPostFrontierToDo = true;
-        private boolean contradictory = false;
-        private boolean atJump = false;
-        private int jumpPC = 0;
-        private boolean atLoadConstant = false;
-        private int loadConstantStackSize = 0;
-
-        public ActionsRunnerPostFrontier(HashMap<Long, String> stringLiterals, HashSet<Long> stringOthers) { 
-            this.stringLiteralsAtFrontier = stringLiterals;
-            this.stringOthersAtFrontier = stringOthers;
-            this.stringLiteralsCurrent = new HashMap<>(this.stringLiteralsAtFrontier);
-            this.stringOthersCurrent = new HashSet<>(this.stringOthersAtFrontier);
-        }
-        
-        public void setTestDepth(int testDepth) {
-            this.testDepth = testDepth;
-        }
-
-        @Override
-        public boolean atStepPre() {
-            final State currentState = getEngine().getCurrentState();
-            if (currentState.phase() != Phase.PRE_INITIAL) {
-                try {
-                    final byte currentInstruction = currentState.getInstruction();
-
-                    //if at a jump bytecode, saves the start program counter
-                    this.atJump = bytecodeJump(currentInstruction);
-                    if (this.atJump) {
-                        this.jumpPC = currentState.getCurrentProgramCounter();
-                    }
-
-                    //if at a load constant bytecode, saves the stack size
-                    this.atLoadConstant = bytecodeLoad(currentInstruction);
-                    if (this.atLoadConstant) {
-                        this.loadConstantStackSize = currentState.getStackSize();
-                    }
-                } catch (ThreadStackEmptyException | FrozenStateException e) {
-                    //this should never happen
-                    LOGGER.error("Internal error when attempting to inspect the current bytecode instruction");
-                    LOGGER.error("Message: %s", e.toString());
-                    LOGGER.error("Stack trace:");
-                    for (StackTraceElement elem : e.getStackTrace()) {
-                        LOGGER.error("%s", elem.toString());
-                    }
-                    throw new RuntimeException(e); //TODO throw better exception
-                }
-            }
-            return super.atStepPre();
-        }
-
-        @Override
-        public boolean atStepPost() {
-            final State currentState = getEngine().getCurrentState();
-
-            //saves string constants
-            if (currentState.phase() != Phase.PRE_INITIAL && this.atLoadConstant) {
-                possiblySaveStringConstant(currentState);
-            }
-
-            if (currentState.getDepth() == this.testDepth + 1) {
-                //we are at a post-frontier state (including the first one)
-                recordState(currentState);
-                
-                //if some references were partially resolved adds states with expansion
-                //clauses in the path condition, hoping that EvoSuite will discover a
-                //concrete class for them
-                if (this.firstPostFrontierToDo && getEngine().someReferencePartiallyResolved()) {
-                    recordStatesForExpansion(currentState);
-                }
-                this.firstPostFrontierToDo = false;
-                
-                getEngine().stopCurrentPath();
-            }
-            
-            return super.atStepPost();
-        }
-
-        @Override
-        public boolean atBacktrackPost(BranchPoint bp) {
-            final State currentState = getEngine().getCurrentState();
-            if (currentState.getDepth() == this.testDepth + 1) {
-                //we are at a post-frontier state (excluding the first one)
-                recordState(currentState);
-                getEngine().stopCurrentPath();            
-                return super.atBacktrackPost(bp);
-            } else {
-                //we are at a lesser depth than testDepth + 1: no
-                //more post-frontier states
-                return true;
-            }
-        }
-        
-        @Override
-        public boolean atContradictionException(ContradictionException e) {
-            this.contradictory = true;
-            return false;
-        }
-        
-        private void recordState(State s) {
-            if (!this.contradictory) {
-                this.stateList.add(s.clone());
-                this.stringLiteralsList.add(this.stringLiteralsCurrent);
-                this.stringOthersList.add(this.stringOthersCurrent);
-                this.stringLiteralsCurrent = new HashMap<>(this.stringLiteralsAtFrontier);
-                this.stringOthersCurrent = new HashSet<>(this.stringOthersAtFrontier);
-                if (this.atJump) {
-                    try {
-                        this.branchList.add(s.getCurrentMethodSignature().toString() + ":" + this.jumpPC + ":" + s.getCurrentProgramCounter());
-                    } catch (ThreadStackEmptyException e) {
-                        //this should never happen
-                        throw new RuntimeException(e); //TODO better exception!
-                    }
-                } //else, do nothing
-            }
-            this.contradictory = false;
-        }
-        
-        private void possiblySaveStringConstant(State currentState) {
-            try {
-                if (this.loadConstantStackSize == currentState.getStackSize()) {
-                    final Value operand = currentState.getCurrentFrame().operands(1)[0];
-                    if (operand instanceof Reference) {
-                        final Reference r = (Reference) operand;
-                        final Objekt o = currentState.getObject(r);
-                        if (o != null && JAVA_STRING.equals(o.getType().getClassName())) {
-                            final long heapPosition = (r instanceof ReferenceConcrete ? ((ReferenceConcrete) r).getHeapPosition() : currentState.getResolution((ReferenceSymbolic) r));
-                            final String s = valueString(currentState, r);
-                            if (s == null) {
-                                this.stringOthersCurrent.add(heapPosition);
-                            } else {
-                                this.stringLiteralsCurrent.put(heapPosition, s);
-                            }
-                        } //TODO: constants for Integer, Float, Double ... boxed types; add generic stateful object graphs produced by pure methods
-                    }                                       
-                }
-            } catch (FrozenStateException | InvalidNumberOfOperandsException | ThreadStackEmptyException e) {
-                //this should never happen
-                LOGGER.error("Internal error when attempting to manage String literals");
-                LOGGER.error("Message: %s", e.toString());
-                LOGGER.error("Stack trace:");
-                for (StackTraceElement elem : e.getStackTrace()) {
-                    LOGGER.error("%s", elem.toString());
-                }
-                throw new RuntimeException(e); //TODO throw better exception
-            }
-        }
-        
-        private void recordStatesForExpansion(State currentState) {
-            final Engine engine = getEngine();
-            final Calculator calc = engine.getExecutionContext().getCalculator();
-            final ClassFile cfJAVA_OBJECT = currentState.getClassHierarchy().getClassFileClassArray(CLASSLOADER_BOOT, JAVA_OBJECT);
-            final List<ReferenceSymbolic> partiallyResolvedReferences = engine.getPartiallyResolvedReferences();
-            LOGGER.warn("Reference%s %s %s partially resolved, artificially generating constraints for attempting their expansion",
-            (partiallyResolvedReferences.size() == 1 ? "" : "s"),
-            String.join(", ", partiallyResolvedReferences.stream().map(ReferenceSymbolic::asOriginString).toArray(String[]::new)),
-            (partiallyResolvedReferences.size() == 1 ? "was" : "were"));
-            
-            for (ReferenceSymbolic partiallyResolvedReference : partiallyResolvedReferences) {
-                final State stateForExpansion = engine.getExecutionContext().getStateStart();
-                final int commonClauses = stateForExpansion.getPathCondition().size();
-                int currentClause = 0;
-                for (Clause c : currentState.getPathCondition()) {
-                    try {
-                        ++currentClause;
-                        if (currentClause <= commonClauses) {
-                            continue;
-                        }
-                        if (c instanceof ClauseAssumeReferenceSymbolic && 
-                        ((ClauseAssumeReferenceSymbolic) c).getReference().equals(partiallyResolvedReference)) {
-                            stateForExpansion.assumeExpands(calc, partiallyResolvedReference, cfJAVA_OBJECT);
-                        } else if (c instanceof ClauseAssume) {
-                            stateForExpansion.assume(((ClauseAssume) c).getCondition());
-                        } else if (c instanceof ClauseAssumeClassInitialized) {
-                            final ClauseAssumeClassInitialized cc = (ClauseAssumeClassInitialized) c;
-                            if (stateForExpansion.getKlass(cc.getClassFile()) == null) {
-                                stateForExpansion.ensureKlassSymbolic(calc, cc.getClassFile());
-                            }
-                            stateForExpansion.assumeClassInitialized(cc.getClassFile(), stateForExpansion.getKlass(cc.getClassFile()));
-                        } else if (c instanceof ClauseAssumeClassNotInitialized) {
-                            stateForExpansion.assumeClassNotInitialized(((ClauseAssumeClassNotInitialized) c).getClassFile());
-                        } else if (c instanceof ClauseAssumeNull) {
-                            stateForExpansion.assumeNull(((ClauseAssumeNull) c).getReference());
-                        } else if (c instanceof ClauseAssumeExpands) {
-                            final ClauseAssumeExpands cc = (ClauseAssumeExpands) c;
-                            stateForExpansion.assumeExpands(calc, cc.getReference(), cc.getObjekt().getType());
-                        } else if (c instanceof ClauseAssumeAliases) {
-                            final ClauseAssumeAliases cc = (ClauseAssumeAliases) c;
-                            stateForExpansion.assumeAliases(cc.getReference(), cc.getObjekt().getOrigin());
-                        }
-                    } catch (CannotAssumeSymbolicObjectException | InvalidInputException |
-                    ContradictionException e) {
-                        LOGGER.error("Internal error when attempting to artificially generate an expansion constraint");
-                        LOGGER.error("Message: %s", e.toString());
-                        LOGGER.error("Stack trace:");
-                        for (StackTraceElement elem : e.getStackTrace()) {
-                            LOGGER.error("%s", elem.toString());
-                        }
-                        throw new RuntimeException(e); //TODO throw better exception
-                    } catch (HeapMemoryExhaustedException e) {
-                        LOGGER.error("Symbolic execution heap memory exhausted when attempting to artificially generate an expansion constraint");
-                        throw new RuntimeException(e); //TODO throw better exception
-                    }
-                }
-                recordState(stateForExpansion);
-            }
-        }
+        this.commonParamsConcrete.addClassInvariantAfterInitializationPattern(".*");
+        this.commonParamsSymbolic.addClassInvariantAfterInitializationPattern(".*");
     }
 
     /**
@@ -596,12 +181,6 @@ final class RunnerPath implements AutoCloseable {
         return (endStates.size() == 0 ? null : endStates.get(0));
     }
     
-    private Runner runnerPreFrontier = null;
-    private ActionsRunnerPreFrontier actionsRunnerPreFrontier = null;
-    private Runner runnerPostFrontier = null;
-    private ActionsRunnerPostFrontier actionsRunnerPostFrontier = null;
-    private State preState = null;
-    
     /**
      * Performs symbolic execution of the target method guided by a test case 
      * up to some depth, then peeks the states on the next branch.  
@@ -632,30 +211,31 @@ final class RunnerPath implements AutoCloseable {
     ThreadStackEmptyException, ContradictionException, EngineStuckException, 
     FailureException {
         //runs up to the pre-frontier
-        if (this.runnerPreFrontier == null || this.runnerPreFrontier.getEngine().getCurrentState().getDepth() > testDepth) {
+        if (this.runnerPreFrontier == null || this.runnerPreFrontier.getCurrentState().getDepth() > testDepth) {
             makeRunnerPreFrontier();
         }
-        this.actionsRunnerPreFrontier.setTestDepth(testDepth);
+        this.runnerPreFrontier.setTestDepth(testDepth);
         this.runnerPreFrontier.run();
         
         if (testDepth < 0) {
             //there is no frontier, and the runnerPreFrontier's final
             //state is the final state of the guided execution: return it
             final ArrayList<State> retVal = new ArrayList<>();
-            if (!this.actionsRunnerPreFrontier.contradictory) {
-                final State finalState = this.runnerPreFrontier.getEngine().getCurrentState().clone();
+            if (!this.runnerPreFrontier.isContradictory()) {
+                final State finalState = this.runnerPreFrontier.getCurrentState().clone();
                 retVal.add(finalState);
             }
             return retVal;
         } else {
             //steps to all the post-frontier states and gathers them
+            this.statePreFrontier = this.runnerPreFrontier.getCurrentState().clone();
             makeRunnerPostFrontier();
-            if (this.preState.isStuck()) {
+            if (this.runnerPostFrontier == null) {
                 return new ArrayList<>();
             } else {
-                this.actionsRunnerPostFrontier.setTestDepth(testDepth);
+                this.runnerPostFrontier.setTestDepth(testDepth);
                 this.runnerPostFrontier.run();
-                return this.actionsRunnerPostFrontier.stateList;
+                return this.runnerPostFrontier.getStatesPostFrontier();
             }
         }
     }
@@ -664,70 +244,58 @@ final class RunnerPath implements AutoCloseable {
     CannotBuildEngineException, InitializationException, InvalidClassFileFactoryClassException, 
     NonexistingObservedVariablesException, ClasspathException, ContradictionException {
         //builds the parameters
-        final RunnerParameters pGuided = this.commonParamsGuided.clone();
-        final RunnerParameters pGuiding = this.commonParamsGuiding.clone();
-        completeParameters(pGuided, pGuiding);
+        final RunnerParameters pSymbolic = this.commonParamsSymbolic.clone();
+        final RunnerParameters pConcrete = this.commonParamsConcrete.clone();
+        completeParametersGuided(pSymbolic, pConcrete);
         
-        //builds the actions
-        this.actionsRunnerPreFrontier = new ActionsRunnerPreFrontier((DecisionProcedureGuidance) pGuided.getDecisionProcedure());
-        pGuided.setActions(this.actionsRunnerPreFrontier);
-
         //builds the runner
-        final RunnerBuilder rb = new RunnerBuilder();
-        this.runnerPreFrontier = rb.build(pGuided);
+        this.runnerPreFrontier = new RunnerPreFrontier(pSymbolic);
     }
     
     private void makeRunnerPostFrontier() throws DecisionException, NotYetImplementedException, 
     CannotBuildEngineException, InitializationException, InvalidClassFileFactoryClassException, 
     NonexistingObservedVariablesException, ClasspathException, ContradictionException {
-        //builds the parameters
-        final RunnerParameters pSymbolic = this.commonParamsGuided.clone();
-        completeParametersSymbolic(pSymbolic);
-        
         //gets the pre-frontier state and sets it as the initial
         //state of the post-frontier runner
-        this.preState = this.runnerPreFrontier.getEngine().getCurrentState().clone();
-        if (this.preState.isStuck()) {
+        if (this.statePreFrontier.isStuck()) {
             //degenerate case: execution ended before or at the pre-frontier
             this.runnerPostFrontier = null;
         } else { 
-            pSymbolic.setStartingState(this.preState);
-
-            //builds the actions
-            this.actionsRunnerPostFrontier = new ActionsRunnerPostFrontier(this.actionsRunnerPreFrontier.stringLiterals, this.actionsRunnerPreFrontier.stringOthers);
-            pSymbolic.setActions(this.actionsRunnerPostFrontier);
+            //builds the parameters
+            final RunnerParameters pSymbolic = this.commonParamsSymbolic.clone();
+            completeParametersSymbolic(pSymbolic);            
+            pSymbolic.setStartingState(this.statePreFrontier);
 
             //builds the runner
-            final RunnerBuilder rb = new RunnerBuilder();
-            this.runnerPostFrontier = rb.build(pSymbolic);
+            this.runnerPostFrontier = new RunnerPostFrontier(pSymbolic, this.runnerPreFrontier.getStringLiterals(), this.runnerPreFrontier.getStringOthers());
         }
     }
 
     private void completeParametersConcrete(RunnerParameters pConcrete) throws DecisionException {
-        completeParameters(null, pConcrete);
+        completeParametersGuided(null, pConcrete);
     }
 
     private void completeParametersSymbolic(RunnerParameters pSymbolic) throws DecisionException {
-        completeParameters(pSymbolic, null);
+        completeParametersGuided(pSymbolic, null);
     }
 
-    private void completeParameters(RunnerParameters pGuided, RunnerParameters pGuiding) throws DecisionException {
+    private void completeParametersGuided(RunnerParameters pSymbolic, RunnerParameters pConcrete) throws DecisionException {
         //sets the calculator
         final CalculatorRewriting calc = new CalculatorRewriting();
         calc.addRewriter(new RewriterExpressionOrConversionOnSimplex());
         calc.addRewriter(new RewriterFunctionApplicationOnSimplex());
         calc.addRewriter(new RewriterZeroUnit());
         calc.addRewriter(new RewriterNegationElimination());
-        if (pGuiding == null) {
+        if (pConcrete == null) {
             //nothing
         } else {
-            pGuiding.setCalculator(calc);
+            pConcrete.setCalculator(calc);
         }
-        if (pGuided == null) {
+        if (pSymbolic == null) {
             //nothing
         } else {
-            pGuided.setCalculator(calc);
-            pGuided.setUseHashMapModel(true);
+            pSymbolic.setCalculator(calc);
+            pSymbolic.setUseHashMapModel(true);
         }
 
         //sets the decision procedures
@@ -738,16 +306,16 @@ final class RunnerPath implements AutoCloseable {
         z3CommandLine.add(SWITCH_CHAR + "t:10");
         final ClassInitRulesRepo initRules = new ClassInitRulesRepo();
         try {
-            if (pGuiding == null) {
+            if (pConcrete == null) {
                 //nothing
             } else {
                 final DecisionProcedureAlgorithms decGuiding = 
                     new DecisionProcedureAlgorithms(
                         new DecisionProcedureClassInit(
                             new DecisionProcedureAlwSat(calc), initRules));
-                pGuiding.setDecisionProcedure(decGuiding);
+                pConcrete.setDecisionProcedure(decGuiding);
             }
-            if (pGuided == null) {
+            if (pSymbolic == null) {
                 //nothing
             } else {
                 final DecisionProcedureAlgorithms decAlgo = 
@@ -757,13 +325,13 @@ final class RunnerPath implements AutoCloseable {
                                 new DecisionProcedureSMTLIB2_AUFNIRA(
                                     new DecisionProcedureAlwSat(calc), z3CommandLine), 
                                 new LICSRulesRepo()), initRules)); 
-                if (pGuiding == null) {
-                    pGuided.setDecisionProcedure(decAlgo);
+                if (pConcrete == null) {
+                    pSymbolic.setDecisionProcedure(decAlgo);
                 } else {
-                    final Signature stopSignature = (pGuided.getMethodSignature() == null ? pGuided.getStartingState().getRootMethodSignature() : pGuided.getMethodSignature());
+                    final Signature stopSignature = (pSymbolic.getMethodSignature() == null ? pSymbolic.getStartingState().getRootMethodSignature() : pSymbolic.getMethodSignature());
                     final DecisionProcedureGuidanceJDI decGuided = 
-                        new DecisionProcedureGuidanceJDI(decAlgo, calc, pGuiding, stopSignature, this.numberOfHits);
-                    pGuided.setDecisionProcedure(decGuided);
+                        new DecisionProcedureGuidanceJDI(decAlgo, calc, pConcrete, stopSignature, this.numberOfHits);
+                    pSymbolic.setDecisionProcedure(decGuided);
                 }
             }
         } catch (InvalidInputException | ThreadStackEmptyException e) {
@@ -776,36 +344,44 @@ final class RunnerPath implements AutoCloseable {
     throws CannotBuildEngineException, DecisionException, InitializationException, InvalidClassFileFactoryClassException, 
     NonexistingObservedVariablesException, ClasspathException, ContradictionException, CannotBacktrackException, 
     CannotManageStateException, ThreadStackEmptyException, EngineStuckException, FailureException {
-        final RunnerParameters pConcrete = this.commonParamsGuiding.clone();
+        final RunnerParameters pConcrete = this.commonParamsConcrete.clone();
         completeParametersConcrete(pConcrete);        
         return countNonRecursiveHits(pConcrete, new Signature(methodClassName, methodDescriptor, methodName));
     }
 
     /**
-     * Must be invoked after an invocation of {@link #runProgram(int) runProgram(depth)}.
+     * Must be invoked after an invocation of {@link #runProgram(int) runProgram(depth)} or
+     * {@link #runProgram()}.
      * Returns the initial state of symbolic execution.
      * 
      * @return a {@link State} or {@code null} if this method is invoked
      *         before an invocation of {@link #runProgram(int)}.
      */
     public State getInitialState() {
-        State retVal = this.commonParamsGuided.getStartingState();
+        State retVal = this.commonParamsSymbolic.getStartingState();
         if (retVal == null) {
-            retVal = this.runnerPreFrontier.getEngine().getInitialState();
-            this.commonParamsGuided.setStartingState(retVal);
+        	if (this.runnerPreFrontier == null) {
+        		retVal = null;
+        	} else {
+        		retVal = this.runnerPreFrontier.getInitialState();
+        		this.commonParamsSymbolic.setStartingState(retVal);
+        	}
         }
         return retVal;
     }
 
     /**
      * Must be invoked after an invocation of {@link #runProgram(int) runProgram(depth)}.
-     * Returns the state of symbolic execution at depth {@code depth}.
+     * Returns the pre-frontier state of symbolic execution, i.e., the state at depth 
+     * {@code depth}.
      * 
-     * @return a {@link State} or {@code null} if this method is invoked
-     *         before an invocation of {@link #runProgram(int)}.
+     * @return a {@link State}. If this method is invoked
+     *         before an invocation of {@link #runProgram(int)},
+     *         or if the execution does not reach the frontier,
+     *         returns {@code null}.
      */
-    public State getPreState() {
-        return this.preState;
+    public State getStatePreFrontier() {
+        return this.statePreFrontier;
     }
 
     /**
@@ -813,75 +389,92 @@ final class RunnerPath implements AutoCloseable {
      * Returns whether the frontier is at a jump bytecode.
      * 
      * @return a {@code boolean}. If this method is invoked
-     *         before an invocation of {@link #runProgram(int)}
-     *         always returns {@code false}.
+     *         before an invocation of {@link #runProgram(int)}, 
+     *         or if the execution does not reach the frontier,
+     *         returns {@code false}.
      */
     public boolean getAtJump() {
-        return this.actionsRunnerPostFrontier.atJump;
+        return (this.runnerPostFrontier == null ? false : this.runnerPostFrontier.atJump());
     }
 
     /**
      * Must be invoked after an invocation of {@link #runProgram(int) runProgram(depth)}.
-     * Returns the branches that the states at depth {@code depth + 1} cover.
+     * Returns the branches covered by the post-frontier states, i.e., the states at depth {@code depth + 1}.
      * 
      * @return a {@link List}{@code <}{@link String}{@code >} if {@link #getAtJump() getAtJump}{@code () == true}. 
      *         In this case {@code getTargetBranches().}{@link List#get(int) get}{@code (i)} is the branch
      *         covered by the {@code i}-th state in the list returned by {@link #runProgram(int) runProgram(depth)}.
      *         If  {@link #getAtJump() getAtJump}{@code () == false}, or if the method is
-     *         invoked before an invocation of {@link #runProgram(int)}, returns {@code null}.
+     *         invoked before an invocation of {@link #runProgram(int)}, 
+     *         or if the execution does not reach the frontier,
+     *         returns an empty {@link List}.
      */
     public List<String> getBranchesPostFrontier() {
-        return this.actionsRunnerPostFrontier.branchList;
+        return (this.runnerPostFrontier == null ? Collections.emptyList() : this.runnerPostFrontier.getBranchesPostFrontier());
     }
 
     /**
-     * Must be invoked after an invocation of {@link #runProgram(TestCase, int) runProgram(tc, depth)}.
+     * Must be invoked after an invocation of {@link #runProgram(int) runProgram(depth)}.
      * Returns the string literals of the execution.
      * 
      * @return a {@link List}{@code <? extends }{@link Map}{@code <}{@link Long}{@code , }{@link String}{@code >}{@code >}. 
      *         Each element in the list maps a heap position of a {@link String} literal to the
      *         corresponding value of the literal. The i-th element in the list
-     *         is for the i-th state returned by {@link #runProgram(TestCase, int)}. 
+     *         is for the i-th state returned by {@link #runProgram(int)}. 
      *         If this method is invoked
-     *         before an invocation of {@link #runProgram(TestCase, int)}
-     *         always returns {@code null}.
+     *         before an invocation of {@link #runProgram(int)}  or
+     *         {@link #runProgram()},
+     *         or if the execution does not reach the frontier,
+     *         returns an empty {@link List}.
      */
     public List<? extends Map<Long, String>> getStringLiterals() {
-        return this.actionsRunnerPostFrontier.stringLiteralsList;
+        return (this.runnerPostFrontier == null ? Collections.emptyList() : this.runnerPostFrontier.getStringLiterals());
     }
 
     /**
-     * Must be invoked after an invocation of {@link #runProgram(TestCase, int) runProgram(tc, depth)}.
+     * Must be invoked after an invocation of {@link #runProgram(int) runProgram(depth)}.
      * Returns the (nonconstant) strings of the execution.
      * 
      * @return a {@link List}{@code <? extends }{@link Set}{@code <}{@link Long}{@code >}{@code >}{@code >}.
      *         Each element in the list contains all the heap positions of the 
      *         (nonconstant) {@link String} objects in the heap. The i-th element
-     *         in the list is for the i-th state returned by {@link #runProgram(TestCase, int)}. 
+     *         in the list is for the i-th state returned by {@link #runProgram(int)}. 
      *         If this method is invoked
-     *         before an invocation of {@link #runProgram(TestCase, int)}
-     *         always returns {@code null}.
+     *         before an invocation of {@link #runProgram(int)} or
+     *         {@link #runProgram()},
+     *         or if the execution does not reach the frontier,
+     *         returns an empty {@link List}.
      */
     public List<? extends Set<Long>> getStringOthers() {
-        return this.actionsRunnerPostFrontier.stringOthersList;
+        return (this.runnerPostFrontier == null ? Collections.emptyList() : this.runnerPostFrontier.getStringOthers());
     }
 
     /**
-     * Must be invoked after an invocation of {@link #runProgram(TestCase, int) runProgram(tc, depth)}.
+     * Must be invoked after an invocation of {@link #runProgram(Testint) runProgram(depth)}.
      * Returns the code branches covered by the execution.
      * 
-     * @return a {@link HashSet}{@code <}{@link String}{@code >} where each {@link String} has the form
-     *         className:methodDescriptor:methodName:bytecodeFrom:bytecodeTo, or {@code null} if this method is invoked
-     *         before an invocation of {@link #runProgram(TestCase, int)}.
+     * @return a {@link Set}{@code <}{@link String}{@code >} where each {@link String} has the form
+     *         className:methodDescriptor:methodName:bytecodeFrom:bytecodeTo. If this method is invoked
+     *         before an invocation of {@link #runProgram(int)} or
+     *         {@link #runProgram()},
+     *         or if the execution does not reach the frontier,
+     *         returns an empty {@link Set}.
      */
-    public HashSet<String> getCoverage() {
-        return this.actionsRunnerPreFrontier.coverage;
+    public Set<String> getCoverage() {
+    	final HashSet<String> retVal = (this.runnerPreFrontier == null ? new HashSet<>() : new HashSet<>(this.runnerPreFrontier.getCoverage()));
+    	if (this.runnerPostFrontier != null) {
+    		retVal.addAll(this.runnerPostFrontier.getCoverage());
+    	}
+    	return retVal;
     }
 
     @Override
     public void close() throws DecisionException {
         if (this.runnerPreFrontier != null) {
-            this.runnerPreFrontier.getEngine().close();
+            this.runnerPreFrontier.close();
+        }
+        if (this.runnerPostFrontier != null) {
+            this.runnerPostFrontier.close();
         }
     }
 }

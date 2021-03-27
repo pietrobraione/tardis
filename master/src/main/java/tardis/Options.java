@@ -81,7 +81,7 @@ public final class Options implements Cloneable {
     private int numOfThreadsJBSE = 1;
 
     @Option(name = "-num_threads_evosuite",
-    usage = "The number of threads in the EvoSuite thread pool")
+            usage = "The number of threads in the EvoSuite thread pool")
     private int numOfThreadsEvosuite = 1;
 
     @Option(name = "-throttle_factor_jbse",
@@ -124,8 +124,8 @@ public final class Options implements Cloneable {
     private Path jbsePath = Paths.get(".", "lib", "jbse.jar");
 
     @Option(name = "-java8_home",
-    usage = "Home of a Java 8 JDK setup, necessary to EvoSuite",
-    handler = PathOptionHandler.class)
+            usage = "Home of a Java 8 JDK setup, necessary to EvoSuite",
+            handler = PathOptionHandler.class)
     private Path java8Home;
 
     @Option(name = "-evosuite",
@@ -190,19 +190,27 @@ public final class Options implements Cloneable {
     
     @Option(name = "-use_improvability_index",
             usage = "Whether to use the improvability index for path conditions selection in the JBSEResultInputOutputBuffer")
-    private boolean useImprovabilityIndex = true;
+    private boolean useIndexImprovability = true;
     
+    @Option(name = "-improvability_index_branch_pattern",
+            usage = "A regular expression specifying the branches that must be considered for the calculation of the improvability index")
+    private String indexImprovabilityBranchPattern = null;
+
     @Option(name = "-use_novelty_index",
             usage = "Whether to use the novelty index for path conditions selection in the JBSEResultInputOutputBuffer")
-    private boolean useNoveltyIndex = true;
+    private boolean useIndexNovelty = true;
     
+    @Option(name = "-novelty_index_branch_pattern",
+            usage = "A regular expression specifying the branches that must be considered for the calculation of the novelty index")
+    private String indexNoveltyBranchPattern = null;
+
     @Option(name = "-use_infeasibility_index",
             usage = "Whether to use the infeasibility index for path conditions selection in the JBSEResultInputOutputBuffer")
-    private boolean useInfeasibilityIndex = true;
+    private boolean useIndexInfeasibility = true;
     
     @Option(name = "-infeasibility_index_threshold",
             usage = "The minimum size of the training set necessary for retraining.")
-    private int infeasibilityIndexThreshold = 200;
+    private int indexInfeasibilityThreshold = 200;
 
     public boolean getHelp() {
         return this.help;
@@ -254,7 +262,23 @@ public final class Options implements Cloneable {
         this.targetClassName = targetClassName;
         this.targetMethodSignature = null;
     }
-
+    
+    private static String toPattern(String s) {
+        return s
+        .replace("(", "\\(")
+        .replace(")", "\\)")
+        .replace("[", "\\[")
+        .replace("$", "\\$");
+    }
+    
+    public String patternBranchesTarget() {
+        return (getTargetClass() == null) ? (toPattern(getTargetMethod().get(0)) + ":" + toPattern(getTargetMethod().get(1)) + ":" + toPattern(getTargetMethod().get(2)) + ":.*:.*") : (toPattern(getTargetClass()) + "(\\$.*)*:.*:.*:.*:.*");
+    }
+    
+    public String patternBranchesUnsafe() {
+        return "jbse/meta/Analysis:\\(Z\\)V:ass3rt:1:4"; //TODO find a more robust way
+    }
+    
     public Visibility getVisibility() {
         return this.visibility;
     }
@@ -490,36 +514,52 @@ public final class Options implements Cloneable {
         this.globalTimeBudgetDuration = globalTimeBudgetDuration;
     }
     
-    public boolean getUseImprovabilityIndex() {
-        return this.useImprovabilityIndex;
+    public boolean getUseIndexImprovability() {
+        return this.useIndexImprovability;
     }
     
-    public void setUseImprovabilityIndex(boolean useImprovabilityIndex) {
-        this.useImprovabilityIndex = useImprovabilityIndex;
+    public void setUseIndexImprovability(boolean useIndexImprovability) {
+        this.useIndexImprovability = useIndexImprovability;
     }
     
-    public boolean getUseNoveltyIndex() {
-        return this.useNoveltyIndex;
+    public String getIndexImprovabilityBranchPattern() {
+    	return this.indexImprovabilityBranchPattern;
     }
     
-    public void setUseNoveltyIndex(boolean useNoveltyIndex) {
-        this.useNoveltyIndex = useNoveltyIndex;
+    public void setIndexImprovabilityBranchPattern(String indexImprovabilityBranchPattern) {
+    	this.indexImprovabilityBranchPattern = indexImprovabilityBranchPattern;
     }
     
-    public boolean getUseInfeasibilityIndex() {
-        return this.useInfeasibilityIndex;
+    public boolean getUseIndexNovelty() {
+        return this.useIndexNovelty;
     }
     
-    public void setUseInfeasibilityIndex(boolean useInfeasibilityIndex) {
-        this.useInfeasibilityIndex = useInfeasibilityIndex;
+    public void setUseIndexNovelty(boolean useIndexNovelty) {
+        this.useIndexNovelty = useIndexNovelty;
     }
     
-    public int getInfeasibilityIndexThreshold() {
-        return this.infeasibilityIndexThreshold;
+    public String getIndexNoveltyBranchPattern() {
+    	return this.indexNoveltyBranchPattern;
     }
     
-    public void setInfeasibilityIndexThreshold(int infeasibilityIndexThreshold) {
-        this.infeasibilityIndexThreshold = infeasibilityIndexThreshold;
+    public void setIndexNoveltyBranchPattern(String indexNoveltyBranchPattern) {
+    	this.indexNoveltyBranchPattern = indexNoveltyBranchPattern;
+    }
+    
+    public boolean getUseIndexInfeasibility() {
+        return this.useIndexInfeasibility;
+    }
+    
+    public void setUseIndexInfeasibility(boolean useInfeasibilityIndex) {
+        this.useIndexInfeasibility = useInfeasibilityIndex;
+    }
+    
+    public int getIndexInfeasibilityThreshold() {
+        return this.indexInfeasibilityThreshold;
+    }
+    
+    public void setIndexInfeasibilityThreshold(int indexInfeasibilityThreshold) {
+        this.indexInfeasibilityThreshold = indexInfeasibilityThreshold;
     }
 
     public TimeUnit getGlobalTimeBudgetUnit() {

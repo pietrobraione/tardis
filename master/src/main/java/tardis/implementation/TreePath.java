@@ -1,13 +1,13 @@
 package tardis.implementation;
 
+import static tardis.implementation.Util.filterOnPattern;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import jbse.mem.Clause;
@@ -175,8 +175,7 @@ public final class TreePath {
      *         branches matching {@code pattern}.
      */
     synchronized int totalCovered(String pattern) {
-        final Pattern p = Pattern.compile(pattern); 
-        final Set<String> filtered = this.coverage.stream().filter(s -> { final Matcher m = p.matcher(s); return m.matches(); }).collect(Collectors.toSet());
+    	final Set<String> filtered = filterOnPattern(this.coverage, pattern);
         return filtered.size();
     }
 
@@ -474,7 +473,7 @@ public final class TreePath {
      */
     synchronized Set<String> getNeighborFrontierBranches(List<Clause> path) {
         final Node nodePath = findNode(path);
-        return (nodePath == null ? null : nodePath.neighborFrontierBranches);
+        return (nodePath == null ? null : new HashSet<>(nodePath.neighborFrontierBranches)); //safety copy
     }
 
     /**
@@ -488,10 +487,10 @@ public final class TreePath {
      *        the covered branches. 
      */
     synchronized void clearNeighborFrontierBranches(List<Clause> path, Set<String> coveredBranches) {
-        final Set<String> branches = getNeighborFrontierBranches(path);
-        if (branches == null) {
+        final Node nodePath = findNode(path);
+        if (nodePath == null) {
             return;
         }
-        branches.removeAll(coveredBranches);
+        nodePath.neighborFrontierBranches.removeAll(coveredBranches);
     }
 }

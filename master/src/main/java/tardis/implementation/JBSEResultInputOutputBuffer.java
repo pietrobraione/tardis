@@ -1,8 +1,11 @@
 package tardis.implementation;
 
+import static tardis.implementation.Util.filterOnPattern;
+
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -10,6 +13,8 @@ import java.util.Set;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import jbse.mem.Clause;
 import tardis.Options;
@@ -26,47 +31,166 @@ import tardis.implementation.ClassifierKNN.ClassificationResult;
  * @param <E> the type of the items stored in the buffer.
  */
 public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult>, OutputBuffer<JBSEResult> {
-    private static int[] INDEX_VALUES;
-    private static int[] PROBABILITY_VALUES;
-    
     /** The maximum value for the index of improvability. */
     private static final int INDEX_IMPROVABILITY_MAX = 10;
+    
+    /** The minimum value for the index of novelty. */
+    private static final int INDEX_NOVELTY_MIN = 0;
     
     /** The maximum value for the index of novelty. */
     private static final int INDEX_NOVELTY_MAX = 10;
     
+    /** 
+     * The queue numbers, from the best to the worst.
+     * This is the case where zero indices are active. 
+     */
+    private static final int[] QUEUE_RANKING_0_INDICES = {0};
+    
+    /** 
+     * The queue numbers, from the best to the worst.
+     * This is the case where the only active index is 
+     * the improvability one. 
+     */
+    private static final int[] QUEUE_RANKING_1_INDEX_IMPROVABILITY = {10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0};
+    
+    /** 
+     * The queue numbers, from the best to the worst.
+     * This is the case where the only active index is 
+     * the novelty one. 
+     */
+    private static final int[] QUEUE_RANKING_1_INDEX_NOVELTY = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+    
+    /** 
+     * The queue numbers, from the best to the worst.
+     * This is the case where the only active index is 
+     * the infeasibility one. 
+     */
+    private static final int[] QUEUE_RANKING_1_INDEX_INFEASIBILITY = {3, 2, 1, 0};
+    
+    /** 
+     * The queue numbers, from the best to the worst.
+     * This is the case where two indices are active. 
+     */
+    private static final int[] QUEUE_RANKING_2_INDICES = {2, 1, 0};
+    
+    /** 
+     * The queue numbers, from the best to the worst.
+     * This is the case where three indices are active. 
+     */
+    private static final int[] QUEUE_RANKING_3_INDICES = {3, 2, 1, 0};
+    
+    /**
+     * The probabilities of choice for each queue.
+     * This is the case where zero indices are active. 
+     */
+    private static final int[] QUEUE_PROBABILITIES_0_INDICES = {100};
+    
+    /**
+     * The probabilities of choice for each queue.
+     * This is the case where the only active index is 
+     * the improvability one. 
+     */
+    private static final int[] QUEUE_PROBABILITIES_1_INDEX_IMPROVABILITY = {50, 12, 9, 7, 6, 5, 4, 3, 2, 1, 1};
+    
+    /**
+     * The probabilities of choice for each queue.
+     * This is the case where the only active index is 
+     * the novelty one. 
+     */
+    private static final int[] QUEUE_PROBABILITIES_1_INDEX_NOVELTY = {50, 12, 9, 7, 6, 5, 4, 3, 2, 1, 1};
+    
+    /**
+     * The probabilities of choice for each queue.
+     * This is the case where the only active index is 
+     * the infeasibility one. 
+     */
+    private static final int[] QUEUE_PROBABILITIES_1_INDEX_INFEASIBILITY = {50, 30, 15, 5};
+    
+    /**
+     * The probabilities of choice for each queue.
+     * This is the case where two indices are active. 
+     */
+    private static final int[] QUEUE_PROBABILITIES_2_INDICES = {60, 30, 10};
+    
+    /**
+     * The probabilities of choice for each queue.
+     * This is the case where three indices are active. 
+     */
+    private static final int[] QUEUE_PROBABILITIES_3_INDICES = {50, 30, 15, 5};
+    
     /** The K value for the KNN classifier. */
     private static final int K = 3;
-    
-    /** The minimum size of the training set necessary for retraining. */
-    private static int TRAINING_SET_MINIMUM_THRESHOLD;
-
-    /** The queues where the {@link JBSEResult}s are stored. */
-    private final HashMap<Integer, LinkedBlockingQueue<JBSEResult>> queues = new HashMap<>();
     
     /** The KNN classifier used to calculate the infeasibility index. */
     private final ClassifierKNN classifier = new ClassifierKNN(K);
 
-    /** Buffers the next training set for the KNN classifier. */
-    private final HashSet<TrainingItem> trainingSet = new HashSet<>();
-    
     /** Buffers the next covered branches for the improvability index. */
     private final HashSet<String> coverageSetImprovability = new HashSet<>();
     
     /** Buffers the next covered branches for the novelty index. */
     private final HashSet<String> coverageSetNovelty = new HashSet<>();
     
+    /** 
+     * {@code true} iff this buffer shall use the improvability index to
+     * rank {@link JBSEResult}s.
+     */
+    private final boolean useIndexImprovability;
+    
+    /** 
+     * {@code true} iff this buffer shall use the novelty index to
+     * rank {@link JBSEResult}s.
+     */
+    private final boolean useIndexNovelty;
+    
+    /** 
+     * {@code true} iff this buffer shall use the infeasibility index to
+     * rank {@link JBSEResult}s.
+     */
+    private final boolean useIndexInfeasibility;
+    
+    /** 
+     * The pattern of the branches that shall be considered for the improvability
+     * index calculation.
+     */
+    private final String patternBranchesImprovability;
+    
+    /** 
+     * The pattern of the branches that shall be considered for the novelty
+     * index calculation.
+     */
+    private final String patternBranchesNovelty;
+    
+    /** The order of the queues, from the most desirable to the least one. */
+    private final int[] queueRanking;
+
+    /** The probability of choosing a queue (ranges from 0 to 100). */
+    private final int[] queueProbabilities;
+    
+    /** The minimum size of the training set necessary for resorting the queues. */
+    private final int trainingSetMinimumThreshold;
+
+    /** The queues where the {@link JBSEResult}s are stored. */
+    private final HashMap<Integer, LinkedBlockingQueue<JBSEResult>> queues = new HashMap<>();
+    
     /** The {@link TreePath} used to store information about the path conditions. */
     private final TreePath treePath;
     
-    private final Options o;
-
+    /** 
+     * The number of training samples learned by the KNN classifier since
+     * the last reclassification of the queues items
+     */
+    private int trainingSetSize = 0;
+    
     public JBSEResultInputOutputBuffer(TreePath treePath, Options o) {
-    	this.o = o;
-    	INDEX_VALUES = setBuffer(true);
-    	PROBABILITY_VALUES = setBuffer(false);
-    	TRAINING_SET_MINIMUM_THRESHOLD = this.o.getInfeasibilityIndexThreshold();
-        for (int i = 0; i < INDEX_VALUES.length; ++i) {
+    	this.useIndexImprovability = o.getUseIndexImprovability();
+    	this.useIndexNovelty = o.getUseIndexNovelty();
+    	this.useIndexInfeasibility = o.getUseIndexInfeasibility();
+    	this.patternBranchesImprovability = (o.getIndexImprovabilityBranchPattern() == null ? o.patternBranchesTarget() : o.getIndexImprovabilityBranchPattern());
+    	this.patternBranchesNovelty = (o.getIndexNoveltyBranchPattern() == null ? o.patternBranchesTarget() : o.getIndexNoveltyBranchPattern());
+    	this.queueRanking = queueRanking();
+    	this.queueProbabilities = queueProbabilities();
+    	this.trainingSetMinimumThreshold = o.getIndexInfeasibilityThreshold();
+        for (int i = 0; i < queueRanking.length; ++i) {
             this.queues.put(i, new LinkedBlockingQueue<>());
         }
         this.treePath = treePath;
@@ -75,18 +199,18 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
     @Override
     public synchronized boolean add(JBSEResult item) {
         final List<Clause> path = item.getFinalState().getPathCondition();
-        if (this.o.getUseImprovabilityIndex()) {
+        if (this.useIndexImprovability) {
         	updateIndexImprovability(path);
         }
-        if (this.o.getUseNoveltyIndex()) {
+        if (this.useIndexNovelty) {
         	updateIndexNovelty(path);
         }
-        if (this.o.getUseInfeasibilityIndex()) {
+        if (this.useIndexInfeasibility) {
         	updateIndexInfeasibility(path);
         }
         final int queueNumber = calculateQueueNumber(path);
-        final LinkedBlockingQueue<JBSEResult> queueInMap = this.queues.get(queueNumber);
-        return queueInMap.add(item);
+        final LinkedBlockingQueue<JBSEResult> queue = this.queues.get(queueNumber);
+        return queue.add(item);
     }
 
     @Override
@@ -97,15 +221,15 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
         int sum = 0;
         int j = 0;
         do {
-            sum += PROBABILITY_VALUES[j++];
-        } while (sum < randomValue && j < INDEX_VALUES.length);
+            sum += this.queueProbabilities[j++];
+        } while (sum < randomValue && j < this.queueRanking.length);
         
         //assert (0 < j && j <= INDEX_VALUES.length)
 
         synchronized (this) {
             //extracts the item
-            for (int i = j - 1; i < INDEX_VALUES.length; ++i) {
-                final LinkedBlockingQueue<JBSEResult> queue = this.queues.get(INDEX_VALUES[i]);
+            for (int i = j - 1; i < this.queueRanking.length; ++i) {
+                final LinkedBlockingQueue<JBSEResult> queue = this.queues.get(this.queueRanking[i]);
                 //selects the next queue if the extracted queue is empty
                 if (queue.isEmpty()) {
                     continue;
@@ -114,7 +238,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
             }
             //last chance to extract
             for (int i = j - 2; i >= 0; --i) {
-                final LinkedBlockingQueue<JBSEResult> queue = this.queues.get(INDEX_VALUES[i]);
+                final LinkedBlockingQueue<JBSEResult> queue = this.queues.get(this.queueRanking[i]);
                 //selects the next queue if the extracted queue is empty
                 if (queue.isEmpty()) {
                     continue;
@@ -142,21 +266,23 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
      * Used to recalculate the improvability index.
      * 
      * @param newCoveredBranches a {@link Set}{@code <}{@link String}{@code >},
-     *        the covered branches.
+     *        the newly covered (i.e., not previously covered) branches.
      */
-    synchronized void learnCoverageForImprovabilityIndex(Set<String> newCoveredBranches) {
-        this.coverageSetImprovability.addAll(newCoveredBranches);
+    synchronized void learnCoverageForIndexImprovability(Set<String> newCoveredBranches) {
+    	final Set<String> filtered = filterOnPattern(newCoveredBranches, this.patternBranchesImprovability);
+        this.coverageSetImprovability.addAll(filtered);
     }
     
     /**
      * Caches the fact that a set of branches was covered.
      * Used to recalculate the novelty index.
      * 
-     * @param newCoveredBranches a {@link Set}{@code <}{@link String}{@code >},
+     * @param coveredBranches a {@link Set}{@code <}{@link String}{@code >},
      *        the covered branches.
      */
-    synchronized void learnCoverageForNoveltyIndex(Set<String> newCoveredBranches) {
-        this.coverageSetNovelty.addAll(newCoveredBranches);
+    synchronized void learnCoverageForIndexNovelty(Set<String> coveredBranches) {
+    	final Set<String> filtered = filterOnPattern(coveredBranches, this.patternBranchesNovelty);
+        this.coverageSetNovelty.addAll(filtered);
     }
     
     /**
@@ -168,17 +294,20 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
      * @param solved a {@code boolean}, {@code true} if the path
      *        condition was solved, {@code false} otherwise.
      */
-    synchronized void learnPathConditionForInfeasibilityIndex(List<Clause> path, boolean solved) {
+    synchronized void learnPathConditionForIndexInfeasibility(List<Clause> path, boolean solved) {
+    	final HashSet<TrainingItem> trainingSet = new HashSet<>();
         if (solved) {
             //all the prefixes are also solved
             for (int i = path.size(); i > 0; --i) {
                 final BloomFilter bloomFilter = this.treePath.getBloomFilter(path.subList(0, i));
-                this.trainingSet.add(new TrainingItem(bloomFilter, true));
+                trainingSet.add(new TrainingItem(bloomFilter, true));
             }
         } else {
             final BloomFilter bloomFilter = this.treePath.getBloomFilter(path);
-            this.trainingSet.add(new TrainingItem(bloomFilter, false));
+            trainingSet.add(new TrainingItem(bloomFilter, false));
         }
+        this.classifier.train(trainingSet);
+        this.trainingSetSize += trainingSet.size();
     }
 
     /**
@@ -226,10 +355,8 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
      */
     synchronized void updateIndexInfeasibilityAndReclassify() {
         synchronized (this.treePath) {
-            //updates and reclassifies only if this.trainingSet is big enough
-            if (this.trainingSet.size() >= TRAINING_SET_MINIMUM_THRESHOLD) {
-                this.classifier.train(this.trainingSet);
-                this.trainingSet.clear();
+            //reclassifies the queued items only if this.trainingSetSize is big enough
+            if (this.trainingSetSize >= this.trainingSetMinimumThreshold) {
                 forAllQueuedItems((queueNumber, bufferedJBSEResult) -> {
                     final List<Clause> pathCondition = bufferedJBSEResult.getFinalState().getPathCondition();
                     updateIndexInfeasibility(pathCondition);
@@ -239,8 +366,78 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
                         this.queues.get(queueNumberNew).add(bufferedJBSEResult);
                     }
                 });
+                this.trainingSetSize = 0;
             }
         }
+    }
+    
+    /**
+     * Gets the ranking of the queue numbers, from the best to the worst.
+     * 
+     * @return an {@code int[]} containing the queue numbers sorted from
+     *         the best to the worst.
+     */
+    private int[] queueRanking() {
+    	int count = 0;
+    	final boolean[] useIndices = {this.useIndexImprovability, this.useIndexNovelty, this.useIndexInfeasibility};
+    	for (boolean useIndex : useIndices) {
+    		if (useIndex) {
+    			++count;
+    		}
+    	}
+    	switch (count) {
+    	case 3:
+    		return QUEUE_RANKING_3_INDICES;
+    	case 2:
+    		return QUEUE_RANKING_2_INDICES;
+    	case 1:
+    		if (this.useIndexImprovability) {
+    			return QUEUE_RANKING_1_INDEX_IMPROVABILITY;
+    		} else if (this.useIndexNovelty) {
+    			return QUEUE_RANKING_1_INDEX_NOVELTY;
+    		} else { //this.useIndexInfeasibility
+    			return QUEUE_RANKING_1_INDEX_INFEASIBILITY;
+    		}
+    	case 0:
+    		return QUEUE_RANKING_0_INDICES;
+    	default:
+    		throw new AssertionError("The number of active indices used to set up JBSEResultInputOutputBuffer is not between 0 and 3");
+    	}
+    }
+    
+    /**
+     * Gets the probabilities of choice of the queues.
+     * 
+     * @return an {@code int[]} containing the probabilities of choice
+     *         of each queue. Note that the probability at position {@code i}
+     *         is the probability of the queue whose number is {@link #queueRanking()}{@code [i]}.
+     */
+    private int[] queueProbabilities() {
+    	int count = 0;
+    	final boolean[] useIndices = {this.useIndexImprovability, this.useIndexNovelty, this.useIndexInfeasibility};
+    	for (boolean useIndex : useIndices) {
+    		if (useIndex) {
+    			++count;
+    		}
+    	}
+    	switch (count) {
+    	case 3:
+    		return QUEUE_PROBABILITIES_3_INDICES;
+    	case 2:
+    		return QUEUE_PROBABILITIES_2_INDICES;
+    	case 1:
+    		if (this.useIndexImprovability) {
+    			return QUEUE_PROBABILITIES_1_INDEX_IMPROVABILITY;
+    		} else if (this.useIndexNovelty) {
+    			return QUEUE_PROBABILITIES_1_INDEX_NOVELTY;
+    		} else { //this.useIndexInfeasibility
+    			return QUEUE_PROBABILITIES_1_INDEX_INFEASIBILITY;
+    		}
+    	case 0:
+    		return QUEUE_PROBABILITIES_0_INDICES;
+    	default:
+    		throw new AssertionError("The number of active indices used to set up JBSEResultInputOutputBuffer is not between 0 and 3");
+    	}
     }
     
     /**
@@ -253,119 +450,35 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
      *         whose associated path condition is {@code path}. 
      */
     private int calculateQueueNumber(List<Clause> path) {
-    	int indexImprovability = -2;
-    	int indexNovelty = -2;
-    	int indexInfeasibility = -2;
         //gets the indices
-    	if (this.o.getUseImprovabilityIndex()) {
-    		indexImprovability = this.treePath.getIndexImprovability(path);
-    	}
-    	if (this.o.getUseNoveltyIndex()) {
-    		indexNovelty = this.treePath.getIndexNovelty(path);
-    	}
-    	if (this.o.getUseInfeasibilityIndex()) {
-    		indexInfeasibility = this.treePath.getIndexInfeasibility(path);
-    	}
-        
-        //detects the index that pass a threshold
-        final boolean thresholdImprovability = indexImprovability > 0;
-        final boolean thresholdNovelty = indexNovelty < 2;
-        final boolean thresholdInfeasibility = indexInfeasibility > 1;
-        
-        //counts the passed thresholds
-        final int[] indices = {indexImprovability, indexNovelty, indexInfeasibility};
-        final boolean[] thresholds = {thresholdImprovability, thresholdNovelty, thresholdInfeasibility};
-        int count = 0;
-        for (int i = 0; i < thresholds.length; ++i) {
-            if (indices[i] != -2 && thresholds[i]) {
-                ++count;
-            }
-        }
-        
-        if (count == 1) {
-        	//only improvability index is used
-    		if (this.o.getUseImprovabilityIndex() && !this.o.getUseNoveltyIndex() && !this.o.getUseInfeasibilityIndex()) {
-				count = indexImprovability;
+    	final int indexImprovability = this.treePath.getIndexImprovability(path);
+    	final int indexNovelty = this.treePath.getIndexNovelty(path);
+    	final int indexInfeasibility = this.treePath.getIndexInfeasibility(path);
+
+		if (this.useIndexImprovability && !this.useIndexNovelty && !this.useIndexInfeasibility) {
+			return indexImprovability;
+		} else if (!this.useIndexImprovability && this.useIndexNovelty && !this.useIndexInfeasibility) {
+			return indexNovelty;
+		} else if (!this.useIndexImprovability && !this.useIndexNovelty && this.useIndexInfeasibility) {
+			return indexInfeasibility;
+		} else {
+			//detects the index that pass a threshold
+			final boolean thresholdImprovability = indexImprovability > 0;
+			final boolean thresholdNovelty = indexNovelty < 2;
+			final boolean thresholdInfeasibility = indexInfeasibility > 1;
+
+			//counts the passed thresholds
+			final boolean[] useIndex = {this.useIndexImprovability, this.useIndexNovelty, this.useIndexInfeasibility};
+			final boolean[] threshold = {thresholdImprovability, thresholdNovelty, thresholdInfeasibility};
+			int count = 0;
+			for (int i = 0; i < threshold.length; ++i) {
+				if (useIndex[i] && threshold[i]) {
+					++count;
+				}
 			}
-			//only novelty index is used
-			else if (!this.o.getUseImprovabilityIndex() && this.o.getUseNoveltyIndex() && !this.o.getUseInfeasibilityIndex()) {
-				count = indexNovelty;
-			}
-			//only infeasibility index is used
-			else if (!this.o.getUseImprovabilityIndex() && !this.o.getUseNoveltyIndex() && this.o.getUseInfeasibilityIndex()) {
-				count = indexInfeasibility;
-			}
-    	}
-        return count;
-    }
-    
-    /**
-     * Sets the buffer to work with different numbers of indices (3, 2, 1 or 0).
-     * If only one index is used, sets the buffer to work with queues and probabilities
-     * of this specific index.
-     * If multiple indices are used, sets the buffer to work with binary representations
-     * of the indices.
-     * 
-     * @param INDEX_VALUES a boolean. True to set index values, false to set probability values.
-     * @return the array witch contains the index values, if INDEX_VALUES is true, otherwise the
-     *         array witch contains the probabilities values.
-     */
-    synchronized int[] setBuffer(boolean INDEX_VALUES) {
-    	int count = 0;
-    	final boolean[] useIndices = new boolean[] {this.o.getUseImprovabilityIndex(), this.o.getUseNoveltyIndex(), this.o.getUseInfeasibilityIndex()};
-    	for (boolean useIndex : useIndices) {
-    		if (useIndex) {
-    			++count;
-    		}
-    	}
-    	if (INDEX_VALUES) {
-    		switch (count) {
-    		case 3:
-    			return new int[] {3, 2, 1, 0};
-    		case 2:
-    			return new int[] {2, 1, 0};
-    		case 1:
-    			//only improvability index is used
-    			if (this.o.getUseImprovabilityIndex() && !this.o.getUseNoveltyIndex() && !this.o.getUseInfeasibilityIndex()) {
-    				return new int[] {10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0};
-    			}
-    			//only novelty index is used
-    			else if (!this.o.getUseImprovabilityIndex() && this.o.getUseNoveltyIndex() && !this.o.getUseInfeasibilityIndex()) {
-    				return new int[] {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-    			}
-    			//only infeasibility index is used
-    			else if (!this.o.getUseImprovabilityIndex() && !this.o.getUseNoveltyIndex() && this.o.getUseInfeasibilityIndex()) {
-    				return new int[] {3, 2, 1, 0};
-    			}
-    		case 0:
-    			return new int[] {0};
-    		}
-    		throw new Error("The number of active indices used to set up JBSEResultInputOutputBuffer is not valid value (should be between 0 and 3)");
-    	}
-    	else {
-    		switch (count) {
-    		case 3:
-    			return new int[] {50, 30, 15, 5};
-    		case 2:
-    			return new int[] {60, 30, 10};
-    		case 1:
-    			//only improvability index is used
-    			if (this.o.getUseImprovabilityIndex() && !this.o.getUseNoveltyIndex() && !this.o.getUseInfeasibilityIndex()) {
-    				return new int[] {50, 12, 9, 7, 6, 5, 4, 3, 2, 1, 1};
-    			}
-    			//only novelty index is used
-    			else if (!this.o.getUseImprovabilityIndex() && this.o.getUseNoveltyIndex() && !this.o.getUseInfeasibilityIndex()) {
-    				return new int[] {50, 12, 9, 7, 6, 5, 4, 3, 2, 1, 1};
-    			}
-    			//only infeasibility index is used
-    			else if (!this.o.getUseImprovabilityIndex() && !this.o.getUseNoveltyIndex() && this.o.getUseInfeasibilityIndex()) {
-    				return new int[] {50, 30, 15, 5};
-    			}
-    		case 0:
-    			return new int[] {100};
-    		}
-    		throw new Error("The number of active indices used to set up JBSEResultInputOutputBuffer is not valid value (should be between 0 and 3)");
-    	}
+
+			return count;
+		}
     }
 
     /**
@@ -375,11 +488,17 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
      *        The first is the closest to the root, the last is the leaf.
      */
     private void updateIndexImprovability(List<Clause> path) {
-        final Set<String> branches = this.treePath.getNeighborFrontierBranches(path);
-        if (branches == null) {
+        final Set<String> branchesNeighbor = this.treePath.getNeighborFrontierBranches(path);
+        if (branchesNeighbor == null) {
             throw new AssertionError("Attempted to update the improvability index of a path condition that was not yet inserted in the TreePath.");
         }
-        final int indexImprovability = Math.min(branches.size(), INDEX_IMPROVABILITY_MAX);
+        final Set<String> branchesRelevant = filterOnPattern(branchesNeighbor, this.patternBranchesImprovability);
+        for (Iterator<String> it  = branchesRelevant.iterator(); it.hasNext(); ) {
+            if (this.treePath.covers(it.next())) {
+            	it.remove();
+            }
+        }
+        final int indexImprovability = Math.min(branchesRelevant.size(), INDEX_IMPROVABILITY_MAX);
         this.treePath.setIndexImprovability(path, indexImprovability);
     }
 
@@ -394,8 +513,16 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
         if (branches == null) {
             throw new AssertionError("Attempted to update the novelty index of a path condition that was not yet inserted in the TreePath.");
         }
-        final Map<String, Integer> allHits = this.treePath.getHits(path);
-        final int minimum = Collections.min(allHits.values());
+        final Map<String, Integer> hits = this.treePath.getHits(path);
+        final Pattern p = Pattern.compile(this.patternBranchesNovelty);
+        for (Iterator<Map.Entry<String, Integer>> it  = hits.entrySet().iterator(); it.hasNext(); ) {
+        	final Map.Entry<String, Integer> hitEntry = it.next();
+        	final Matcher m = p.matcher(hitEntry.getKey());
+        	if (!m.matches()) {
+        		it.remove();
+        	}
+        }
+        final int minimum = (hits.values().isEmpty() ? INDEX_NOVELTY_MIN : Collections.min(hits.values()));
         final int indexNovelty = Math.min(minimum, INDEX_NOVELTY_MAX);
         this.treePath.setIndexNovelty(path, indexNovelty);
     }
