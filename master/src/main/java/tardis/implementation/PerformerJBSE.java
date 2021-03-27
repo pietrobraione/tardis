@@ -83,21 +83,6 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
         };
         return job;
     }
-    
-    private State possiblyGetInitialStateCached(EvosuiteResult item) {
-        final String key = item.getTargetMethodClassName() + ":" + item.getTargetMethodDescriptor() + ":" + item.getTargetMethodName();
-        final State value = this.initialStateCache.get(key);
-        return (value == null ? null : value.clone());
-    }
-    
-    private void possiblySetInitialStateCached(EvosuiteResult item, State initialState) {
-        final String key = item.getTargetMethodClassName() + ":" + item.getTargetMethodDescriptor() + ":" + item.getTargetMethodName();
-        if (this.initialStateCache.containsKey(key)) {
-            return;
-        } else {
-            this.initialStateCache.put(key, initialState.clone());
-        }
-    }
 
     /**
      * Executes a test case and generates tests for all the alternative branches
@@ -132,27 +117,27 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             
             //runs the test case up to the final state, and takes the 
             //final state's path condition
-            final State tcFinalState = rp.runProgram();
-            if (tcFinalState == null) {
+            final State stateFinal = rp.runProgram();
+            if (stateFinal == null) {
                 //the execution violated some assumption: prints some feedback
                 LOGGER.info("Run test case %s, the test case violated an assumption", tc.getClassName());
                 return;
             }
-            final List<Clause> tcFinalPC = tcFinalState.getPathCondition();
+            final List<Clause> pathConditionFinal = stateFinal.getPathCondition();
 
             //prints some feedback
-            LOGGER.info("Run test case %s, path condition %s", tc.getClassName(), stringifyPathCondition(shorten(tcFinalPC)));
+            LOGGER.info("Run test case %s, path condition %s", tc.getClassName(), stringifyPathCondition(shorten(pathConditionFinal)));
             
             //skips the test case if its path was already covered,
             //otherwise records its path
             final Set<String> coveredBranches = rp.getCoverage();
             final Set<String> newCoveredBranches;
             synchronized (this.treePath) {
-                if (this.treePath.containsPath(tcFinalPC, true)) {
+                if (this.treePath.containsPath(pathConditionFinal, true)) {
                     LOGGER.info("Test case %s redundant, skipped", tc.getClassName());
                     return;
                 }
-                newCoveredBranches = this.treePath.insertPath(tcFinalPC, coveredBranches, Collections.emptySet(), true);
+                newCoveredBranches = this.treePath.insertPath(pathConditionFinal, coveredBranches, Collections.emptySet(), true);
             }
 
             //possibly caches the initial state
@@ -160,27 +145,11 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             possiblySetInitialStateCached(item, initialState);
             
             //learns the new data for future update of indices
-            if (this.o.getUseIndexImprovability()) {
-            	this.out.learnCoverageForIndexImprovability(newCoveredBranches);
-            }
-            if (this.o.getUseIndexNovelty()) {
-            	this.out.learnCoverageForIndexNovelty(coveredBranches);
-            }
-            if (this.o.getUseIndexInfeasibility()) {
-            	this.out.learnPathConditionForIndexInfeasibility(tcFinalPC, true);
-            }
+            learnDataForIndices(newCoveredBranches, coveredBranches, pathConditionFinal);
             
             //updates all indices and reclassifies all the items in output buffer
             //TODO possibly do it more lazily!
-            if (this.o.getUseIndexImprovability()) {
-            	this.out.updateIndexImprovabilityAndReclassify();
-            }
-            if (this.o.getUseIndexNovelty()) { 
-            	this.out.updateIndexNoveltyAndReclassify();
-            }
-            if (this.o.getUseIndexInfeasibility()) {
-            	this.out.updateIndexInfeasibilityAndReclassify();
-            }
+            updateIndicesAndReclassify();
 
             //emits the test if it covers something new
             emitTestIfCoversSomethingNew(item, newCoveredBranches);
@@ -190,7 +159,7 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             
             //reruns the test case at all the depths in the range, generates all the modified 
             //path conditions and puts all the output jobs in the output queue
-            final int tcFinalDepth = Math.min(startDepth + this.o.getMaxTestCaseDepth(), tcFinalState.getDepth());
+            final int tcFinalDepth = Math.min(startDepth + this.o.getMaxTestCaseDepth(), stateFinal.getDepth());
             boolean noOutputJobGenerated = true;
             for (int currentDepth = startDepth; currentDepth < Math.min(this.o.getMaxDepth(), tcFinalDepth); ++currentDepth) {
                 final List<State> statesPostFrontier = rp.runProgram(currentDepth);
@@ -206,32 +175,7 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
                 }
 
                 //creates all the output jobs
-                final State statePreFrontier = rp.getStatePreFrontier();
-                final List<String> branchesPostFrontier = rp.getBranchesPostFrontier(); 
-                for (int i = 0; i < statesPostFrontier.size(); ++i) {
-                    final State statePostFrontier = statesPostFrontier.get(i);
-                    final List<Clause> pathCondition = statePostFrontier.getPathCondition();
-                    if (this.treePath.containsPath(pathCondition, false)) {
-                        continue;
-                    }
-                    final ClassHierarchy hier = statePostFrontier.getClassHierarchy();
-                    if (!pathCondition.isEmpty() && assumptionViolated(hier, pathCondition.get(pathCondition.size() - 1))) {
-                        LOGGER.info("From test case %s skipping path condition due to violated assumption %s on initialMap in path condition %s", tc.getClassName(), pathCondition.get(pathCondition.size() - 1), stringifyPathCondition(shorten(pathCondition)));
-                        continue;
-                    }
-                    
-                    //inserts the generated path in the treePath
-                    this.treePath.insertPath(pathCondition, rp.getCoverage(), branchesPostFrontier, false);
-
-                    //emits the output job in the output buffer
-                    final Map<Long, String> stringLiterals = rp.getStringLiterals().get(i);
-                    final Set<Long> stringOthers = rp.getStringOthers().get(i); 
-                    final boolean atJump = rp.getAtJump();
-                    final JBSEResult output = new JBSEResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), initialState, statePreFrontier, statePostFrontier, atJump, (atJump ? branchesPostFrontier.get(i) : null), stringLiterals, stringOthers, currentDepth);
-                    getOutputBuffer().add(output);
-                    LOGGER.info("From test case %s generated path condition %s%s", tc.getClassName(), stringifyPathCondition(shorten(pathCondition)), (atJump ? (" aimed at branch " + branchesPostFrontier.get(i)) : ""));
-                    noOutputJobGenerated = false;
-                }
+                noOutputJobGenerated = noOutputJobGenerated && createOutputJobsForFrontier(rp, statesPostFrontier, item, tc, initialState, currentDepth);
             }
 
             if (noOutputJobGenerated) {
@@ -240,6 +184,45 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
         } catch (NoTargetHitException e) {
             //prints some feedback
             LOGGER.warn("Run test case %s, does not reach the target method %s:%s:%s", item.getTestCase().getClassName(), item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName());
+        }
+    }
+    
+    private State possiblyGetInitialStateCached(EvosuiteResult item) {
+        final String key = item.getTargetMethodClassName() + ":" + item.getTargetMethodDescriptor() + ":" + item.getTargetMethodName();
+        final State value = this.initialStateCache.get(key);
+        return (value == null ? null : value.clone());
+    }
+    
+    private void possiblySetInitialStateCached(EvosuiteResult item, State initialState) {
+        final String key = item.getTargetMethodClassName() + ":" + item.getTargetMethodDescriptor() + ":" + item.getTargetMethodName();
+        if (this.initialStateCache.containsKey(key)) {
+            return;
+        } else {
+            this.initialStateCache.put(key, initialState.clone());
+        }
+    }
+    
+    private void learnDataForIndices(Set<String> newCoveredBranches, Set<String> coveredBranches, List<Clause> pathConditionFinal) {
+        if (this.o.getUseIndexImprovability()) {
+        	this.out.learnCoverageForIndexImprovability(newCoveredBranches);
+        }
+        if (this.o.getUseIndexNovelty()) {
+        	this.out.learnCoverageForIndexNovelty(coveredBranches);
+        }
+        if (this.o.getUseIndexInfeasibility()) {
+        	this.out.learnPathConditionForIndexInfeasibility(pathConditionFinal, true);
+        }
+    }
+    
+    private void updateIndicesAndReclassify() {
+        if (this.o.getUseIndexImprovability()) {
+        	this.out.updateIndexImprovabilityAndReclassify();
+        }
+        if (this.o.getUseIndexNovelty()) { 
+        	this.out.updateIndexNoveltyAndReclassify();
+        }
+        if (this.o.getUseIndexInfeasibility()) {
+        	this.out.updateIndexInfeasibilityAndReclassify();
         }
     }
     
@@ -298,6 +281,37 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
         final int branchCoverageTarget = this.treePath.totalCovered(this.o.patternBranchesTarget());
         final int branchCoverageUnsafe = this.treePath.totalCovered(this.o.patternBranchesUnsafe());
         LOGGER.info("Current coverage: %d path%s, %d branch%s (total), %d branch%s (target), %d failed assertion%s", pathCoverage, (pathCoverage == 1 ? "" : "s"), branchCoverage, (branchCoverage == 1 ? "" : "es"), branchCoverageTarget, (branchCoverageTarget == 1 ? "" : "es"), branchCoverageUnsafe, (branchCoverageUnsafe == 1 ? "" : "s"));
+    }
+    
+    private boolean createOutputJobsForFrontier(RunnerPath rp, List<State> statesPostFrontier, EvosuiteResult item, TestCase tc, State initialState, int currentDepth) {
+    	boolean noOutputJobGenerated = true;
+        final State statePreFrontier = rp.getStatePreFrontier();
+        final List<String> branchesPostFrontier = rp.getBranchesPostFrontier(); 
+        for (int i = 0; i < statesPostFrontier.size(); ++i) {
+            final State statePostFrontier = statesPostFrontier.get(i);
+            final List<Clause> pathCondition = statePostFrontier.getPathCondition();
+            if (this.treePath.containsPath(pathCondition, false)) {
+                continue;
+            }
+            final ClassHierarchy hier = statePostFrontier.getClassHierarchy();
+            if (!pathCondition.isEmpty() && assumptionViolated(hier, pathCondition.get(pathCondition.size() - 1))) {
+                LOGGER.info("From test case %s skipping path condition due to violated assumption %s on initialMap in path condition %s", tc.getClassName(), pathCondition.get(pathCondition.size() - 1), stringifyPathCondition(shorten(pathCondition)));
+                continue;
+            }
+            
+            //inserts the generated path in the treePath
+            this.treePath.insertPath(pathCondition, rp.getCoverage(), branchesPostFrontier, false);
+
+            //emits the output job in the output buffer
+            final Map<Long, String> stringLiterals = rp.getStringLiterals().get(i);
+            final Set<Long> stringOthers = rp.getStringOthers().get(i); 
+            final boolean atJump = rp.getAtJump();
+            final JBSEResult output = new JBSEResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), initialState, statePreFrontier, statePostFrontier, atJump, (atJump ? branchesPostFrontier.get(i) : null), stringLiterals, stringOthers, currentDepth);
+            getOutputBuffer().add(output);
+            LOGGER.info("From test case %s generated path condition %s%s", tc.getClassName(), stringifyPathCondition(shorten(pathCondition)), (atJump ? (" aimed at branch " + branchesPostFrontier.get(i)) : ""));
+            noOutputJobGenerated = false;
+        }
+        return noOutputJobGenerated;
     }
 }
 
