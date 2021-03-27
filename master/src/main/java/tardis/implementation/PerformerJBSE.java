@@ -89,7 +89,7 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
      * starting from some depth up to some maximum depth.
      * 
      * @param item a {@link EvosuiteResult}.
-     * @param startDepth the depth to which generation of tests must be started.
+     * @param depthStart the depth to which generation of tests must be started.
      * @throws DecisionException
      * @throws CannotBuildEngineException
      * @throws InitializationException
@@ -103,7 +103,7 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
      * @throws EngineStuckException
      * @throws FailureException
      */
-    private void explore(EvosuiteResult item, int startDepth) 
+    private void explore(EvosuiteResult item, int depthStart) 
     throws DecisionException, CannotBuildEngineException, InitializationException, 
     InvalidClassFileFactoryClassException, NonexistingObservedVariablesException, 
     ClasspathException, CannotBacktrackException, CannotManageStateException, 
@@ -159,10 +159,10 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             
             //reruns the test case at all the depths in the range, generates all the modified 
             //path conditions and puts all the output jobs in the output queue
-            final int tcFinalDepth = Math.min(startDepth + this.o.getMaxTestCaseDepth(), stateFinal.getDepth());
+            final int depthFinal = Math.min(this.o.getMaxDepth(), Math.min(depthStart + this.o.getMaxTestCaseDepth(), stateFinal.getDepth()));
             boolean noOutputJobGenerated = true;
-            for (int currentDepth = startDepth; currentDepth < Math.min(this.o.getMaxDepth(), tcFinalDepth); ++currentDepth) {
-                final List<State> statesPostFrontier = rp.runProgram(currentDepth);
+            for (int depthCurrent = depthStart; depthCurrent < depthFinal; ++depthCurrent) {
+                final List<State> statesPostFrontier = rp.runProgram(depthCurrent);
 
                 //checks shutdown of the performer
                 if (Thread.interrupted()) {
@@ -171,13 +171,12 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 
                 //gives some feedback if detects a contradiction
                 if (statesPostFrontier.isEmpty()) {
-                    LOGGER.info("Test case %s, detected contradiction while generating path conditions at depth %d", tc.getClassName(), currentDepth);
+                    LOGGER.info("Test case %s, detected contradiction while generating path conditions at depth %d", tc.getClassName(), depthCurrent);
                 }
 
                 //creates all the output jobs
-                noOutputJobGenerated = createOutputJobsForFrontier(rp, statesPostFrontier, item, tc, initialState, currentDepth) && noOutputJobGenerated;
+                noOutputJobGenerated = createOutputJobsForFrontier(rp, statesPostFrontier, item, tc, initialState, depthCurrent) && noOutputJobGenerated;
             }
-
             if (noOutputJobGenerated) {
                 LOGGER.info("From test case %s no path condition generated", tc.getClassName());
             }
