@@ -3,6 +3,7 @@ package tardis.implementation;
 import static tardis.implementation.Util.filterOnPattern;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -35,6 +36,9 @@ public final class TreePath {
      * @author Pietro Braione
      */
     private final class Node {
+    	/** The ancestor {@link Node}. */
+    	private final Node ancestor;
+    	
         /** The {@link Clause} associated to this node. */
         private final Clause clause;
 
@@ -51,10 +55,9 @@ public final class TreePath {
         private final HashSet<String> coveredBranches = new HashSet<>();
 
         /** 
-         * The neighbor frontier branches to the path used to 
-         * calculate the improvability index.
+         * The neighbor (post frontier) branches to the path.
          */
-        private final HashSet<String> neighborFrontierBranches = new HashSet<>();
+        private final HashSet<String> branchesFrontier = new HashSet<>();
 
         /** 
          * The status of this node (i.e., of the path
@@ -86,7 +89,8 @@ public final class TreePath {
          * @param path a {@link List}{@code <}{@link Clause}{@code >}, 
          *        the path condition from the root to this node.
          */
-        Node(List<Clause> path) {
+        Node(Node ancestor, List<Clause> path) {
+        	this.ancestor = ancestor;
             this.clause = (path == null ? null : path.get(path.size() - 1));
             this.bloomFilter = (path == null ? null : new BloomFilter(path));
         }
@@ -96,7 +100,7 @@ public final class TreePath {
          * not store any {@link Clause}.
          */
         Node() { 
-            this(null);
+            this(null, null);
         }
 
         /**
@@ -127,7 +131,7 @@ public final class TreePath {
          *         that will store {@code newChild}.
          */
         Node addChild(List<Clause> path) {
-            final Node retVal = new Node(path);
+            final Node retVal = new Node(this, path);
             this.children.add(retVal);
             return retVal;
         }
@@ -184,18 +188,19 @@ public final class TreePath {
      * 
      * @param path a {@link List}{@code <}{@link Clause}{@code >}. The first in 
      *        the sequence is the closer to the root, the last is the leaf.
-     * @param coveredBranches a {@link Set}{@code <}{@link String}{@code >}, 
-     *        the branches covered by {@code path}.
-     * @param neighborFrontierBranches a {@link Set}{@code <}{@link String}{@code >} 
-     *        containing the neighbor frontier branches next to {@code path}, used 
-     *        to calculate the improvability index.
+     * @param coveredBranches a {@link Collection}{@code <}{@link String}{@code >}, 
+     *        the branches covered by {@code path} (possibly excluded the frontier
+     *        branches).
+     * @param branchesFrontier a {@link Collection}{@code <}{@link String}{@code >} 
+     *        containing the frontier branches next to the last branch in 
+     *        {@code path}.
      * @param covered a {@code boolean}, {@code true} iff the path is
      *        covered by a test.
      * @return if {@code covered == true}, the {@link Set} of the elements in 
      *         {@code coveredBranches} that were not already covered before the 
      *         invocation of this method, otherwise returns {@code null}.
      */
-    synchronized Set<String> insertPath(List<Clause> path, Set<String> coveredBranches, Set<String> neighborFrontierBranches, boolean covered) {
+    synchronized Set<String> insertPath(List<Clause> path, Collection<String> coveredBranches, Collection<String> branchesFrontier, boolean covered) {
         int index = 0;
         Node currentInTree = this.root;
         if (covered) {
@@ -215,7 +220,7 @@ public final class TreePath {
             }
             if (index == path.size() - 1) {
                 currentInTree.coveredBranches.addAll(coveredBranches);
-                currentInTree.neighborFrontierBranches.addAll(neighborFrontierBranches);
+                currentInTree.branchesFrontier.addAll(branchesFrontier);
             }
             ++index;
         }
@@ -233,9 +238,9 @@ public final class TreePath {
     /**
      * Increases by one the number of hits of a set of branches.
      * 
-     * @param coveredBranches a {@link Set}{@code <}{@link String}{@code >}.
+     * @param coveredBranches a {@link Collection}{@code <}{@link String}{@code >}.
      */
-    private void increaseHits(Set<String> coveredBranches) {
+    private void increaseHits(Collection<String> coveredBranches) {
         for (String branch : coveredBranches) {
             final Integer hitsCounter = this.hitsCounterMap.get(branch);
             if (hitsCounter == null) {
@@ -429,7 +434,7 @@ public final class TreePath {
      *         the branches covered by the path, or {@code null} if
      *         {@code path} does not belong to the tree.
      */
-    synchronized Set<String> getCoveredBranches(List<Clause> path) {
+    synchronized Set<String> getBranchesCovered(List<Clause> path) {
         final Node nodePath = findNode(path);
         return (nodePath == null ? null : nodePath.coveredBranches);
     }
@@ -444,7 +449,7 @@ public final class TreePath {
      *         of hits, or {@code null} if {@code path} does not belong to the tree.
      */
     synchronized Map<String, Integer> getHits(List<Clause> path) {
-        final Set<String> branches = getCoveredBranches(path);
+        final Set<String> branches = getBranchesCovered(path);
         if (branches == null) {
             return null;
         }
@@ -468,29 +473,21 @@ public final class TreePath {
      * @param path a {@link List}{@code <}{@link Clause}{@code >}. 
      *        The first is the closest to the root, the last is the leaf.
      * @return a {@link Set}{@code <}{@link String}{@code >} containing 
-     *         the branches used to calculate the improvability index, or
+     *         the neighbor frontier branches to {@code path}, or
      *         {@code null} if {@code path} does not belong to the tree.
      */
-    synchronized Set<String> getNeighborFrontierBranches(List<Clause> path) {
-        final Node nodePath = findNode(path);
-        return (nodePath == null ? null : new HashSet<>(nodePath.neighborFrontierBranches)); //safety copy
-    }
-
-    /**
-     * Updates the neighbor frontier branches next to a given path, used to 
-     * calculate the improvability index, by removing a set of covered branches 
-     * from the neighbor frontier branches.
-     * 
-     * @param path a {@link List}{@code <}{@link Clause}{@code >}. 
-     *        The first is the closest to the root, the last is the leaf.
-     * @param coveredBranches a {@link Set}{@code <}{@link String}{@code >}, 
-     *        the covered branches. 
-     */
-    synchronized void clearNeighborFrontierBranches(List<Clause> path, Set<String> coveredBranches) {
-        final Node nodePath = findNode(path);
+    synchronized Set<String> getBranchesNeighbor(List<Clause> path) {
+        Node nodePath = findNode(path);
         if (nodePath == null) {
-            return;
+        	return null;
         }
-        nodePath.neighborFrontierBranches.removeAll(coveredBranches);
+        final HashSet<String> retVal = new HashSet<>();
+        while (nodePath != null) {
+        	if (nodePath.branchesFrontier != null) {
+        		retVal.addAll(nodePath.branchesFrontier);
+        	}
+        	nodePath = nodePath.ancestor;
+        }
+        return retVal;
     }
 }

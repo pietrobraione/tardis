@@ -318,7 +318,6 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
         synchronized (this.treePath) {
             forAllQueuedItemsToUpdateImprovability((queueNumber, bufferedJBSEResult) -> {
                 final List<Clause> pathCondition = bufferedJBSEResult.getFinalState().getPathCondition();
-                this.treePath.clearNeighborFrontierBranches(pathCondition, this.coverageSetImprovability);
                 updateIndexImprovability(pathCondition);
                 final int queueNumberNew = calculateQueueNumber(pathCondition);
                 if (queueNumberNew != queueNumber) {
@@ -488,7 +487,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
      *        The first is the closest to the root, the last is the leaf.
      */
     private void updateIndexImprovability(List<Clause> path) {
-        final Set<String> branchesNeighbor = this.treePath.getNeighborFrontierBranches(path);
+        final Set<String> branchesNeighbor = this.treePath.getBranchesNeighbor(path);
         if (branchesNeighbor == null) {
             throw new AssertionError("Attempted to update the improvability index of a path condition that was not yet inserted in the TreePath.");
         }
@@ -509,7 +508,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
      *        The first is the closest to the root, the last is the leaf.
      */
     private void updateIndexNovelty(List<Clause> path) {
-        final Set<String> branches = this.treePath.getCoveredBranches(path);
+        final Set<String> branches = this.treePath.getBranchesCovered(path);
         if (branches == null) {
             throw new AssertionError("Attempted to update the novelty index of a path condition that was not yet inserted in the TreePath.");
         }
@@ -567,7 +566,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
     private void forAllQueuedItemsToUpdateImprovability(BiConsumer<Integer, JBSEResult> toDo) {
         forAllQueuedItems((queue, bufferedJBSEResult) -> {
             final List<Clause> pathCondition = bufferedJBSEResult.getFinalState().getPathCondition();
-            final Set<String> toCompareBranches = this.treePath.getNeighborFrontierBranches(pathCondition);
+            final Set<String> toCompareBranches = this.treePath.getBranchesNeighbor(pathCondition);
             if (!Collections.disjoint(toCompareBranches, this.coverageSetImprovability)) {
                 toDo.accept(queue, bufferedJBSEResult);
             }
@@ -577,7 +576,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
     private void forAllQueuedItemsToUpdateNovelty(BiConsumer<Integer, JBSEResult> toDo) {
         forAllQueuedItems((queue, bufferedJBSEResult) -> {
             final List<Clause> pathCondition = bufferedJBSEResult.getFinalState().getPathCondition();
-            final Set<String> toCompareBranches = this.treePath.getCoveredBranches(pathCondition);
+            final Set<String> toCompareBranches = this.treePath.getBranchesCovered(pathCondition);
             if (!Collections.disjoint(toCompareBranches, this.coverageSetNovelty)) {
                 toDo.accept(queue, bufferedJBSEResult);
             }

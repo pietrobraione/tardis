@@ -9,10 +9,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -185,137 +183,53 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             }
 
             //emits the test if it covers something new
-            final Coverage coverage = this.o.getCoverage();
-            final int branchCoverageTargetNew = filterOnPattern(newCoveredBranches, this.o.patternBranchesTarget()).size();            
-            final int branchCoverageUnsafeNew = filterOnPattern(newCoveredBranches, this.o.patternBranchesUnsafe()).size();
-            if (coverage == Coverage.PATHS || 
-            (coverage == Coverage.BRANCHES && branchCoverageTargetNew > 0) ||
-            (coverage == Coverage.UNSAFE && branchCoverageUnsafeNew > 0)) {
-                //more feedback
-                if (coverage == Coverage.BRANCHES) {
-                    LOGGER.info("Test case %s covered branch%s %s", tc.getClassName(), (branchCoverageTargetNew == 1 ? " " : "es"), String.join(", ", newCoveredBranches));
-                }
-                
-                //copies the test in out
-                try {
-                    //gets the source and destination paths of the test source file
-                    final Path source = item.getTestCase().getSourcePath();
-                    final Path destination = this.o.getOutDirectory().resolve(item.getTestCase().getClassName() + ".java");
-                    
-                    //creates the intermediate package directories if they do not exist
-                    final int lastSlash = item.getTestCase().getClassName().lastIndexOf('/');
-                    if (lastSlash != -1) {
-                        final String dirs = item.getTestCase().getClassName().substring(0, lastSlash);
-                        final Path destinationDir = this.o.getOutDirectory().resolve(dirs);
-                        Files.createDirectories(destinationDir);
-                    }
-                    
-                    //copies the test file
-                    Files.copy(source, destination, StandardCopyOption.REPLACE_EXISTING);
-
-                    //possibly copies the scaffolding file
-                    final Path sourceScaffolding = item.getTestCase().getScaffoldingPath();
-                    if (sourceScaffolding != null) {
-                        final Path destinationScaffolding = this.o.getOutDirectory().resolve(item.getTestCase().getClassName() + "_scaffolding.java");
-                        Files.copy(sourceScaffolding, destinationScaffolding, StandardCopyOption.REPLACE_EXISTING);
-                    }
-                    
-                } catch (IOException e) {
-                    LOGGER.error("Unexpected I/O error while attempting to copy test case %s or its scaffolding to its destination directory", tc.getClassName());
-                    LOGGER.error("Message: %s", e.toString());
-                    LOGGER.error("Stack trace:");
-                    for (StackTraceElement elem : e.getStackTrace()) {
-                        LOGGER.error("%s", elem.toString());
-                    }
-                    //falls through
-                }
-            }
+            emitTestIfCoversSomethingNew(item, newCoveredBranches);
             
             //calculates coverage and emits feedback
-            final long pathCoverage = this.pathCoverage.incrementAndGet();
-            final int branchCoverage = this.treePath.totalCovered();
-            final int branchCoverageTarget = this.treePath.totalCovered(this.o.patternBranchesTarget());
-            final int branchCoverageUnsafe = this.treePath.totalCovered(this.o.patternBranchesUnsafe());
-            LOGGER.info("Current coverage: %d path%s, %d branch%s (total), %d branch%s (target), %d failed assertion%s", pathCoverage, (pathCoverage == 1 ? "" : "s"), branchCoverage, (branchCoverage == 1 ? "" : "es"), branchCoverageTarget, (branchCoverageTarget == 1 ? "" : "es"), branchCoverageUnsafe, (branchCoverageUnsafe == 1 ? "" : "s"));
+            logCoverage();
             
             //reruns the test case at all the depths in the range, generates all the modified 
-            //path conditions and gathers the necessary information to produce the output jobs
+            //path conditions and puts all the output jobs in the output queue
             final int tcFinalDepth = Math.min(startDepth + this.o.getMaxTestCaseDepth(), tcFinalState.getDepth());
-            final ArrayList<HashSet<String>> branchesNeighborList = new ArrayList<>();
-            final ArrayList<List<State>> newStatesList = new ArrayList<>();
-            final ArrayList<State> statePreFrontierList = new ArrayList<>();
-            final ArrayList<Boolean> atJumpList = new ArrayList<>();
-            final ArrayList<Set<String>> coveredBranchesList = new ArrayList<>();
-            final ArrayList<List<String>> branchesPostFrontierList = new ArrayList<>();
-            final ArrayList<List<? extends Map<Long, String>>> stringLiteralsList = new ArrayList<>();
-            final ArrayList<List<? extends Set<Long>>> stringOthersList = new ArrayList<>();
+            boolean noOutputJobGenerated = true;
             for (int currentDepth = startDepth; currentDepth < Math.min(this.o.getMaxDepth(), tcFinalDepth); ++currentDepth) {
-                final List<State> newStates = rp.runProgram(currentDepth);
+                final List<State> statesPostFrontier = rp.runProgram(currentDepth);
 
                 //checks shutdown of the performer
                 if (Thread.interrupted()) {
                     return;
                 }
-                
+
                 //gives some feedback if detects a contradiction
-                if (newStates.isEmpty()) {
+                if (statesPostFrontier.isEmpty()) {
                     LOGGER.info("Test case %s, detected contradiction while generating path conditions at depth %d", tc.getClassName(), currentDepth);
                 }
 
-                //updates neigborFrontierBranchesList
-                final List<String> branchesPostFrontier = rp.getBranchesPostFrontier();
-                final HashSet<String> branchesNeighbor = new HashSet<>(branchesPostFrontier);
-                for (int i = 0; i < branchesNeighborList.size(); ++i) {
-                	branchesNeighbor.addAll(branchesNeighborList.get(i));
-                }
-                branchesNeighborList.add(branchesNeighbor);                
-
-                //updates all the other lists
-                newStatesList.add(newStates);
-                statePreFrontierList.add(rp.getStatePreFrontier());
-                atJumpList.add(rp.getAtJump());
-                coveredBranchesList.add(rp.getCoverage());
-                branchesPostFrontierList.add(branchesPostFrontier);
-                stringLiteralsList.add(rp.getStringLiterals());
-                stringOthersList.add(rp.getStringOthers());
-            }
-
-            //puts all the output jobs in the output queue 
-            boolean noOutputJobGenerated = true;
-            for (int currentDepth = startDepth; currentDepth < Math.min(this.o.getMaxDepth(), tcFinalDepth); ++currentDepth) {
-                final int depthLevel = currentDepth - startDepth;
-                final List<State> newStates = newStatesList.get(depthLevel);
-
-                //checks shutdown of the performer
-                if (Thread.interrupted()) {
-                    return;
-                }
-
                 //creates all the output jobs
-                final State preState = statePreFrontierList.get(depthLevel);
-                final List<String> targetBranches = branchesPostFrontierList.get(depthLevel); 
-                for (int i = 0; i < newStates.size(); ++i) {
-                    final State newState = newStates.get(i);
-                    final List<Clause> pathCondition = newState.getPathCondition();
+                final State statePreFrontier = rp.getStatePreFrontier();
+                final List<String> branchesPostFrontier = rp.getBranchesPostFrontier(); 
+                for (int i = 0; i < statesPostFrontier.size(); ++i) {
+                    final State statePostFrontier = statesPostFrontier.get(i);
+                    final List<Clause> pathCondition = statePostFrontier.getPathCondition();
                     if (this.treePath.containsPath(pathCondition, false)) {
                         continue;
                     }
-                    final ClassHierarchy hier = newState.getClassHierarchy();
+                    final ClassHierarchy hier = statePostFrontier.getClassHierarchy();
                     if (!pathCondition.isEmpty() && assumptionViolated(hier, pathCondition.get(pathCondition.size() - 1))) {
                         LOGGER.info("From test case %s skipping path condition due to violated assumption %s on initialMap in path condition %s", tc.getClassName(), pathCondition.get(pathCondition.size() - 1), stringifyPathCondition(shorten(pathCondition)));
                         continue;
                     }
                     
                     //inserts the generated path in the treePath
-                    final Map<Long, String> stringLiterals = stringLiteralsList.get(depthLevel).get(i);
-                    final Set<Long> stringOthers = stringOthersList.get(depthLevel).get(i); 
-                    this.treePath.insertPath(pathCondition, coveredBranchesList.get(depthLevel), branchesNeighborList.get(depthLevel), false);
+                    this.treePath.insertPath(pathCondition, rp.getCoverage(), branchesPostFrontier, false);
 
                     //emits the output job in the output buffer
-                    final boolean atJump = atJumpList.get(depthLevel);
-                    final JBSEResult output = new JBSEResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), initialState, preState, newState, atJump, (atJump ? targetBranches.get(i) : null), stringLiterals, stringOthers, currentDepth);
-                    this.getOutputBuffer().add(output);
-                    LOGGER.info("From test case %s generated path condition %s%s", tc.getClassName(), stringifyPathCondition(shorten(pathCondition)), (atJump ? (" aimed at branch " + targetBranches.get(i)) : ""));
+                    final Map<Long, String> stringLiterals = rp.getStringLiterals().get(i);
+                    final Set<Long> stringOthers = rp.getStringOthers().get(i); 
+                    final boolean atJump = rp.getAtJump();
+                    final JBSEResult output = new JBSEResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), initialState, statePreFrontier, statePostFrontier, atJump, (atJump ? branchesPostFrontier.get(i) : null), stringLiterals, stringOthers, currentDepth);
+                    getOutputBuffer().add(output);
+                    LOGGER.info("From test case %s generated path condition %s%s", tc.getClassName(), stringifyPathCondition(shorten(pathCondition)), (atJump ? (" aimed at branch " + branchesPostFrontier.get(i)) : ""));
                     noOutputJobGenerated = false;
                 }
             }
@@ -327,6 +241,63 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             //prints some feedback
             LOGGER.warn("Run test case %s, does not reach the target method %s:%s:%s", item.getTestCase().getClassName(), item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName());
         }
+    }
+    
+    private void emitTestIfCoversSomethingNew(EvosuiteResult item, Set<String> newCoveredBranches) {
+        final TestCase tc = item.getTestCase();
+        final Coverage coverageType = this.o.getCoverage();
+        final int branchCoverageTargetNew = filterOnPattern(newCoveredBranches, this.o.patternBranchesTarget()).size();            
+        final int branchCoverageUnsafeNew = filterOnPattern(newCoveredBranches, this.o.patternBranchesUnsafe()).size();
+        if (coverageType == Coverage.PATHS || 
+        (coverageType == Coverage.BRANCHES && branchCoverageTargetNew > 0) ||
+        (coverageType == Coverage.UNSAFE && branchCoverageUnsafeNew > 0)) {
+            //more feedback
+            if (coverageType == Coverage.BRANCHES) {
+                LOGGER.info("Test case %s covered branch%s %s", tc.getClassName(), (branchCoverageTargetNew == 1 ? " " : "es"), String.join(", ", newCoveredBranches));
+            }
+            
+            //copies the test in out
+            try {
+                //gets the source and destination paths of the test source file
+                final Path source = item.getTestCase().getSourcePath();
+                final Path destination = this.o.getOutDirectory().resolve(item.getTestCase().getClassName() + ".java");
+                
+                //creates the intermediate package directories if they do not exist
+                final int lastSlash = item.getTestCase().getClassName().lastIndexOf('/');
+                if (lastSlash != -1) {
+                    final String dirs = item.getTestCase().getClassName().substring(0, lastSlash);
+                    final Path destinationDir = this.o.getOutDirectory().resolve(dirs);
+                    Files.createDirectories(destinationDir);
+                }
+                
+                //copies the test file
+                Files.copy(source, destination, StandardCopyOption.REPLACE_EXISTING);
+
+                //possibly copies the scaffolding file
+                final Path sourceScaffolding = item.getTestCase().getScaffoldingPath();
+                if (sourceScaffolding != null) {
+                    final Path destinationScaffolding = this.o.getOutDirectory().resolve(item.getTestCase().getClassName() + "_scaffolding.java");
+                    Files.copy(sourceScaffolding, destinationScaffolding, StandardCopyOption.REPLACE_EXISTING);
+                }
+                
+            } catch (IOException e) {
+                LOGGER.error("Unexpected I/O error while attempting to copy test case %s or its scaffolding to its destination directory", tc.getClassName());
+                LOGGER.error("Message: %s", e.toString());
+                LOGGER.error("Stack trace:");
+                for (StackTraceElement elem : e.getStackTrace()) {
+                    LOGGER.error("%s", elem.toString());
+                }
+                //falls through
+            }
+        }
+    }
+    
+    private void logCoverage() {
+        final long pathCoverage = this.pathCoverage.incrementAndGet();
+        final int branchCoverage = this.treePath.totalCovered();
+        final int branchCoverageTarget = this.treePath.totalCovered(this.o.patternBranchesTarget());
+        final int branchCoverageUnsafe = this.treePath.totalCovered(this.o.patternBranchesUnsafe());
+        LOGGER.info("Current coverage: %d path%s, %d branch%s (total), %d branch%s (target), %d failed assertion%s", pathCoverage, (pathCoverage == 1 ? "" : "s"), branchCoverage, (branchCoverage == 1 ? "" : "es"), branchCoverageTarget, (branchCoverageTarget == 1 ? "" : "es"), branchCoverageUnsafe, (branchCoverageUnsafe == 1 ? "" : "s"));
     }
 }
 
