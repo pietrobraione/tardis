@@ -219,18 +219,18 @@ public final class Util {
     }
     
     private static void addTargetIfNotExcluded(List<List<String>> retVal, Executable target, boolean onlyPublic, String className) {
-    	if (!EXCLUDED.contains(target.getName()) &&
-    	((onlyPublic && (target.getModifiers() & Modifier.PUBLIC) != 0) || (target.getModifiers() & Modifier.PRIVATE) == 0) &&
-    	!target.isSynthetic()) {
+    	final boolean visible = (onlyPublic && (target.getModifiers() & Modifier.PUBLIC) != 0) || (target.getModifiers() & Modifier.PRIVATE) == 0;
+    	if (!EXCLUDED.contains(target.getName()) && visible && !target.isSynthetic()) {
     		final List<String> targetSignature = new ArrayList<>(3);
     		targetSignature.add(className);
-    		targetSignature.add("(" + Arrays.stream(target.getParameterTypes())
+    		final String descriptorParams = "(" + Arrays.stream(target.getParameterTypes())
     		.map(c -> c.getName())
     		.map(s -> s.replace('.', '/'))
     		.map(Util::convertPrimitiveTypes)
     		.map(Util::addReferenceMark)
-    		.collect(Collectors.joining()) +
-    		")" + ((target instanceof Method) ? addReferenceMark(convertPrimitiveTypes(((Method) target).getReturnType().getName().replace('.', '/'))) : "V"));
+    		.collect(Collectors.joining()) + ")";
+    		final String descriptorReturn = ((target instanceof Method) ? addReferenceMark(convertPrimitiveTypes(((Method) target).getReturnType().getName().replace('.', '/'))) : "V");
+    		targetSignature.add(descriptorParams + descriptorReturn);
     		targetSignature.add((target instanceof Method) ? target.getName() : "<init>");
     		retVal.add(targetSignature);
     	}
