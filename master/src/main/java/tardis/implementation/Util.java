@@ -211,25 +211,29 @@ public final class Util {
             final ClassLoader ic = getInternalClassloader(o.getClassesPath());
             final Class<?> clazz = ic.loadClass(className.replace('/', '.'));
             final List<Executable> targets = Stream.concat(Arrays.stream(clazz.getDeclaredMethods()), Arrays.stream(clazz.getDeclaredConstructors())).collect(Collectors.toList());
-            for (Executable t : targets) {
-                if (!EXCLUDED.contains(t.getName()) &&
-                    ((onlyPublic && (t.getModifiers() & Modifier.PUBLIC) != 0) || (t.getModifiers() & Modifier.PRIVATE) == 0) &&
-                    !t.isSynthetic()) {
-                    final List<String> targetSignature = new ArrayList<>(3);
-                    targetSignature.add(className);
-                    targetSignature.add("(" + Arrays.stream(t.getParameterTypes())
-                                                    .map(c -> c.getName())
-                                                    .map(s -> s.replace('.', '/'))
-                                                    .map(Util::convertPrimitiveTypes)
-                                                    .map(Util::addReferenceMark)
-                                                    .collect(Collectors.joining()) +
-                                        ")" + ((t instanceof Method) ? addReferenceMark(convertPrimitiveTypes(((Method) t).getReturnType().getName().replace('.', '/'))) : "V"));
-                    targetSignature.add((t instanceof Method) ? t.getName() : "<init>");
-                    retVal.add(targetSignature);
-                }
+            for (Executable target : targets) {
+            	addTargetIfNotExcluded(retVal, target, onlyPublic, className);
             }
         }
         return retVal;
+    }
+    
+    private static void addTargetIfNotExcluded(List<List<String>> retVal, Executable target, boolean onlyPublic, String className) {
+    	if (!EXCLUDED.contains(target.getName()) &&
+    	((onlyPublic && (target.getModifiers() & Modifier.PUBLIC) != 0) || (target.getModifiers() & Modifier.PRIVATE) == 0) &&
+    	!target.isSynthetic()) {
+    		final List<String> targetSignature = new ArrayList<>(3);
+    		targetSignature.add(className);
+    		targetSignature.add("(" + Arrays.stream(target.getParameterTypes())
+    		.map(c -> c.getName())
+    		.map(s -> s.replace('.', '/'))
+    		.map(Util::convertPrimitiveTypes)
+    		.map(Util::addReferenceMark)
+    		.collect(Collectors.joining()) +
+    		")" + ((target instanceof Method) ? addReferenceMark(convertPrimitiveTypes(((Method) target).getReturnType().getName().replace('.', '/'))) : "V"));
+    		targetSignature.add((target instanceof Method) ? target.getName() : "<init>");
+    		retVal.add(targetSignature);
+    	}
     }
     
     /**
@@ -249,32 +253,36 @@ public final class Util {
     static ClassLoader internalClassLoader = null; //lazily initialized
     private static ClassLoader getInternalClassloader(List<Path> classpath) throws MalformedURLException, SecurityException {
         if (internalClassLoader == null) {
-            final ClassLoader systemClassLoader = ClassLoader.getSystemClassLoader();
             if (classpath == null || classpath.size() == 0) {
-                internalClassLoader = systemClassLoader;
+                internalClassLoader = ClassLoader.getSystemClassLoader();
             } else {
-                final List<File> paths = new ArrayList<File>();
-                for (Path path : classpath) {
-                    final File newPath = path.toFile();
-                    if (!newPath.exists()) {
-                        throw new MalformedURLException("The new path " + newPath + " does not exist");
-                    } else {
-                        paths.add(newPath);
-                    }
-                }
-    
-                final List<URL> urls = new ArrayList<URL>();
-                if (systemClassLoader instanceof URLClassLoader) {
-                    urls.addAll(Arrays.asList(((URLClassLoader) systemClassLoader).getURLs()));
-                }
-    
-                for (File newPath : paths) {
-                    urls.add(newPath.toURI().toURL());
-                }
-                internalClassLoader = new URLClassLoader(urls.toArray(new URL[0]), Util.class.getClassLoader());
+            	internalClassLoader = makeURLClassLoader(classpath);
             }
         }
         return internalClassLoader;
+    }
+    
+    private static ClassLoader makeURLClassLoader(List<Path> classpath) throws MalformedURLException {
+        final List<File> paths = new ArrayList<File>();
+        for (Path path : classpath) {
+            final File newPath = path.toFile();
+            if (!newPath.exists()) {
+                throw new MalformedURLException("The new path " + newPath + " does not exist");
+            } else {
+                paths.add(newPath);
+            }
+        }
+
+        final List<URL> urls = new ArrayList<URL>();
+        final ClassLoader systemClassLoader = ClassLoader.getSystemClassLoader();
+        if (systemClassLoader instanceof URLClassLoader) {
+            urls.addAll(Arrays.asList(((URLClassLoader) systemClassLoader).getURLs()));
+        }
+
+        for (File newPath : paths) {
+            urls.add(newPath.toURI().toURL());
+        }
+        return new URLClassLoader(urls.toArray(new URL[0]), Util.class.getClassLoader());
     }
     
     /**
