@@ -347,7 +347,6 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
                 for (JBSEResult splitItem : splitItems) {
                     try {
                         checkTestCompileAndScheduleJBSE(testCount, splitItem);
-                        ++testCount;
                     } catch (NoTestFileException e) {
                         LOGGER.error("Failed to generate the test case %s for path condition %s: the generated test class file does not seem to exist (perhaps EvoSuite must be blamed)", e.file.toAbsolutePath().toString(), e.pathCondition);
                         //continue
@@ -379,6 +378,8 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
                             LOGGER.error("%s", elem.toString());
                         }
                         //continue
+                    } finally {
+                    	++testCount;
                     }
                 }
 
