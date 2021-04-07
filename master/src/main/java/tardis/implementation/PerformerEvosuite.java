@@ -423,10 +423,9 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
                 try {
                     emitAndCompileEvoSuiteWrapper(i, item.getInitialState(), item.getFinalState(), item.getStringLiterals(), item.getStringOthers());
                     compiled.add(item);
-                    //continue
                 } catch (CompilationFailedWrapperException e) {
                     LOGGER.error("Internal error: EvoSuite wrapper %s compilation failed", e.file.toAbsolutePath().toString());
-                    //continue
+                    //falls through
                 } catch (IOFileCreationException e) {
                     LOGGER.error("Unexpected I/O error during EvoSuite wrapper creation/compilation while creating file %s", e.file.toAbsolutePath().toString());
                     LOGGER.error("Message: %s", e.toString());
@@ -434,7 +433,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
                     for (StackTraceElement elem : e.getStackTrace()) {
                         LOGGER.error("%s", elem.toString());
                     }
-                    //continue
+                    //falls through
                 } catch (FrozenStateException e) {
                     LOGGER.error("Internal error while creating EvoSuite wrapper");
                     LOGGER.error("Message: %s", e.toString());
@@ -442,11 +441,16 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
                     for (StackTraceElement elem : e.getStackTrace()) {
                         LOGGER.error("%s", elem.toString());
                     }
-                    //continue
+                    //falls through
                 }
                 ++i;
             }
 
+            //skips to next subitems if failed to compile all
+            if (compiled.size() == 0) {
+            	continue;
+            }
+            
             //builds the EvoSuite command line
             final List<String> evosuiteCommand = buildEvoSuiteCommand(testCount, compiled); 
 
@@ -464,7 +468,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
                 for (StackTraceElement elem : e.getStackTrace()) {
                     LOGGER.error("%s", elem.toString());
                 }
-                return;
+                continue;
             }
 
             //launches a thread that waits for tests and schedules 
@@ -483,7 +487,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
                 for (StackTraceElement elem : e.getStackTrace()) {
                     LOGGER.error("%s", elem.toString());
                 }
-                return;
+                evosuiteProcess.destroy();
             }
         }
 
