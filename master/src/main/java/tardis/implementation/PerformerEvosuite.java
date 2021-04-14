@@ -735,7 +735,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         }
 
         final Path javacLogFilePath = this.o.getTmpDirectoryPath().resolve("javac-log-wrapper-" + testCount + ".txt");
-        final String[] javacParameters = { "-cp", this.classpathCompilationWrapper, "-d", this.o.getTmpBinDirectoryPath().toString(), "-source", "8", "-target", "8", wrapperFilePath.toString(), "-J-Xmx4G", "-J-Xss1G" };
+        final String[] javacParameters = { "-cp", this.classpathCompilationWrapper, "-d", this.o.getTmpBinDirectoryPath().toString(), "-source", "8", "-target", "8", wrapperFilePath.toString() };
         try (final OutputStream w = new BufferedOutputStream(Files.newOutputStream(javacLogFilePath))) {
             final int success = this.compiler.run(null, w, w, javacParameters);
             if (success != 0) {
