@@ -303,7 +303,7 @@ final class RunnerPath implements AutoCloseable {
         z3CommandLine.add(this.z3Path);
         z3CommandLine.add(SWITCH_CHAR + "smt2");
         z3CommandLine.add(SWITCH_CHAR + "in");
-        z3CommandLine.add(SWITCH_CHAR + "t:10");
+        z3CommandLine.add(SWITCH_CHAR + "t:100");
         final ClassInitRulesRepo initRules = new ClassInitRulesRepo();
         try {
             if (pConcrete == null) {
