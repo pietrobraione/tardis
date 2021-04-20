@@ -70,6 +70,7 @@ final class RunnerPostFrontier implements AutoCloseable {
     private static final Logger LOGGER = LogManager.getFormatterLogger(RunnerPostFrontier.class);
 
     private final Runner runnerPostFrontier;
+    private final long maxCount;
     private final Map<Long, String> stringLiteralsAtFrontier;
     private final Set<Long> stringOthersAtFrontier;
     private final ArrayList<HashMap<Long, String>> stringLiterals = new ArrayList<>();
@@ -87,13 +88,14 @@ final class RunnerPostFrontier implements AutoCloseable {
     private boolean atLoadConstant = false;
     private int loadConstantStackSize = 0;
     
-    public RunnerPostFrontier(RunnerParameters runnerParameters, Map<Long, String> stringLiterals, Set<Long> stringOthers) 
+    public RunnerPostFrontier(RunnerParameters runnerParameters, long maxCount, Map<Long, String> stringLiterals, Set<Long> stringOthers) 
     throws NotYetImplementedException, CannotBuildEngineException, DecisionException, InitializationException, 
     InvalidClassFileFactoryClassException, NonexistingObservedVariablesException, ClasspathException, 
     ContradictionException {
     	runnerParameters.setActions(new ActionsRunnerPostFrontier());
         final RunnerBuilder rb = new RunnerBuilder();
         this.runnerPostFrontier = rb.build(runnerParameters);
+        this.maxCount = maxCount;
         this.stringLiteralsAtFrontier = stringLiterals;
         this.stringOthersAtFrontier = stringOthers;
         this.stringLiteralsCurrent = new HashMap<>(this.stringLiteralsAtFrontier);
@@ -210,6 +212,9 @@ final class RunnerPostFrontier implements AutoCloseable {
                 }
                 RunnerPostFrontier.this.firstPostFrontierToDo = false;
                 
+                getEngine().stopCurrentPath();
+            } else if (currentState.getCount() >= RunnerPostFrontier.this.maxCount) {
+            	//we were not able to reach a post-frontier state along this path
                 getEngine().stopCurrentPath();
             }
             

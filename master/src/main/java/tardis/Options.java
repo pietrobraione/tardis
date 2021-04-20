@@ -73,8 +73,12 @@ public final class Options implements Cloneable {
     private int maxDepth = 50;
 
     @Option(name = "-max_tc_depth",
-            usage = "The maximum depth at which each single test path is explored")
+            usage = "The maximum depth at which each single test case path is explored")
     private int maxTestCaseDepth = 25;
+
+    @Option(name = "-max_count",
+            usage = "The maximum state count after which, if the depth does not increase, the exploration of a path is abandoned")
+    private long maxCount = 10_000_000;
 
     @Option(name = "-num_threads_jbse",
             usage = "The number of threads in the JBSE thread pool")
@@ -327,6 +331,14 @@ public final class Options implements Cloneable {
 
     public void setMaxTestCaseDepth(int maxTestCaseDepth) {
         this.maxTestCaseDepth = maxTestCaseDepth;
+    }
+
+    public long getMaxCount() {
+        return this.maxCount;
+    }
+
+    public void setMaxCount(long maxCount) {
+        this.maxCount = maxCount;
     }
 
     public float getThrottleFactorJBSE() {

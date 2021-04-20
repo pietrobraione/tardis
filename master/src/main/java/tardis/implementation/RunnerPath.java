@@ -64,6 +64,8 @@ final class RunnerPath implements AutoCloseable {
     private final String targetMethodDescriptor;
     private final String targetMethodName;
     private final TestCase testCase;
+    private final int maxDepth;
+    private final long maxCount;
     private final RunnerParameters commonParamsSymbolic;
     private final RunnerParameters commonParamsConcrete;
     private final int numberOfHits;
@@ -80,6 +82,8 @@ final class RunnerPath implements AutoCloseable {
         this.targetMethodDescriptor = item.getTargetMethodDescriptor();
         this.targetMethodName = item.getTargetMethodName();
         this.testCase = item.getTestCase();
+        this.maxDepth = o.getMaxDepth();
+        this.maxCount = o.getMaxCount();
 
         //builds the template parameters object for the guided (symbolic) 
         //and the guiding (concrete) executions
@@ -87,6 +91,7 @@ final class RunnerPath implements AutoCloseable {
         this.commonParamsConcrete = new RunnerParameters();
         fillCommonParams(o, item, initialState);
 
+        
         //calculates the number of hits
         this.numberOfHits = countNumberOfInvocations(this.targetMethodClassName, this.targetMethodDescriptor, this.targetMethodName);
         if (this.numberOfHits == 0) {
@@ -191,6 +196,8 @@ final class RunnerPath implements AutoCloseable {
      *         all the states on branch at depth {@code stateDepth + 1}. 
      *         In case {@code stateDepth < 0} executes the test up to the 
      *         final state and returns a list containing only the final state.
+     *         If the execution exhausts one of its bounds or terminates before 
+     *         arriving at the post-frontier branch, returns an empty {@link List}.  
      * @throws DecisionException
      * @throws CannotBuildEngineException
      * @throws InitializationException
@@ -214,29 +221,31 @@ final class RunnerPath implements AutoCloseable {
         if (this.runnerPreFrontier == null || this.runnerPreFrontier.getCurrentState().getDepth() > testDepth) {
             makeRunnerPreFrontier();
         }
-        this.runnerPreFrontier.setTestDepth(testDepth);
+        this.runnerPreFrontier.setTestDepth(testDepth < 0 ? this.maxDepth : Math.min(this.maxDepth, testDepth));
         this.runnerPreFrontier.run();
         
-        if (testDepth < 0) {
-            //there is no frontier, and the runnerPreFrontier's final
-            //state is the final state of the guided execution: return it
-            final ArrayList<State> retVal = new ArrayList<>();
-            if (!this.runnerPreFrontier.isContradictory()) {
-                final State finalState = this.runnerPreFrontier.getCurrentState().clone();
-                retVal.add(finalState);
-            }
-            return retVal;
+        if (this.runnerPreFrontier.isAtPreFrontier()) {
+        	if (testDepth < 0) {
+        		//there is no frontier, and the runnerPreFrontier's final
+        		//state is the final state of the guided execution: return it
+        		final State finalState = this.runnerPreFrontier.getCurrentState().clone();
+        		final ArrayList<State> retVal = new ArrayList<>();
+        		retVal.add(finalState);
+        		return retVal;
+        	} else {
+        		//steps to all the post-frontier states and gathers them
+        		this.statePreFrontier = this.runnerPreFrontier.getCurrentState().clone();
+        		makeRunnerPostFrontier();
+        		if (this.runnerPostFrontier == null) {
+                	return Collections.emptyList();
+        		} else {
+        			this.runnerPostFrontier.setTestDepth(Math.min(this.maxDepth, testDepth));
+        			this.runnerPostFrontier.run();
+        			return this.runnerPostFrontier.getStatesPostFrontier();
+        		}
+        	}
         } else {
-            //steps to all the post-frontier states and gathers them
-            this.statePreFrontier = this.runnerPreFrontier.getCurrentState().clone();
-            makeRunnerPostFrontier();
-            if (this.runnerPostFrontier == null) {
-                return new ArrayList<>();
-            } else {
-                this.runnerPostFrontier.setTestDepth(testDepth);
-                this.runnerPostFrontier.run();
-                return this.runnerPostFrontier.getStatesPostFrontier();
-            }
+        	return Collections.emptyList();
         }
     }
     
@@ -249,7 +258,7 @@ final class RunnerPath implements AutoCloseable {
         completeParametersGuided(pSymbolic, pConcrete);
         
         //builds the runner
-        this.runnerPreFrontier = new RunnerPreFrontier(pSymbolic);
+        this.runnerPreFrontier = new RunnerPreFrontier(pSymbolic, this.maxCount);
     }
     
     private void makeRunnerPostFrontier() throws DecisionException, NotYetImplementedException, 
@@ -267,7 +276,7 @@ final class RunnerPath implements AutoCloseable {
             pSymbolic.setStartingState(this.statePreFrontier);
 
             //builds the runner
-            this.runnerPostFrontier = new RunnerPostFrontier(pSymbolic, this.runnerPreFrontier.getStringLiterals(), this.runnerPreFrontier.getStringOthers());
+            this.runnerPostFrontier = new RunnerPostFrontier(pSymbolic, this.maxCount, this.runnerPreFrontier.getStringLiterals(), this.runnerPreFrontier.getStringOthers());
         }
     }
 

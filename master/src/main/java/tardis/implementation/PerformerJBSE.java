@@ -120,7 +120,7 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             final State stateFinal = rp.runProgram();
             if (stateFinal == null) {
                 //the execution violated some assumption: prints some feedback
-                LOGGER.info("Run test case %s, the test case violated an assumption", tc.getClassName());
+                LOGGER.info("Run test case %s, the test case violated an assumption or exhausted a bound before arriving at the final state", tc.getClassName());
                 return;
             }
             final List<Clause> pathConditionFinal = stateFinal.getPathCondition();
@@ -159,7 +159,7 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             
             //reruns the test case at all the depths in the range, generates all the modified 
             //path conditions and puts all the output jobs in the output queue
-            final int depthFinal = Math.min(this.o.getMaxDepth(), Math.min(depthStart + this.o.getMaxTestCaseDepth(), stateFinal.getDepth()));
+            final int depthFinal = Math.min(depthStart + this.o.getMaxTestCaseDepth(), stateFinal.getDepth());
             boolean noOutputJobGenerated = true;
             for (int depthCurrent = depthStart; depthCurrent < depthFinal; ++depthCurrent) {
                 final List<State> statesPostFrontier = rp.runProgram(depthCurrent);

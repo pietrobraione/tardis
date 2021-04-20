@@ -54,6 +54,7 @@ final class RunnerPreFrontier implements AutoCloseable {
 
     private final Runner runnerPreFrontier;
     private final DecisionProcedureGuidance guid;
+    private final long maxCount;
     private final HashMap<Long, String> stringLiterals = new HashMap<>();
     private final HashSet<Long> stringOthers = new HashSet<>();
     private final HashSet<String> coverage = new HashSet<>();
@@ -62,9 +63,9 @@ final class RunnerPreFrontier implements AutoCloseable {
     private int jumpPC = 0;
     private boolean atLoadConstant = false;
     private int loadConstantStackSize = 0;
-    private boolean contradictory = false;
+    private boolean atPreFrontier = false;
 
-    public RunnerPreFrontier(RunnerParameters runnerParameters) 
+    public RunnerPreFrontier(RunnerParameters runnerParameters, long maxCount) 
     throws NotYetImplementedException, CannotBuildEngineException, DecisionException, 
     InitializationException, InvalidClassFileFactoryClassException, NonexistingObservedVariablesException, 
     ClasspathException, ContradictionException {
@@ -72,6 +73,7 @@ final class RunnerPreFrontier implements AutoCloseable {
         final RunnerBuilder rb = new RunnerBuilder();
         this.runnerPreFrontier = rb.build(runnerParameters);
         this.guid = (DecisionProcedureGuidance) runnerParameters.getDecisionProcedure();
+        this.maxCount = maxCount;
     }
     
     public void setTestDepth(int testDepth) {
@@ -93,10 +95,6 @@ final class RunnerPreFrontier implements AutoCloseable {
     	this.runnerPreFrontier.run();
     }
     
-    public boolean isContradictory() {
-    	return this.contradictory;
-    }
-    
     public Map<Long, String> getStringLiterals() {
     	return this.stringLiterals;
     }
@@ -109,6 +107,10 @@ final class RunnerPreFrontier implements AutoCloseable {
     	return this.coverage;
     }
 
+    public boolean isAtPreFrontier() {
+    	return this.atPreFrontier;
+    }
+    
     /**
      * The {@link Actions} for this {@link RunnerPreFrontier}.
      * 
@@ -163,6 +165,9 @@ final class RunnerPreFrontier implements AutoCloseable {
             
             //stops if at the pre-frontier
             if (currentState.getDepth() == RunnerPreFrontier.this.testDepth) {
+            	RunnerPreFrontier.this.atPreFrontier = true;
+                return true;
+            } else if (currentState.getCount() >= RunnerPreFrontier.this.maxCount) {
                 return true;
             } else {
                 return super.atStepPre();
@@ -232,16 +237,15 @@ final class RunnerPreFrontier implements AutoCloseable {
 
         @Override
         public boolean atPathEnd() {
-            if (RunnerPreFrontier.this.testDepth < 0) { //running a test up to the end
-                return true;
-            } else {
-                return super.atPathEnd();
-            }
+        	//this triggers end of unconstrained exploration when
+        	//the path is shorter than the depth bound
+        	RunnerPreFrontier.this.atPreFrontier = true;
+        	return true;
         }
         
         @Override
         public boolean atContradictionException(ContradictionException e) {
-        	RunnerPreFrontier.this.contradictory = true;
+        	RunnerPreFrontier.this.atPreFrontier = false;
             return true;
         }
     }
