@@ -20,6 +20,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import jbse.algo.exc.CannotManageStateException;
+import jbse.apps.run.UninterpretedNoContextException;
 import jbse.bc.ClassHierarchy;
 import jbse.bc.exc.InvalidClassFileFactoryClassException;
 import jbse.common.exc.ClasspathException;
@@ -117,7 +118,13 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             
             //runs the test case up to the final state, and takes the 
             //final state's path condition
-            final State stateFinal = rp.runProgram();
+            final State stateFinal;
+        	try {
+        		stateFinal = rp.runProgram();
+        	} catch (UninterpretedNoContextException e) {
+                LOGGER.info("Skipped test case %s because it invokes an uninterpreted function in the context of a model", tc.getClassName());
+                return;
+        	}
             if (stateFinal == null) {
                 //the execution violated some assumption: prints some feedback
                 LOGGER.info("Run test case %s, the test case violated an assumption or exhausted a bound before arriving at the final state", tc.getClassName());
@@ -141,8 +148,8 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             }
 
             //possibly caches the initial state
-            final State initialState = rp.getInitialState();
-            possiblySetInitialStateCached(item, initialState);
+            final State stateInitial = rp.getInitialState();
+            possiblySetInitialStateCached(item, stateInitial);
             
             //learns the new data for future update of indices
             learnDataForIndices(newCoveredBranches, coveredBranches, pathConditionFinal);
@@ -162,20 +169,19 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             final int depthFinal = Math.min(depthStart + this.o.getMaxTestCaseDepth(), stateFinal.getDepth());
             boolean noOutputJobGenerated = true;
             for (int depthCurrent = depthStart; depthCurrent < depthFinal; ++depthCurrent) {
-                final List<State> statesPostFrontier = rp.runProgram(depthCurrent);
+            	try {
+            		final List<State> statesPostFrontier = rp.runProgram(depthCurrent);
 
-                //checks shutdown of the performer
-                if (Thread.interrupted()) {
-                    return;
-                }
+            		//checks shutdown of the performer
+            		if (Thread.interrupted()) {
+            			return;
+            		}
 
-                //gives some feedback if detects a contradiction
-                if (statesPostFrontier.isEmpty()) {
-                    LOGGER.info("Test case %s, detected contradiction while generating path conditions at depth %d", tc.getClassName(), depthCurrent);
-                }
-
-                //creates all the output jobs
-                noOutputJobGenerated = createOutputJobsForFrontier(rp, statesPostFrontier, item, tc, initialState, depthCurrent) && noOutputJobGenerated;
+            		//creates all the output jobs
+            		noOutputJobGenerated = createOutputJobsForFrontier(rp, statesPostFrontier, item, tc, stateInitial, depthCurrent) && noOutputJobGenerated;
+            	} catch (UninterpretedNoContextException e) {
+                    LOGGER.info("From test case %s skipping a path condition because it invokes an uninterpreted function in the context of a model", tc.getClassName());
+            	}
             }
             if (noOutputJobGenerated) {
                 LOGGER.info("From test case %s no path condition generated", tc.getClassName());
@@ -282,7 +288,12 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
         LOGGER.info("Current coverage: %d path%s, %d branch%s (total), %d branch%s (target), %d failed assertion%s", pathCoverage, (pathCoverage == 1 ? "" : "s"), branchCoverage, (branchCoverage == 1 ? "" : "es"), branchCoverageTarget, (branchCoverageTarget == 1 ? "" : "es"), branchCoverageUnsafe, (branchCoverageUnsafe == 1 ? "" : "s"));
     }
     
-    private boolean createOutputJobsForFrontier(RunnerPath rp, List<State> statesPostFrontier, EvosuiteResult item, TestCase tc, State initialState, int currentDepth) {
+    private boolean createOutputJobsForFrontier(RunnerPath rp, List<State> statesPostFrontier, EvosuiteResult item, TestCase tc, State stateInitial, int depthCurrent) {
+        //gives some feedback if detects a contradiction
+        if (statesPostFrontier.isEmpty()) {
+            LOGGER.info("Test case %s, detected contradiction while generating path conditions at depth %d", tc.getClassName(), depthCurrent);
+        }
+
     	boolean noOutputJobGenerated = true;
         final State statePreFrontier = rp.getStatePreFrontier();
         final List<String> branchesPostFrontier = rp.getBranchesPostFrontier(); 
@@ -305,7 +316,7 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             final Map<Long, String> stringLiterals = rp.getStringLiterals().get(i);
             final Set<Long> stringOthers = rp.getStringOthers().get(i); 
             final boolean atJump = rp.getAtJump();
-            final JBSEResult output = new JBSEResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), initialState, statePreFrontier, statePostFrontier, atJump, (atJump ? branchesPostFrontier.get(i) : null), stringLiterals, stringOthers, currentDepth);
+            final JBSEResult output = new JBSEResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), stateInitial, statePreFrontier, statePostFrontier, atJump, (atJump ? branchesPostFrontier.get(i) : null), stringLiterals, stringOthers, depthCurrent);
             getOutputBuffer().add(output);
             LOGGER.info("From test case %s generated path condition %s%s", tc.getClassName(), stringifyPathCondition(shorten(pathCondition)), (atJump ? (" aimed at branch " + branchesPostFrontier.get(i)) : ""));
             noOutputJobGenerated = false;
