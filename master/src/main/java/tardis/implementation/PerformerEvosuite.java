@@ -676,7 +676,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
                     
                     //learns for update of indices
                     if (this.o.getUseIndexInfeasibility()) {
-                    	this.in.learnPathConditionForIndexInfeasibility(item.getFinalState().getPathCondition(), false);
+                    	this.in.learnPathConditionForIndexInfeasibility(item.getTargetMethodSignature(), item.getFinalState().getPathCondition(), false);
                     }
 
                     //TODO possibly lazier updates of index

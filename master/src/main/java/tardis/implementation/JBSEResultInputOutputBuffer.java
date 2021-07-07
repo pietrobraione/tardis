@@ -198,17 +198,18 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
 
     @Override
     public synchronized boolean add(JBSEResult item) {
-        final List<Clause> path = item.getFinalState().getPathCondition();
+    	final String entryPoint = item.getTargetMethodSignature();
+        final List<Clause> pathCondition = item.getFinalState().getPathCondition();
         if (this.useIndexImprovability) {
-        	updateIndexImprovability(path);
+        	updateIndexImprovability(entryPoint, pathCondition);
         }
         if (this.useIndexNovelty) {
-        	updateIndexNovelty(path);
+        	updateIndexNovelty(entryPoint, pathCondition);
         }
         if (this.useIndexInfeasibility) {
-        	updateIndexInfeasibility(path);
+        	updateIndexInfeasibility(entryPoint, pathCondition);
         }
-        final int queueNumber = calculateQueueNumber(path);
+        final int queueNumber = calculateQueueNumber(entryPoint, pathCondition);
         final LinkedBlockingQueue<JBSEResult> queue = this.queues.get(queueNumber);
         return queue.add(item);
     }
@@ -289,21 +290,24 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
      * Caches the fact that a path condition was successfully solved or not. 
      * Used to recalculate the infeasibility index.
      * 
+     * @param entryPoint a {@link String}, the 
+     *        identifier of a method's entry point where the
+     *        path starts. 
      * @param path a {@link List}{@code <}{@link Clause}{@code >}. 
      *        The first is the closest to the root, the last is the leaf.
      * @param solved a {@code boolean}, {@code true} if the path
      *        condition was solved, {@code false} otherwise.
      */
-    synchronized void learnPathConditionForIndexInfeasibility(List<Clause> path, boolean solved) {
+    synchronized void learnPathConditionForIndexInfeasibility(String entryPoint, List<Clause> path, boolean solved) {
     	final HashSet<TrainingItem> trainingSet = new HashSet<>();
         if (solved) {
             //all the prefixes are also solved
             for (int i = path.size(); i > 0; --i) {
-                final BloomFilter bloomFilter = this.treePath.getBloomFilter(path.subList(0, i));
+                final BloomFilter bloomFilter = this.treePath.getBloomFilter(entryPoint, path.subList(0, i));
                 trainingSet.add(new TrainingItem(bloomFilter, true));
             }
         } else {
-            final BloomFilter bloomFilter = this.treePath.getBloomFilter(path);
+            final BloomFilter bloomFilter = this.treePath.getBloomFilter(entryPoint, path);
             trainingSet.add(new TrainingItem(bloomFilter, false));
         }
         this.classifier.train(trainingSet);
@@ -317,9 +321,10 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
     synchronized void updateIndexImprovabilityAndReclassify() {
         synchronized (this.treePath) {
             forAllQueuedItemsToUpdateImprovability((queueNumber, bufferedJBSEResult) -> {
+            	final String entryPoint = bufferedJBSEResult.getTargetMethodSignature();
                 final List<Clause> pathCondition = bufferedJBSEResult.getFinalState().getPathCondition();
-                updateIndexImprovability(pathCondition);
-                final int queueNumberNew = calculateQueueNumber(pathCondition);
+                updateIndexImprovability(entryPoint, pathCondition);
+                final int queueNumberNew = calculateQueueNumber(entryPoint, pathCondition);
                 if (queueNumberNew != queueNumber) {
                     this.queues.get(queueNumber).remove(bufferedJBSEResult);
                     this.queues.get(queueNumberNew).add(bufferedJBSEResult);
@@ -336,9 +341,10 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
     synchronized void updateIndexNoveltyAndReclassify() {
         synchronized (this.treePath) {
             forAllQueuedItemsToUpdateNovelty((queueNumber, bufferedJBSEResult) -> {
+            	final String entryPoint = bufferedJBSEResult.getTargetMethodSignature();
                 final List<Clause> pathCondition = bufferedJBSEResult.getFinalState().getPathCondition();
-                updateIndexNovelty(pathCondition);
-                final int queueNumberNew = calculateQueueNumber(pathCondition);
+                updateIndexNovelty(entryPoint, pathCondition);
+                final int queueNumberNew = calculateQueueNumber(entryPoint, pathCondition);
                 if (queueNumberNew != queueNumber) {
                     this.queues.get(queueNumber).remove(bufferedJBSEResult);
                     this.queues.get(queueNumberNew).add(bufferedJBSEResult);
@@ -357,9 +363,10 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
             //reclassifies the queued items only if this.trainingSetSize is big enough
             if (this.trainingSetSize >= this.trainingSetMinimumThreshold) {
                 forAllQueuedItems((queueNumber, bufferedJBSEResult) -> {
+                	final String entryPoint = bufferedJBSEResult.getTargetMethodSignature();
                     final List<Clause> pathCondition = bufferedJBSEResult.getFinalState().getPathCondition();
-                    updateIndexInfeasibility(pathCondition);
-                    final int queueNumberNew = calculateQueueNumber(pathCondition);
+                    updateIndexInfeasibility(entryPoint, pathCondition);
+                    final int queueNumberNew = calculateQueueNumber(entryPoint, pathCondition);
                     if (queueNumberNew != queueNumber) {
                         this.queues.get(queueNumber).remove(bufferedJBSEResult);
                         this.queues.get(queueNumberNew).add(bufferedJBSEResult);
@@ -443,16 +450,19 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
      * Calculates the queue of a {@link JBSEResult} based on the path condition of its
      * final state.
      * 
+     * @param entryPoint a {@link String}, the 
+     *        identifier of a method's entry point where the
+     *        path starts. 
      * @param path a {@link List}{@code <}{@link Clause}{@code >}. 
      *        The first is the closest to the root, the last is the leaf.
      * @return an {@code int} between {@code 0} and {@code 3}: the queue of the {@link JBSEResult}
      *         whose associated path condition is {@code path}. 
      */
-    private int calculateQueueNumber(List<Clause> path) {
+    private int calculateQueueNumber(String entryPoint, List<Clause> path) {
         //gets the indices
-    	final int indexImprovability = this.treePath.getIndexImprovability(path);
-    	final int indexNovelty = this.treePath.getIndexNovelty(path);
-    	final int indexInfeasibility = this.treePath.getIndexInfeasibility(path);
+    	final int indexImprovability = this.treePath.getIndexImprovability(entryPoint, path);
+    	final int indexNovelty = this.treePath.getIndexNovelty(entryPoint, path);
+    	final int indexInfeasibility = this.treePath.getIndexInfeasibility(entryPoint, path);
 
 		if (this.useIndexImprovability && !this.useIndexNovelty && !this.useIndexInfeasibility) {
 			return indexImprovability;
@@ -483,11 +493,14 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
     /**
      * Updates the improvability index for a given path.
      * 
+     * @param entryPoint a {@link String}, the 
+     *        identifier of a method's entry point where the
+     *        path starts. 
      * @param path a {@link List}{@code <}{@link Clause}{@code >}. 
      *        The first is the closest to the root, the last is the leaf.
      */
-    private void updateIndexImprovability(List<Clause> path) {
-        final Set<String> branchesNeighbor = this.treePath.getBranchesNeighbor(path);
+    private void updateIndexImprovability(String entryPoint, List<Clause> path) {
+        final Set<String> branchesNeighbor = this.treePath.getBranchesNeighbor(entryPoint, path);
         if (branchesNeighbor == null) {
             throw new AssertionError("Attempted to update the improvability index of a path condition that was not yet inserted in the TreePath.");
         }
@@ -498,21 +511,24 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
             }
         }
         final int indexImprovability = Math.min(branchesRelevant.size(), INDEX_IMPROVABILITY_MAX);
-        this.treePath.setIndexImprovability(path, indexImprovability);
+        this.treePath.setIndexImprovability(entryPoint, path, indexImprovability);
     }
 
     /**
      * Updates the novelty index for a given path.
      * 
+     * @param entryPoint a {@link String}, the 
+     *        identifier of a method's entry point where the
+     *        path starts. 
      * @param path a {@link List}{@code <}{@link Clause}{@code >}. 
      *        The first is the closest to the root, the last is the leaf.
      */
-    private void updateIndexNovelty(List<Clause> path) {
-        final Set<String> branches = this.treePath.getBranchesCovered(path);
+    private void updateIndexNovelty(String entryPoint, List<Clause> path) {
+        final Set<String> branches = this.treePath.getBranchesCovered(entryPoint, path);
         if (branches == null) {
             throw new AssertionError("Attempted to update the novelty index of a path condition that was not yet inserted in the TreePath.");
         }
-        final Map<String, Integer> hits = this.treePath.getHits(path);
+        final Map<String, Integer> hits = this.treePath.getHits(entryPoint, path);
         final Pattern p = Pattern.compile(this.patternBranchesNovelty);
         for (Iterator<Map.Entry<String, Integer>> it  = hits.entrySet().iterator(); it.hasNext(); ) {
         	final Map.Entry<String, Integer> hitEntry = it.next();
@@ -523,17 +539,20 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
         }
         final int minimum = (hits.values().isEmpty() ? INDEX_NOVELTY_MIN : Collections.min(hits.values()));
         final int indexNovelty = Math.min(minimum, INDEX_NOVELTY_MAX);
-        this.treePath.setIndexNovelty(path, indexNovelty);
+        this.treePath.setIndexNovelty(entryPoint, path, indexNovelty);
     }
     
     /**
      * Updates the infeasibility index for a given path.
      * 
+     * @param entryPoint a {@link String}, the 
+     *        identifier of a method's entry point where the
+     *        path starts. 
      * @param path a {@link List}{@code <}{@link Clause}{@code >}. 
      *        The first is the closest to the root, the last is the leaf.
      */
-    private void updateIndexInfeasibility(List<Clause> path) {
-        final BloomFilter bloomFilter = this.treePath.getBloomFilter(path);
+    private void updateIndexInfeasibility(String entryPoint, List<Clause> path) {
+        final BloomFilter bloomFilter = this.treePath.getBloomFilter(entryPoint, path);
         if (bloomFilter == null) {
             throw new AssertionError("Attempted to update the infeasibility index of a path condition that was not yet inserted in the TreePath.");
         }
@@ -552,7 +571,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
         } else { //feasible && voting == K
             indexInfeasibility = 3;
         }
-        this.treePath.setIndexInfeasibility(path, indexInfeasibility);
+        this.treePath.setIndexInfeasibility(entryPoint, path, indexInfeasibility);
     }
 
     private void forAllQueuedItems(BiConsumer<Integer, JBSEResult> toDo) {
@@ -565,8 +584,9 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
     
     private void forAllQueuedItemsToUpdateImprovability(BiConsumer<Integer, JBSEResult> toDo) {
         forAllQueuedItems((queue, bufferedJBSEResult) -> {
+        	final String entryPoint = bufferedJBSEResult.getTargetMethodSignature();
             final List<Clause> pathCondition = bufferedJBSEResult.getFinalState().getPathCondition();
-            final Set<String> toCompareBranches = this.treePath.getBranchesNeighbor(pathCondition);
+            final Set<String> toCompareBranches = this.treePath.getBranchesNeighbor(entryPoint, pathCondition);
             if (!Collections.disjoint(toCompareBranches, this.coverageSetImprovability)) {
                 toDo.accept(queue, bufferedJBSEResult);
             }
@@ -575,8 +595,9 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
     
     private void forAllQueuedItemsToUpdateNovelty(BiConsumer<Integer, JBSEResult> toDo) {
         forAllQueuedItems((queue, bufferedJBSEResult) -> {
+        	final String entryPoint = bufferedJBSEResult.getTargetMethodSignature();
             final List<Clause> pathCondition = bufferedJBSEResult.getFinalState().getPathCondition();
-            final Set<String> toCompareBranches = this.treePath.getBranchesCovered(pathCondition);
+            final Set<String> toCompareBranches = this.treePath.getBranchesCovered(entryPoint, pathCondition);
             if (!Collections.disjoint(toCompareBranches, this.coverageSetNovelty)) {
                 toDo.accept(queue, bufferedJBSEResult);
             }

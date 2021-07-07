@@ -96,7 +96,7 @@ public final class TreePath {
         }
 
         /** 
-         * Constructor for the root node. It does
+         * Constructor for a root node. It does
          * not store any {@link Clause}.
          */
         Node() { 
@@ -138,17 +138,20 @@ public final class TreePath {
     }
 
     /**
-     * The root {@link Node}.
+     * The root {@link Node}s, associated to the entry points.
      */
-    private final Node root = new Node();
+    private final HashMap<String, Node> roots = new HashMap<>();
 
     /**
-     * Returns the root.
+     * Returns the root {@link Node} for an entry point.
      * 
-     * @return a {@link Node}.
+     * @code entryPoint a {@link String}, the branch
+     *       identifier of a method's entry point.
+     * @return a {@link Node}, or {@code null} if
+     *         {@code entryPoint} was not yet covered.
      */
-    synchronized Node getRoot() {
-        return this.root;
+    synchronized Node getRoot(String entryPoint) {
+        return this.roots.get(entryPoint);
     }
 
     /**
@@ -182,10 +185,29 @@ public final class TreePath {
     	final Set<String> filtered = filterOnPattern(this.coverage, pattern);
         return filtered.size();
     }
+    
+    /**
+     * Gets an existing root, or creates it
+     * if it does not exists, and returns it.
+     * 
+     * @param entryPoint a {@link String}, the branch
+     *        identifier of a method's entry point
+     *        associated to the root.
+     * @return the root {@link Node}.
+     */
+    private Node ensureRoot(String entryPoint) {
+    	if (!this.roots.containsKey(entryPoint)) {
+    		this.roots.put(entryPoint, new Node());
+    	}
+		return this.roots.get(entryPoint);
+    }
 
     /**
      * Inserts a path in this {@link TreePath}.
      * 
+     * @param entryPoint a {@link String}, the branch
+     *        identifier of a method's entry point where the
+     *        path starts. 
      * @param path a {@link List}{@code <}{@link Clause}{@code >}. The first in 
      *        the sequence is the closer to the root, the last is the leaf.
      * @param coveredBranches a {@link Collection}{@code <}{@link String}{@code >}, 
@@ -200,9 +222,9 @@ public final class TreePath {
      *         {@code coveredBranches} that were not already covered before the 
      *         invocation of this method, otherwise returns {@code null}.
      */
-    synchronized Set<String> insertPath(List<Clause> path, Collection<String> coveredBranches, Collection<String> branchesFrontier, boolean covered) {
+    synchronized Set<String> insertPath(String entryPoint, List<Clause> path, Collection<String> coveredBranches, Collection<String> branchesFrontier, boolean covered) {
         int index = 0;
-        Node currentInTree = this.root;
+        Node currentInTree = ensureRoot(entryPoint);
         if (covered) {
             currentInTree.status = NodeStatus.COVERED;
         }
@@ -254,17 +276,23 @@ public final class TreePath {
     /**
      * Checks whether a path exists in this {@link TreePath}.
      * 
+     * @param entryPoint a {@link String}, the branch
+     *        identifier of a method's entry point where the
+     *        path starts. 
      * @param path a {@link List}{@code <}{@link Clause}{@code >}. 
      *        The first is the closest to the root, the last is the leaf.
      * @param covered a {@code boolean}, {@code true} iff the path must be
-     *        covered by a test. 
+     *        covered by a test, {@code false} if it doesn't care. 
      * @return {@code true} iff the {@code path} was inserted by means
      *         of one or more calls to {@link #insertPath(Iterable) insertPath}, 
      *         and in case {@code covered == true}, if it is also covered 
      *         by a test.
      */
-    synchronized boolean containsPath(List<Clause> path, boolean covered) {
-        Node currentInTree = this.root;
+    synchronized boolean containsPath(String entryPoint, List<Clause> path, boolean covered) {
+        Node currentInTree = this.roots.get(entryPoint);
+        if (currentInTree == null) {
+        	return false;
+        }
         if (covered && currentInTree.status != NodeStatus.COVERED) {
             return false;
         }
@@ -285,14 +313,20 @@ public final class TreePath {
     /**
      * Finds a node in the tree.
      * 
+     * @param entryPoint a {@link String}, the branch
+     *        identifier of a method's entry point where the
+     *        path starts. 
      * @param path a {@link List}{@code <}{@link Clause}{@code >}. 
      *        The first is the closest to the root, the last is the 
      *        clause of the node to find.
      * @return the {@link Node}, or {@code null} if {@code path} 
      *         does not belong to the tree.
      */
-    private Node findNode(List<Clause> path) {
-        Node currentInTree = this.root;
+    private Node findNode(String entryPoint, List<Clause> path) {
+        Node currentInTree = this.roots.get(entryPoint);
+        if (currentInTree == null) {
+        	return null;
+        }
 
         for (Clause currentInPath : path) {
             final Node child = currentInTree.findChild(currentInPath);
@@ -307,27 +341,33 @@ public final class TreePath {
     /**
      * Returns the bloom filter associated to a given path.
      * 
+     * @param entryPoint a {@link String}, the branch
+     *        identifier of a method's entry point where the
+     *        path starts. 
      * @param path a {@link List}{@code <}{@link Clause}{@code >}. 
      *        The first is the closest to the root, the last is the leaf.
      * @return a {@link BloomFilter}, or {@code null} if
      *         {@code path} does not belong to the tree.
      */
-    synchronized BloomFilter getBloomFilter(List<Clause> path) {
-        final Node nodePath = findNode(path);
+    synchronized BloomFilter getBloomFilter(String entryPoint, List<Clause> path) {
+        final Node nodePath = findNode(entryPoint, path);
         return (nodePath == null ? null : nodePath.bloomFilter);
     }
 
     /**
      * Returns the improvability index associated to a given path.
      * 
+     * @param entryPoint a {@link String}, the branch
+     *        identifier of a method's entry point where the
+     *        path starts. 
      * @param path a {@link List}{@code <}{@link Clause}{@code >}. 
      *        The first is the closest to the root, the last is the leaf.
      * @return the improvability index (an {@code int} between {@code 0} 
      *         and {@code 10}), or {@code -1} if
      *         {@code path} does not belong to the tree.
      */
-    synchronized int getIndexImprovability(List<Clause> path) {
-        final Node nodePath = findNode(path);
+    synchronized int getIndexImprovability(String entryPoint, List<Clause> path) {
+        final Node nodePath = findNode(entryPoint, path);
         return (nodePath == null ? -1 : nodePath.indexImprovability);
     }
 
@@ -335,14 +375,17 @@ public final class TreePath {
      * Sets the improvability index associated to a given path, 
      * if the path belongs to the tree.
      * 
+     * @param entryPoint a {@link String}, the branch
+     *        identifier of a method's entry point where the
+     *        path starts. 
      * @param path a {@link List}{@code <}{@link Clause}{@code >}. 
      *        The first is the closest to the root, the last is the leaf.
      * @param indexImprovability the improvability index (an {@code int} between {@code 0} 
      *         and {@code 10}).
      */
-    synchronized void setIndexImprovability(List<Clause> path, int indexImprovability) {
+    synchronized void setIndexImprovability(String entryPoint, List<Clause> path, int indexImprovability) {
         //TODO check the range of indexImprovability?
-        final Node nodePath = findNode(path);
+        final Node nodePath = findNode(entryPoint, path);
         if (nodePath == null) {
             return; //TODO throw an exception?
         }
@@ -352,14 +395,17 @@ public final class TreePath {
     /**
      * Returns the novelty index associated to a given path.
      * 
+     * @param entryPoint a {@link String}, the branch
+     *        identifier of a method's entry point where the
+     *        path starts. 
      * @param path a {@link List}{@code <}{@link Clause}{@code >}. 
      *        The first is the closest to the root, the last is the leaf.
      * @return The novelty index (an {@code int} between {@code 0} 
      *         and {@code 10}), or {@code -1} if
      *         {@code path} does not belong to the tree.
      */
-    synchronized int getIndexNovelty(List<Clause> path) {
-        final Node nodePath = findNode(path);
+    synchronized int getIndexNovelty(String entryPoint, List<Clause> path) {
+        final Node nodePath = findNode(entryPoint, path);
         return (nodePath == null ? -1 : nodePath.indexNovelty);
     }
 
@@ -367,14 +413,17 @@ public final class TreePath {
      * Sets the novelty index associated to a given path, 
      * if the path belongs to the tree.
      * 
+     * @param entryPoint a {@link String}, the branch
+     *        identifier of a method's entry point where the
+     *        path starts. 
      * @param path a {@link List}{@code <}{@link Clause}{@code >}. 
      *        The first is the closest to the root, the last is the leaf.
      * @param indexNovelty the novelty index (an {@code int} between {@code 0} 
      *         and {@code 10}).
      */
-    synchronized void setIndexNovelty(List<Clause> path, int indexNovelty) {
+    synchronized void setIndexNovelty(String entryPoint, List<Clause> path, int indexNovelty) {
         //TODO check the range of indexImprovability?
-        final Node nodePath = findNode(path);
+        final Node nodePath = findNode(entryPoint, path);
         if (nodePath == null) {
             return; //TODO throw an exception?
         }
@@ -384,6 +433,9 @@ public final class TreePath {
     /**
      * Returns the infeasibility index associated to a given path.
      * 
+     * @param entryPoint a {@link String}, the branch
+     *        identifier of a method's entry point where the
+     *        path starts. 
      * @param path a {@link List}{@code <}{@link Clause}{@code >}. 
      *        The first is the closest to the root, the last is the leaf.
      * @return the infeasibility index, an {@code int} between {@code 0} 
@@ -396,8 +448,8 @@ public final class TreePath {
      *         </ul>
      *         If {@code path} does not belong to the tree returns {@code -1}.
      */
-    synchronized int getIndexInfeasibility(List<Clause> path) {
-        final Node nodePath = findNode(path);
+    synchronized int getIndexInfeasibility(String entryPoint, List<Clause> path) {
+        final Node nodePath = findNode(entryPoint, path);
         return (nodePath == null ? -1 : nodePath.indexInfeasibility);
     }
 
@@ -405,6 +457,9 @@ public final class TreePath {
      * Sets the novelty index associated to a given path, 
      * if the path belongs to the tree.
      * 
+     * @param entryPoint a {@link String}, the branch
+     *        identifier of a method's entry point where the
+     *        path starts. 
      * @param path a {@link List}{@code <}{@link Clause}{@code >}. 
      *        The first is the closest to the root, the last is the leaf.
      * @param indexInfeasibility the novelty index, an {@code int} between {@code 0} 
@@ -416,9 +471,9 @@ public final class TreePath {
      *         <li>{@code 0}: infeasible with voting 3, or inconclusive voting.</li>
      *         </ul>
      */
-    synchronized void setIndexInfeasibility(List<Clause> path, int indexInfeasibility) {
+    synchronized void setIndexInfeasibility(String entryPoint, List<Clause> path, int indexInfeasibility) {
         //TODO check the range of indexInfeasibility?
-        final Node nodePath = findNode(path);
+        final Node nodePath = findNode(entryPoint, path);
         if (nodePath == null) {
             return; //TODO throw an exception?
         }
@@ -428,28 +483,34 @@ public final class TreePath {
     /**
      * Returns the covered branches associated to a given path.
      * 
+     * @param entryPoint a {@link String}, the branch
+     *        identifier of a method's entry point where the
+     *        path starts. 
      * @param path a {@link List}{@code <}{@link Clause}{@code >}. 
      *        The first is the closest to the root, the last is the leaf.
      * @return a {@link Set}{@code <}{@link String}{@code >} containing 
      *         the branches covered by the path, or {@code null} if
      *         {@code path} does not belong to the tree.
      */
-    synchronized Set<String> getBranchesCovered(List<Clause> path) {
-        final Node nodePath = findNode(path);
+    synchronized Set<String> getBranchesCovered(String entryPoint, List<Clause> path) {
+        final Node nodePath = findNode(entryPoint, path);
         return (nodePath == null ? null : nodePath.coveredBranches);
     }
 
     /**
      * Returns the hit counts of the branches associated to a given path.
      * 
+     * @param entryPoint a {@link String}, the branch
+     *        identifier of a method's entry point where the
+     *        path starts. 
      * @param path a {@link List}{@code <}{@link Clause}{@code >}. 
      *        The first is the closest to the root, the last is the leaf.
      * @return a {@link Map}{@code <}{@link String}{@code , }{@link Integer}{@code >} 
      *         mapping the branches covered by the path to the corresponding number
      *         of hits, or {@code null} if {@code path} does not belong to the tree.
      */
-    synchronized Map<String, Integer> getHits(List<Clause> path) {
-        final Set<String> branches = getBranchesCovered(path);
+    synchronized Map<String, Integer> getHits(String entryPoint, List<Clause> path) {
+        final Set<String> branches = getBranchesCovered(entryPoint, path);
         if (branches == null) {
             return null;
         }
@@ -470,14 +531,17 @@ public final class TreePath {
      * Returns the neighbor frontier branches next to a given path, used 
      * to calculate the improvability index.
      * 
+     * @param entryPoint a {@link String}, the branch
+     *        identifier of a method's entry point where the
+     *        path starts. 
      * @param path a {@link List}{@code <}{@link Clause}{@code >}. 
      *        The first is the closest to the root, the last is the leaf.
      * @return a {@link Set}{@code <}{@link String}{@code >} containing 
      *         the neighbor frontier branches to {@code path}, or
      *         {@code null} if {@code path} does not belong to the tree.
      */
-    synchronized Set<String> getBranchesNeighbor(List<Clause> path) {
-        Node nodePath = findNode(path);
+    synchronized Set<String> getBranchesNeighbor(String entryPoint, List<Clause> path) {
+        Node nodePath = findNode(entryPoint, path);
         if (nodePath == null) {
         	return null;
         }

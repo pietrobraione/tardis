@@ -130,6 +130,7 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
                 LOGGER.info("Run test case %s, the test case violated an assumption or exhausted a bound before arriving at the final state", tc.getClassName());
                 return;
             }
+            final String entryPoint = item.getTargetMethodSignature();
             final List<Clause> pathConditionFinal = stateFinal.getPathCondition();
 
             //prints some feedback
@@ -140,11 +141,11 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             final Set<String> coveredBranches = rp.getCoverage();
             final Set<String> newCoveredBranches;
             synchronized (this.treePath) {
-                if (this.treePath.containsPath(pathConditionFinal, true)) {
+                if (this.treePath.containsPath(entryPoint, pathConditionFinal, true)) {
                     LOGGER.info("Test case %s redundant, skipped", tc.getClassName());
                     return;
                 }
-                newCoveredBranches = this.treePath.insertPath(pathConditionFinal, coveredBranches, Collections.emptySet(), true);
+                newCoveredBranches = this.treePath.insertPath(entryPoint, pathConditionFinal, coveredBranches, Collections.emptySet(), true);
             }
 
             //possibly caches the initial state
@@ -152,7 +153,7 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             possiblySetInitialStateCached(item, stateInitial);
             
             //learns the new data for future update of indices
-            learnDataForIndices(newCoveredBranches, coveredBranches, pathConditionFinal);
+            learnDataForIndices(newCoveredBranches, coveredBranches, entryPoint, pathConditionFinal);
             
             //updates all indices and reclassifies all the items in output buffer
             //TODO possibly do it more lazily!
@@ -207,7 +208,7 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
         }
     }
     
-    private void learnDataForIndices(Set<String> newCoveredBranches, Set<String> coveredBranches, List<Clause> pathConditionFinal) {
+    private void learnDataForIndices(Set<String> newCoveredBranches, Set<String> coveredBranches, String entryPoint, List<Clause> pathConditionFinal) {
         if (this.o.getUseIndexImprovability()) {
         	this.out.learnCoverageForIndexImprovability(newCoveredBranches);
         }
@@ -215,7 +216,7 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
         	this.out.learnCoverageForIndexNovelty(coveredBranches);
         }
         if (this.o.getUseIndexInfeasibility()) {
-        	this.out.learnPathConditionForIndexInfeasibility(pathConditionFinal, true);
+        	this.out.learnPathConditionForIndexInfeasibility(entryPoint, pathConditionFinal, true);
         }
     }
     
@@ -294,13 +295,14 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             LOGGER.info("Test case %s, detected contradiction while generating path conditions at depth %d", tc.getClassName(), depthCurrent);
         }
 
+        final String entryPoint = item.getTargetMethodSignature();
     	boolean noOutputJobGenerated = true;
         final State statePreFrontier = rp.getStatePreFrontier();
         final List<String> branchesPostFrontier = rp.getBranchesPostFrontier(); 
         for (int i = 0; i < statesPostFrontier.size(); ++i) {
             final State statePostFrontier = statesPostFrontier.get(i);
             final List<Clause> pathCondition = statePostFrontier.getPathCondition();
-            if (this.treePath.containsPath(pathCondition, false)) {
+            if (this.treePath.containsPath(entryPoint, pathCondition, false)) {
                 continue;
             }
             final ClassHierarchy hier = statePostFrontier.getClassHierarchy();
@@ -310,7 +312,7 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             }
             
             //inserts the generated path in the treePath
-            this.treePath.insertPath(pathCondition, rp.getCoverage(), branchesPostFrontier, false);
+            this.treePath.insertPath(entryPoint, pathCondition, rp.getCoverage(), branchesPostFrontier, false);
 
             //emits the output job in the output buffer
             final Map<Long, String> stringLiterals = rp.getStringLiterals().get(i);

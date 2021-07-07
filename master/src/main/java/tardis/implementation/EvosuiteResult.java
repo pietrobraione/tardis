@@ -100,6 +100,15 @@ public final class EvosuiteResult {
     }
 
     /**
+     * Gets the signature of the target method.
+     *
+     * @return {@link #getTargetMethodClassName() getTargetMethodClassName}{@code () + }{@link #getTargetMethodDescriptor() getTargetMethodDescriptor}{@code () + }{@link #getTargetMethodName() getTargetMethodName}{@code ()}.
+     */
+    public String getTargetMethodSignature() {
+    	return this.targetMethodClassName + ":" + this.targetMethodDescriptor + ":" + this.targetMethodName;
+    }
+
+    /**
      * Returns the {@link TestCase}.
      * 
      * @return A {@link TestCase}.

@@ -244,6 +244,16 @@ public final class JBSEResult {
     public String getTargetMethodName() {
         return this.targetMethodName;
     }
+    
+    /**
+     * Gets the signature of the target method.
+     * To be invoked only when {@link #hasTargetMethod() hasTargetMethod}{@code () == true}.
+     *
+     * @return {@link #getTargetMethodClassName() getTargetMethodClassName}{@code () + }{@link #getTargetMethodDescriptor() getTargetMethodDescriptor}{@code () + }{@link #getTargetMethodName() getTargetMethodName}{@code ()}.
+     */
+    public String getTargetMethodSignature() {
+    	return this.targetMethodClassName + ":" + this.targetMethodDescriptor + ":" + this.targetMethodName;
+    }
 
     /**
      * Gets the initial {@link State} of the path.
