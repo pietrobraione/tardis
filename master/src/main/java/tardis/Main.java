@@ -3,6 +3,7 @@ package tardis;
 import static java.nio.file.Files.createDirectory;
 import static java.nio.file.Files.exists;
 
+import static tardis.implementation.Util.getTargets;
 import static tardis.implementation.Util.stream;
 
 import java.io.BufferedOutputStream;
@@ -110,18 +111,8 @@ public final class Main {
             final PerformerJBSE performerJBSE = new PerformerJBSE(this.o, testCaseBuffer, pathConditionBuffer, treePath);
             final TerminationManager terminationManager = new TerminationManager(this.o.getGlobalTimeBudgetDuration(), this.o.getGlobalTimeBudgetUnit(), performerJBSE, performerEvosuite);
 
-            //seeds a performer to bootstrap
-            if (this.o.getTargetMethod() == null || this.o.getInitialTestCase() == null) {
-                //the target is a class, or is a method but
-                //there is no initial test case: EvoSuite should start
-                final ArrayList<JBSEResult> seed = generateSeedForPerformerEvosuite();
-                performerEvosuite.seed(seed);
-            } else {
-                //the target is a method and there is one
-                //initial test case: JBSE should start
-                final ArrayList<EvosuiteResult> seed = generateSeedForPerformerJBSE();
-                performerJBSE.seed(seed);
-            }
+            //injects a seed into a performer
+            injectSeed(performerEvosuite, performerJBSE);
             
             //starts everything
             performerJBSE.start();
@@ -139,6 +130,9 @@ public final class Main {
             return 1;
         } catch (NoJava8ToolsJarException e) {
             LOGGER.error("Failed to find a Java version 8 JDK (no tools.jar).");
+            return 1;
+        } catch (NoInitialTestFileException e) {
+            LOGGER.error("Failed to find the specified initial test class source file " + this.o.getInitialTestCasePath().resolve(this.o.getInitialTestCase().get(0) + ".java"));
             return 1;
         } catch (NoJavaCompilerException e) {
             LOGGER.error("Failed to find a system Java compiler for Java version 8.");
@@ -287,18 +281,54 @@ public final class Main {
     }
 
     /**
+     * Injects a seed into a performer.
+     * 
+     * @param performerEvosuite a {@link PerformerEvosuite}.
+     * @param performerJBSE a {@link PerformerJBSE}.
+     * @throws NoJavaCompilerException if no Java compiler is installed.
+     * @throws JavaCompilerException if some error happens while the Java 
+     *         compiler is run.
+     * @throws ClassNotFoundException if the target class is not in {@code o.}{@link Options#getClassesPath() getClassesPath()}.
+     * @throws SecurityException if a security violation arises.
+     * @throws MalformedURLException if some path in {@code o.}{@link Options#getClassesPath() getClassesPath()} is malformed.
+     * @throws NoInitialTestFileException  if the initial test specified by
+     *         the user does not exist in the filesystem.
+     */
+    private void injectSeed(PerformerEvosuite performerEvosuite, PerformerJBSE performerJBSE) 
+    throws NoJavaCompilerException, JavaCompilerException, ClassNotFoundException, MalformedURLException, SecurityException, NoInitialTestFileException {
+        if (this.o.getTargetMethod() != null && this.o.getInitialTestCase() != null) {
+            //the target is a method and there is an
+            //initial test case: JBSE should start
+            final ArrayList<EvosuiteResult> seed = generateSeedForPerformerJBSE();
+            performerJBSE.seed(seed);
+        } else {
+            //all the other cases: EvoSuite should start
+            final ArrayList<JBSEResult> seed = generateSeedForPerformerEvosuite();
+            performerEvosuite.seed(seed);
+        }
+    }
+    
+    /**
      * Generates a seed for the Evosuite performer.
      * 
      * @return an {@link ArrayList}{@code <}{@link JBSEResult}{@code >}, to be
      *         inserted in the input queue of the Evosuite performer.
+     * @throws ClassNotFoundException if the target class is not in {@code o.}{@link Options#getClassesPath() getClassesPath()}.
+     * @throws SecurityException if a security violation arises.
+     * @throws MalformedURLException if some path in {@code o.}{@link Options#getClassesPath() getClassesPath()} is malformed.
      */
-    private ArrayList<JBSEResult> generateSeedForPerformerEvosuite() {
-        //this is the "no initial test case" situation
+    private ArrayList<JBSEResult> generateSeedForPerformerEvosuite() 
+    throws ClassNotFoundException, MalformedURLException, SecurityException {
         final ArrayList<JBSEResult> retVal = new ArrayList<>();
-        if (this.o.getTargetMethod() == null) {
-            retVal.add(new JBSEResult(this.o.getTargetClass()));
-        } else {
+        if (this.o.getTargetMethod() != null) {
             retVal.add(new JBSEResult(this.o.getTargetMethod()));
+        } else if (this.o.getInitialTestCaseRandom() == Randomness.METHOD) {
+        	final List<List<String>> targets = getTargets(this.o);
+        	for (List<String> target : targets) {
+        		retVal.add(new JBSEResult(target));
+        	}
+        } else {
+            retVal.add(new JBSEResult(this.o.getTargetClass()));
         }
         return retVal;
     }
@@ -308,15 +338,23 @@ public final class Main {
      * 
      * @return an {@link ArrayList}{@code <}{@link EvosuiteResult}{@code >}, to be
      *         inserted in the input queue of the JBSE performer.
+     * @throws NoInitialTestFileException if the initial test specified by
+     *         the user does not exist in the filesystem.
      * @throws NoJavaCompilerException if no Java compiler is installed.
+     * @throws JavaCompilerException if some error happens while the Java 
+     *         compiler is run.
      */
     private ArrayList<EvosuiteResult> generateSeedForPerformerJBSE() 
-    throws NoJavaCompilerException, JavaCompilerException {
+    throws NoInitialTestFileException, NoJavaCompilerException, JavaCompilerException {
         final JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
         if (compiler == null) {
             throw new NoJavaCompilerException();
         }
         final TestCase tc = new TestCase(this.o, false);
+        if (!Files.exists(tc.getSourcePath())) {
+        	throw new NoInitialTestFileException();
+        }
+
         final String classpathCompilationTest = String.join(File.pathSeparator, stream(this.o.getClassesPath()).map(Object::toString).toArray(String[]::new));
         final Path javacLogFilePath = this.o.getTmpDirectoryPath().resolve("javac-log-test-0.txt");
         final String[] javacParametersTestCase = { "-cp", classpathCompilationTest, "-d", this.o.getTmpBinDirectoryPath().toString(), tc.getSourcePath().toString() };

@@ -5,6 +5,11 @@ import org.kohsuke.args4j.OptionDef;
 import org.kohsuke.args4j.spi.FloatOptionHandler;
 import org.kohsuke.args4j.spi.Setter;
 
+/**
+ * A {@link FloatOptionHandler} for percentages.
+ * 
+ * @author Pietro Braione
+ */
 public class PercentageOptionHandler extends FloatOptionHandler {
 
     public PercentageOptionHandler(CmdLineParser parser, OptionDef option, Setter<? super Float> setter) {

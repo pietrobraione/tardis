@@ -41,10 +41,14 @@ public final class Options implements Cloneable {
             handler = LoggingLevelOptionHandler.class)
     private Level verbosity = Level.INFO;
 
+    @Option(name = "-initial_test_random",
+            usage = "How the initial random tests must be generated; When set to METHOD, a random test is created for each visible method, when set to SUITE, EvoSuite is run to generate an initial test suite")
+    private Randomness initialTestCaseRandom = Randomness.METHOD;
+
     @Option(name = "-initial_test",
             usage = "Java signature of the initial test case method for seeding concolic exploration",
             handler = SignatureHandler.class)
-    private List<String> initialTestCaseSignature;
+    private List<String> initialTestCaseSignature = null;
 
     @Option(name = "-initial_test_path",
             usage = "Path where the source file of the initial test is found",
@@ -55,6 +59,11 @@ public final class Options implements Cloneable {
             usage = "Name of the target class (containing the methods to test)")
     private String targetClassName;
 
+    @Option(name = "-target_method",
+            usage = "Java signature of the target method (the method to test)",
+            handler = SignatureHandler.class)
+    private List<String> targetMethodSignature;
+
     @Option(name = "-visibility",
             usage = "For which methods defined in the target class should generate tests: PUBLIC (methods with public visibility), PACKAGE (methods with public, protected and package visibility)")
     private Visibility visibility = Visibility.PUBLIC;
@@ -63,11 +72,6 @@ public final class Options implements Cloneable {
             usage = "Coverage: PATHS (all paths), BRANCHES (all branches), UNSAFE (failed assertion, works for only one assertion)")
     private Coverage coverage = Coverage.BRANCHES;
     
-    @Option(name = "-target_method",
-            usage = "Java signature of the target method (the method to test)",
-            handler = SignatureHandler.class)
-    private List<String> targetMethodSignature;
-
     @Option(name = "-max_depth",
             usage = "The maximum depth at which the target program is explored")
     private int maxDepth = 50;
@@ -231,6 +235,15 @@ public final class Options implements Cloneable {
     public void setVerbosity(Level verbosity) {
         this.verbosity = verbosity;
     }
+    
+    public Randomness getInitialTestCaseRandom() {
+    	return this.initialTestCaseRandom;
+    }
+
+    public void setInitialTestCaseRandom(Randomness initialTestCaseRandom) {
+    	this.initialTestCaseRandom = initialTestCaseRandom;
+    	this.initialTestCaseSignature = null;
+    }
 
     public List<String> getInitialTestCase() {
         return (this.initialTestCaseSignature == null ? null : Collections.unmodifiableList(this.initialTestCaseSignature));
@@ -275,6 +288,18 @@ public final class Options implements Cloneable {
         .replace("$", "\\$");
     }
     
+    public List<String> getTargetMethod() {
+        return (this.targetMethodSignature == null ? null : Collections.unmodifiableList(this.targetMethodSignature));
+    }
+
+    public void setTargetMethod(String... signature) {
+        if (signature.length != 3) {
+            return;
+        }
+        this.targetMethodSignature = Arrays.asList(signature.clone());
+        this.targetClassName = null;
+    }
+
     public String patternBranchesTarget() {
         return (getTargetClass() == null) ? (toPattern(getTargetMethod().get(0)) + ":" + toPattern(getTargetMethod().get(1)) + ":" + toPattern(getTargetMethod().get(2)) + ":.*:.*") : (toPattern(getTargetClass()) + "(\\$.*)*:.*:.*:.*:.*");
     }
@@ -303,18 +328,6 @@ public final class Options implements Cloneable {
             throw new NullPointerException("Attempted to set coverage to null.");
         }
         this.coverage = coverage;
-    }
-
-    public List<String> getTargetMethod() {
-        return (this.targetMethodSignature == null ? null : Collections.unmodifiableList(this.targetMethodSignature));
-    }
-
-    public void setTargetMethod(String... signature) {
-        if (signature.length != 3) {
-            return;
-        }
-        this.targetMethodSignature = Arrays.asList(signature.clone());
-        this.targetClassName = null;
     }
 
     public int getMaxDepth() {

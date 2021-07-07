@@ -200,7 +200,7 @@ public final class Util {
      * @throws SecurityException if a security violation arises.
      * @throws MalformedURLException if some path in {@code o.}{@link Options#getClassesPath() getClassesPath()} is malformed.
      */
-    static List<List<String>> getTargets(Options o) 
+    public static List<List<String>> getTargets(Options o) 
     throws ClassNotFoundException, MalformedURLException, SecurityException {
         final List<List<String>> retVal = new ArrayList<>();
         final String className = o.getTargetClass();
