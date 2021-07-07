@@ -233,7 +233,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
             	for (JBSEResult item : items) {
             		final int i = testCount - testCountInitial;
             		//builds the EvoSuite command line
-            		final List<String> evosuiteCommand = buildEvoSuiteCommand(testCount, Collections.singletonList(items.get(i)));
+            		final List<String> evosuiteCommand = buildEvoSuiteCommand(testCount, Collections.singletonList(item));
 
             		//launches EvoSuite
             		final Path evosuiteLogFilePath = this.o.getTmpDirectoryPath().resolve("evosuite-log-" + testCount + ".txt");
