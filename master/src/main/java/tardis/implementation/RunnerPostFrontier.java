@@ -69,7 +69,7 @@ import jbse.val.Value;
 final class RunnerPostFrontier implements AutoCloseable {
     private static final Logger LOGGER = LogManager.getFormatterLogger(RunnerPostFrontier.class);
 
-    private final Runner runnerPostFrontier;
+    private final Runner runner;
     private final long maxCount;
     private final Map<Long, String> stringLiteralsAtFrontier;
     private final Set<Long> stringOthersAtFrontier;
@@ -94,7 +94,7 @@ final class RunnerPostFrontier implements AutoCloseable {
     ContradictionException {
     	runnerParameters.setActions(new ActionsRunnerPostFrontier());
         final RunnerBuilder rb = new RunnerBuilder();
-        this.runnerPostFrontier = rb.build(runnerParameters);
+        this.runner = rb.build(runnerParameters);
         this.maxCount = maxCount;
         this.stringLiteralsAtFrontier = stringLiterals;
         this.stringOthersAtFrontier = stringOthers;
@@ -109,7 +109,7 @@ final class RunnerPostFrontier implements AutoCloseable {
     public void run() throws CannotBacktrackException, CannotManageStateException, ClasspathException, 
     ThreadStackEmptyException, ContradictionException, DecisionException, EngineStuckException, 
     FailureException, NonexistingObservedVariablesException {
-    	this.runnerPostFrontier.run();
+    	this.runner.run();
     }
     
     public List<State> getStatesPostFrontier() {
@@ -200,7 +200,7 @@ final class RunnerPostFrontier implements AutoCloseable {
                 possiblySaveStringConstant(currentState);
             }
 
-            if (currentState.getDepth() == RunnerPostFrontier.this.testDepth + 1) {
+            if (currentState.getDepth() == RunnerPostFrontier.this.testDepth) {
                 //we are at a post-frontier state (including the first one)
                 recordState(currentState);
                 
@@ -241,7 +241,7 @@ final class RunnerPostFrontier implements AutoCloseable {
                 }
             }
             
-            if (currentState.getDepth() == RunnerPostFrontier.this.testDepth + 1) {
+            if (currentState.getDepth() == RunnerPostFrontier.this.testDepth) {
                 //we are at a post-frontier state (excluding the first one)
                 recordState(currentState);
                 getEngine().stopCurrentPath();            
@@ -371,6 +371,6 @@ final class RunnerPostFrontier implements AutoCloseable {
     
     @Override
     public void close() throws DecisionException {
-    	this.runnerPostFrontier.getEngine().close();
+    	this.runner.getEngine().close();
     }
 }

@@ -115,7 +115,7 @@ public final class JBSEResult {
         this.targetBranch = null;
         this.stringLiterals = null;
         this.stringOthers = null;
-        this.depth = -1;
+        this.depth = 0;
     }
 
     /**
@@ -135,7 +135,7 @@ public final class JBSEResult {
         this.targetBranch = null;
         this.stringLiterals = null;
         this.stringOthers = null;
-        this.depth = -1;
+        this.depth = 0;
     }
 
     /**

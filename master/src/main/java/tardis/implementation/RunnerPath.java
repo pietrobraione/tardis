@@ -218,31 +218,31 @@ final class RunnerPath implements AutoCloseable {
     ThreadStackEmptyException, ContradictionException, EngineStuckException, 
     FailureException {
         //runs up to the pre-frontier
-        if (this.runnerPreFrontier == null || this.runnerPreFrontier.getCurrentState().getDepth() > testDepth) {
+    	final int postFrontierDepth = Math.min(this.maxDepth, testDepth);
+        if (this.runnerPreFrontier == null || 
+        !this.runnerPreFrontier.isAtPreFrontier() ||
+        this.runnerPreFrontier.getPreFrontierState().getDepth() >= testDepth) {
             makeRunnerPreFrontier();
         }
-        this.runnerPreFrontier.setTestDepth(testDepth < 0 ? this.maxDepth : Math.min(this.maxDepth, testDepth));
+        this.runnerPreFrontier.setTestDepth(testDepth < 0 ? this.maxDepth : postFrontierDepth);
         this.runnerPreFrontier.run();
         
-        if (this.runnerPreFrontier.isAtPreFrontier()) {
-        	if (testDepth < 0) {
-        		//there is no frontier, and the runnerPreFrontier's final
-        		//state is the final state of the guided execution: return it
-        		final State finalState = this.runnerPreFrontier.getCurrentState().clone();
-        		final ArrayList<State> retVal = new ArrayList<>();
-        		retVal.add(finalState);
-        		return retVal;
+        //returns the result
+        if (testDepth < 0) {
+        	//there is no frontier, and the runnerPreFrontier's final
+        	//state is the final state of the guided execution: return it
+        	final State finalState = this.runnerPreFrontier.getCurrentState().clone();
+        	return Collections.singletonList(finalState);
+        } else if (this.runnerPreFrontier.isAtPreFrontier()) {
+        	//steps to all the post-frontier states and gathers them
+        	this.statePreFrontier = this.runnerPreFrontier.getPreFrontierState().clone();
+        	makeRunnerPostFrontier();
+        	if (this.runnerPostFrontier == null) {
+        		return Collections.emptyList();
         	} else {
-        		//steps to all the post-frontier states and gathers them
-        		this.statePreFrontier = this.runnerPreFrontier.getCurrentState().clone();
-        		makeRunnerPostFrontier();
-        		if (this.runnerPostFrontier == null) {
-                	return Collections.emptyList();
-        		} else {
-        			this.runnerPostFrontier.setTestDepth(Math.min(this.maxDepth, testDepth));
-        			this.runnerPostFrontier.run();
-        			return this.runnerPostFrontier.getStatesPostFrontier();
-        		}
+        		this.runnerPostFrontier.setTestDepth(postFrontierDepth);
+        		this.runnerPostFrontier.run();
+        		return this.runnerPostFrontier.getStatesPostFrontier();
         	}
         } else {
         	return Collections.emptyList();

@@ -364,7 +364,7 @@ public final class Main {
             throw new JavaCompilerException(javacLogFilePath.toString(), e);
         }
         final ArrayList<EvosuiteResult> retVal = new ArrayList<>();
-        retVal.add(new EvosuiteResult(this.o.getTargetMethod(), tc, 0));
+        retVal.add(new EvosuiteResult(this.o.getTargetMethod(), tc, 1));
         return retVal;
     }
     

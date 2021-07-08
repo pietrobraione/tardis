@@ -167,26 +167,12 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             
             //reruns the test case at all the depths in the range, generates all the modified 
             //path conditions and puts all the output jobs in the output queue
-            final int depthFinal = Math.min(depthStart + this.o.getMaxTestCaseDepth(), stateFinal.getDepth());
-            boolean noOutputJobGenerated = true;
-            for (int depthCurrent = depthStart; depthCurrent < depthFinal; ++depthCurrent) {
-            	try {
-            		final List<State> statesPostFrontier = rp.runProgram(depthCurrent);
-
-            		//checks shutdown of the performer
-            		if (Thread.interrupted()) {
-            			return;
-            		}
-
-            		//creates all the output jobs
-            		noOutputJobGenerated = createOutputJobsForFrontier(rp, statesPostFrontier, item, tc, stateInitial, depthCurrent) && noOutputJobGenerated;
-            	} catch (UninterpretedNoContextException e) {
-                    LOGGER.info("From test case %s skipping a path condition because it invokes an uninterpreted function in the context of a model", tc.getClassName());
-            	}
-            }
-            if (noOutputJobGenerated) {
-                LOGGER.info("From test case %s no path condition generated", tc.getClassName());
-            }
+            try {
+				createOutputJobsForFrontiersAtAllDepths(rp, item, tc, stateInitial, stateFinal, depthStart);
+			} catch (InterruptedException e) {
+				//the performer shut down
+				return;
+			}
         } catch (NoTargetHitException e) {
             //prints some feedback
             LOGGER.warn("Run test case %s, does not reach the target method %s:%s:%s", item.getTestCase().getClassName(), item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName());
@@ -282,11 +268,39 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
     }
     
     private void logCoverage() {
-        final long pathCoverage = this.pathCoverage.incrementAndGet();
-        final int branchCoverage = this.treePath.totalCovered();
-        final int branchCoverageTarget = this.treePath.totalCovered(this.o.patternBranchesTarget());
-        final int branchCoverageUnsafe = this.treePath.totalCovered(this.o.patternBranchesUnsafe());
-        LOGGER.info("Current coverage: %d path%s, %d branch%s (total), %d branch%s (target), %d failed assertion%s", pathCoverage, (pathCoverage == 1 ? "" : "s"), branchCoverage, (branchCoverage == 1 ? "" : "es"), branchCoverageTarget, (branchCoverageTarget == 1 ? "" : "es"), branchCoverageUnsafe, (branchCoverageUnsafe == 1 ? "" : "s"));
+    	synchronized (this.treePath) {
+    		final long pathCoverage = this.pathCoverage.incrementAndGet();
+    		final int branchCoverage = this.treePath.totalCovered();
+    		final int branchCoverageTarget = this.treePath.totalCovered(this.o.patternBranchesTarget());
+    		final int branchCoverageUnsafe = this.treePath.totalCovered(this.o.patternBranchesUnsafe());
+    		LOGGER.info("Current coverage: %d path%s, %d branch%s (total), %d branch%s (target), %d failed assertion%s", pathCoverage, (pathCoverage == 1 ? "" : "s"), branchCoverage, (branchCoverage == 1 ? "" : "es"), branchCoverageTarget, (branchCoverageTarget == 1 ? "" : "es"), branchCoverageUnsafe, (branchCoverageUnsafe == 1 ? "" : "s"));
+    	}
+    }
+    
+    private void createOutputJobsForFrontiersAtAllDepths(RunnerPath rp, EvosuiteResult item, TestCase tc, State stateInitial, State stateFinal, int depthStart) 
+    throws DecisionException, CannotBuildEngineException, InitializationException, InvalidClassFileFactoryClassException, NonexistingObservedVariablesException, 
+    ClasspathException, CannotBacktrackException, CannotManageStateException, ThreadStackEmptyException, ContradictionException, EngineStuckException, 
+    FailureException, InterruptedException {
+        final int depthFinal = Math.min(depthStart + this.o.getMaxTestCaseDepth(), stateFinal.getDepth() + 1);
+        boolean noOutputJobGenerated = true;
+        for (int depthCurrent = depthStart; depthCurrent < depthFinal; ++depthCurrent) {
+        	try {
+        		final List<State> statesPostFrontier = rp.runProgram(depthCurrent);
+
+        		//checks shutdown of the performer
+        		if (Thread.interrupted()) {
+        			throw new InterruptedException();
+        		}
+
+        		//creates all the output jobs
+        		noOutputJobGenerated = createOutputJobsForFrontier(rp, statesPostFrontier, item, tc, stateInitial, depthCurrent) && noOutputJobGenerated;
+        	} catch (UninterpretedNoContextException e) {
+                LOGGER.info("From test case %s skipping a path condition because it invokes an uninterpreted function in the context of a model", tc.getClassName());
+        	}
+        }
+        if (noOutputJobGenerated) {
+            LOGGER.info("From test case %s no path condition generated", tc.getClassName());
+        }
     }
     
     private boolean createOutputJobsForFrontier(RunnerPath rp, List<State> statesPostFrontier, EvosuiteResult item, TestCase tc, State stateInitial, int depthCurrent) {
@@ -302,17 +316,19 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
         for (int i = 0; i < statesPostFrontier.size(); ++i) {
             final State statePostFrontier = statesPostFrontier.get(i);
             final List<Clause> pathCondition = statePostFrontier.getPathCondition();
-            if (this.treePath.containsPath(entryPoint, pathCondition, false)) {
-                continue;
+            synchronized (this.treePath) {
+            	if (this.treePath.containsPath(entryPoint, pathCondition, false)) {
+            		continue;
+            	}
+            	final ClassHierarchy hier = statePostFrontier.getClassHierarchy();
+            	if (!pathCondition.isEmpty() && assumptionViolated(hier, pathCondition.get(pathCondition.size() - 1))) {
+            		LOGGER.info("From test case %s skipping path condition due to violated assumption %s on initialMap in path condition %s", tc.getClassName(), pathCondition.get(pathCondition.size() - 1), stringifyPathCondition(shorten(pathCondition)));
+            		continue;
+            	}
+
+            	//inserts the generated path in the treePath
+            	this.treePath.insertPath(entryPoint, pathCondition, rp.getCoverage(), branchesPostFrontier, false);
             }
-            final ClassHierarchy hier = statePostFrontier.getClassHierarchy();
-            if (!pathCondition.isEmpty() && assumptionViolated(hier, pathCondition.get(pathCondition.size() - 1))) {
-                LOGGER.info("From test case %s skipping path condition due to violated assumption %s on initialMap in path condition %s", tc.getClassName(), pathCondition.get(pathCondition.size() - 1), stringifyPathCondition(shorten(pathCondition)));
-                continue;
-            }
-            
-            //inserts the generated path in the treePath
-            this.treePath.insertPath(entryPoint, pathCondition, rp.getCoverage(), branchesPostFrontier, false);
 
             //emits the output job in the output buffer
             final Map<Long, String> stringLiterals = rp.getStringLiterals().get(i);

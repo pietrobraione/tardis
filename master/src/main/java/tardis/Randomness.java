@@ -1,5 +1,5 @@
 package tardis;
 
-enum Randomness {
+public enum Randomness {
 	METHOD, SUITE
 }

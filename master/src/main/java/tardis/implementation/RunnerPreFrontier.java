@@ -2,6 +2,7 @@ package tardis.implementation;
 
 import static jbse.algo.Util.valueString;
 import static jbse.bc.Signatures.JAVA_STRING;
+import static tardis.implementation.Util.bytecodeBranch;
 import static tardis.implementation.Util.bytecodeJump;
 import static tardis.implementation.Util.bytecodeLoad;
 
@@ -52,7 +53,7 @@ import jbse.val.Value;
 final class RunnerPreFrontier implements AutoCloseable {
     private static final Logger LOGGER = LogManager.getFormatterLogger(RunnerPreFrontier.class);
 
-    private final Runner runnerPreFrontier;
+    private final Runner runner;
     private final DecisionProcedureGuidance guid;
     private final long maxCount;
     private final HashMap<Long, String> stringLiterals = new HashMap<>();
@@ -64,6 +65,7 @@ final class RunnerPreFrontier implements AutoCloseable {
     private boolean atLoadConstant = false;
     private int loadConstantStackSize = 0;
     private boolean atPreFrontier = false;
+    private State preFrontierState;
 
     public RunnerPreFrontier(RunnerParameters runnerParameters, long maxCount) 
     throws NotYetImplementedException, CannotBuildEngineException, DecisionException, 
@@ -71,7 +73,7 @@ final class RunnerPreFrontier implements AutoCloseable {
     ClasspathException, ContradictionException {
     	runnerParameters.setActions(new ActionsRunnerPreFrontier());
         final RunnerBuilder rb = new RunnerBuilder();
-        this.runnerPreFrontier = rb.build(runnerParameters);
+        this.runner = rb.build(runnerParameters);
         this.guid = (DecisionProcedureGuidance) runnerParameters.getDecisionProcedure();
         this.maxCount = maxCount;
     }
@@ -81,18 +83,19 @@ final class RunnerPreFrontier implements AutoCloseable {
     }
     
     public State getInitialState() {
-    	return this.runnerPreFrontier.getEngine().getInitialState();
+    	return this.runner.getEngine().getInitialState();
     }
     
     public State getCurrentState() {
-    	return this.runnerPreFrontier.getEngine().getCurrentState();
+    	return this.runner.getEngine().getCurrentState();
     }
     
-    public void run() 
-    throws CannotBacktrackException, CannotManageStateException, ClasspathException, 
-    ThreadStackEmptyException, ContradictionException, DecisionException, EngineStuckException, 
-    FailureException, NonexistingObservedVariablesException {
-    	this.runnerPreFrontier.run();
+    public boolean isAtPreFrontier() {
+    	return this.atPreFrontier;
+    }
+    
+    public State getPreFrontierState() {
+    	return this.preFrontierState;
     }
     
     public Map<Long, String> getStringLiterals() {
@@ -107,8 +110,11 @@ final class RunnerPreFrontier implements AutoCloseable {
     	return this.coverage;
     }
 
-    public boolean isAtPreFrontier() {
-    	return this.atPreFrontier;
+    public void run() 
+    throws CannotBacktrackException, CannotManageStateException, ClasspathException, 
+    ThreadStackEmptyException, ContradictionException, DecisionException, EngineStuckException, 
+    FailureException, NonexistingObservedVariablesException {
+    	this.runner.run();
     }
     
     /**
@@ -151,6 +157,12 @@ final class RunnerPreFrontier implements AutoCloseable {
                     if (RunnerPreFrontier.this.atLoadConstant) {
                     	RunnerPreFrontier.this.loadConstantStackSize = currentState.getStackSize();
                     }
+                    
+                    //if at a symbolic branch bytecode, and at testDepth - 1,
+                    //saves the pre-state
+                	if (bytecodeBranch(currentInstruction) && currentState.getDepth() == RunnerPreFrontier.this.testDepth - 1) {
+                        RunnerPreFrontier.this.preFrontierState = currentState.clone();
+                	}
                 } catch (ThreadStackEmptyException | FrozenStateException e) {
                     //this should never happen
                     LOGGER.error("Internal error when attempting to inspect the state before bytecode instruction execution");
@@ -163,15 +175,7 @@ final class RunnerPreFrontier implements AutoCloseable {
                 }
             }
             
-            //stops if at the pre-frontier
-            if (currentState.getDepth() == RunnerPreFrontier.this.testDepth) {
-            	RunnerPreFrontier.this.atPreFrontier = true;
-                return true;
-            } else if (currentState.getCount() >= RunnerPreFrontier.this.maxCount) {
-                return true;
-            } else {
-                return super.atStepPre();
-            }
+            return super.atStepPre();
         }
 
         @Override
@@ -232,14 +236,22 @@ final class RunnerPreFrontier implements AutoCloseable {
                 }
             }
 
-            return super.atStepPost();
+            //stops if current state is at post-frontier
+            RunnerPreFrontier.this.atPreFrontier = (currentState.getDepth() == RunnerPreFrontier.this.testDepth);
+            if (RunnerPreFrontier.this.atPreFrontier) {
+                return true;
+            } else if (currentState.getCount() >= RunnerPreFrontier.this.maxCount) {
+                return true;
+            } else {
+                return super.atStepPost();
+            }
         }
 
         @Override
         public boolean atPathEnd() {
         	//this triggers end of unconstrained exploration when
         	//the path is shorter than the depth bound
-        	RunnerPreFrontier.this.atPreFrontier = true;
+        	RunnerPreFrontier.this.atPreFrontier = false;
         	return true;
         }
         
@@ -252,6 +264,6 @@ final class RunnerPreFrontier implements AutoCloseable {
     
     @Override
     public void close() throws DecisionException {
-    	this.runnerPreFrontier.getEngine().close();
+    	this.runner.getEngine().close();
     }
 }
