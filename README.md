@@ -10,7 +10,7 @@ TARDIS aims at preserving the main advantages of [SUSHI](https://github.com/piet
 
 There are two ways to install TARDIS. The easiest is via Docker; The less easy is by building it from source and deploying it on your local machine. In both cases we support only the head revision of the master branch. Formal releases will be available when TARDIS will be more feature-ready and stable.
 
-## Installing TARDIS via Docker
+### Installing TARDIS via Docker
 
 A convenient package is available from the TARDIS GitHub page, that allows you to install a Docker image containing a setup of TARDIS and some examples to play with. From the command line run:
 
@@ -23,11 +23,11 @@ Alternatively, download the `Dockerfile` to the current directory and from the c
    
 The resulting environment is an Ubuntu container, where at the current (`/root`) directory you will find a clone of the head revision of the master branch of the TARDIS and of the [tardis-experiments](https://github.com/pietrobraione/tardis-experiments) repositories. On the path you will find a `tardis` command that alleviates the need of invoking Java and passing most of the command line parameters (see the "Usage" section below). The `tardis` script is at `/usr/local/bin` in the case you want to study it.
 
-## Building TARDIS
+### Building TARDIS
 
 TARDIS is composed by several projects, some of which are imported as git submodules, and is built with Gradle version 6.7.1, that is included in the repository. First, ensure that all the dependencies are present, including Z3 (see section "Dependencies"). Then, clone the TARDIS git repository and init/update its submodules. If you work from the command line, this means running first `git clone`, and then `git submodule init && git submodule update`. Next, follow the instructions described in the section "Patching the tests" of the README.md file of the JBSE subproject. Finally, run the build Gradle task, e.g. by invoking `gradlew build` from the command line. 
 
-### Dependencies
+#### Dependencies
 
 TARDIS has many dependencies. It must be built using a JDK version 8 - neither less, nor more. We suggest to use the latest [AdoptOpenJDK](https://adoptopenjdk.net/) v8 with HotSpot JVM (note that the JDK with the OpenJ9 JVM currently does not work, because there are some slight differences in the standard library classes). The Gradle wrapper `gradlew` included in the repository will take care to select the right version of Java. Gradle will automatically resolve and use the following compile-time-only dependencies:
 
@@ -57,7 +57,7 @@ Finally, two runtime dependencies that are not currently used by TARDIS at runti
 
 Gradle will download them to compile SUSHI-Lib, but you can avoid to deploy them.
 
-### Working under Eclipse
+#### Working under Eclipse
 
 If you want to build (and possibly modify) TARDIS by using (as we do) Eclipse 2021-06 for Java Developers, you are lucky: All the Eclipse plugins that are necessary to import and build TARDIS are already present in the distribution. The only caveat is that, since starting from version 2020-09 Eclipse requires at least Java 11 to run, your development machine will need to have both a Java 11 (to run Eclipse) and a Java 8 setup (to build JBSE and TARDIS). Gradle will automatically select the right version of the JDK when building TARDIS. If you use a different flavor, or an earlier version, of Eclipse you might need to install the egit and the Buildship plugins, both available from the Eclipse Marketplace. After that, to import TARDIS under Eclipse follow these steps:
 
@@ -76,7 +76,7 @@ In the end, your Eclipse workspace should contain these projects:
 * sushi-lib: the [sushi-lib](https://github.com/pietrobraione/sushi-lib) submodule for the run-time library component of TARDIS; on the filesystem it is in the `runtime` subdirectory;
 * jbse: JBSE as a submodule; on the filesystem it is in the `jbse` subdirectory.
 
-### Deploying TARDIS
+#### Deploying TARDIS
 
 Deploying TARDIS outside the build environment to a target machine is tricky. The `gradlew build` command will produce a SUSHI-Lib jar `runtime/build/libs/sushi-lib-<VERSION>.jar`, the JBSE jars in `jbse/build/libs` (refer to the JBSE project's README file for more information on them), and a jar for the main TARDIS application `master/build/libs/tardis-master-<VERSION>.jar`. Moreover, it will copy all the dependencies of the SUSHI-Lib, JBSE and TARDIS projects in `runtime/build/libs`, `jbse/build/libs`, and `master/build/libs` respectively. You need to deploy all of them plus the native files (Z3). The build process will also produce an uber-jar `master/build/libs/tardis-master-<VERSION>-shaded.jar` containing all the runtime dependencies excluded EvoSuite, `tools.jar`, and the native files. Deploying based on the uber-jar is easier, but to our experience a setup based on the uber-jar is more crash-prone (on the other hand, using the uber-jar for JBSE is safe). 
 
@@ -99,7 +99,7 @@ If you deploy the `tardis-master-<VERSION>-shaded.jar` uber-jar you do not need 
 
 ## Usage
 
-Compile the target program with the debug symbols, then launch TARDIS either from the command line, or from another program, e.g., from the `main` of an application. From the command line you need to invoke it as follows:
+Compile the target program with the debug symbols, then launch TARDIS either from the command line or from another program, e.g., from the `main` of an application. In the first case you need to invoke it as follows:
 
     $ java -Xms16G -Xmx16G -cp <classpath> tardis.Main <options>
 
@@ -107,7 +107,7 @@ where `<classpath>` must be set according to the indications of the previous sec
 
     $ tardis <options>
 
-If you prefer to invoke TARDIS from code, this is a possible template:
+If you prefer to invoke TARDIS programmatically, this is a possible template of a launcher class:
 
 ```Java
 import tardis.Main;
@@ -125,9 +125,11 @@ public class Launcher {
 }
 ```
 
-In both cases you need to set a number of options. The indispensable ones, that you *must* set in order for TARDIS to work, are:
+The launcher must create a `tardis.Options` object, configure it with the necessary options, then it must create a `tardis.Main` object and pass to its constructor the previously configured `Options` object. Finally, it must invoke the `tardis.Main.start()` method. Note that the command line TARDIS launcher is not much different from this: The main difference is that the command line TARDIS launcher parses the command line parameters to create the `tardis.Options` object.
 
-* `-java8_home` (command line) or `setJava8Home` (code): the path to the home directory of a Java 8 full JDK setup, in case the default JDK installed on the deploy platform should be overridden. If this parameter is not provided, TARDIS will try with the default JDK installed on the deploy platform.
+Shall you launch TARDIS via the command line or programmatically, you will need to set a number of options for it to work. The indispensable ones, that you *must* set in order to obtain any result, are:
+
+* `-java8_home` (command line) or `setJava8Home` (code): the path to the home directory of a Java 8 full JDK setup, in case the default JDK installed on the deploy platform is not Java 8, or should be overridden. If this parameter is not provided, TARDIS will try with the default JDK installed on the deploy platform.
 * `-evosuite` (command line) or `setEvosuitePath` (code): the path to the EvoSuite jar file `evosuite-shaded-1.0.6-SNAPSHOT.jar` contained in the `lib/` folder. The same jar file must be put on the classpath (see previous section).
 * `-jbse_lib` (command line) or `setJBSELibraryPath` (code): this must be set to the path of the JBSE jar file from the `jbse/build/libs` directory. It must be the same you put in the classpath. If you chose to deploy the `tardis-master-<VERSION>-shaded.jar` uber-jar, set this option to point to it.
 * `-sushi_lib` (command line) or `setSushiLibPath` (code): this must be set to the path of the SUSHI-Lib jar file from the `runtime/build/libs` directory.  If you chose to deploy the `tardis-master-<VERSION>-shaded.jar` uber-jar, set this option to point to it.
@@ -148,7 +150,7 @@ where we assume that all the jars except for `tools.jar` are in `./libs`, that t
 
     $ java -Xms16G -Xmx16G -cp /usr/lib/jvm/java-8-openjdk-amd64/lib/tools.jar:./libs/tardis-master-0.2.0-SNAPSHOT-shaded.jar:./libs/evosuite-shaded-1.0.6-SNAPSHOT.jar tardis.Main -jbse_lib ./libs/tardis-master-0.2.0-SNAPSHOT-shaded.jar -sushi_lib ./libs/tardis-master-0.2.0-SNAPSHOT-shaded.jar -evosuite ./libs/evosuite-shaded-1.0.6-SNAPSHOT.jar -z3 /usr/bin/z3 -classes ./my-application/bin -target_class my/Class -tmp_base ./tmp -out ./tests
 
-There is a third, sort-of-intermediate way of launching TARDIS: You launch it from the command line, but you pass the `<options>` through an object of class `tardis.Options`. The thing works this way: You must define a class that implements the interface `tardis.OptionsConfigurator`. This interface declares only one method `configure`, that you must override and use to configure a `tardis.Options` object as in the following example:
+There is a third way of launching TARDIS that mixes the two approaches: You can launch it from the command line, but by configuring the options through an object of class `tardis.Options`. At the purpose you must define a class implementing the interface `tardis.OptionsConfigurator`. This interface declares only one method `configure`, that you must override to configure a `tardis.Options` object as in the following example:
 
 ```Java
 import tardis.OptionsConfigurator;
@@ -163,9 +165,11 @@ public final class MyConfigurator implements OptionsConfigurator {
 }
 ```
 
-As you can see, the code resembles the one used to directly invoke TARDIS from a `main` method, but you do not need to explicitly create the `tardis.Options` object (it is passed as a parameter) nor to create the `tardis.Main` object and start it. Once created your configurator class, compile it (remember to put the `tardis-master` jar in the compilation classpath), put the generated classfile where you prefer (let us suppose in a `./my-config` directory) and invoke TARDIS as follows:
+As you can see, the code resembles that of a TARDIS launcher, but you do not need to explicitly create the `tardis.Options` object (it is received as a parameter) nor to create the `tardis.Main` object and start it. Once created your configurator class, compile it (remember to put the `tardis-master` jar in the compilation classpath), put the generated classfile where you prefer and invoke TARDIS as follows:
 
     $ java -Xms16G -Xmx16G -cp /usr/lib/jvm/java-8-openjdk-amd64/lib/tools.jar:./libs/tardis-master-0.2.0-SNAPSHOT.jar:./libs/sushi-lib-0.2.0-SNAPSHOT.jar:./libs/jbse-0.10.0-SNAPSHOT-shaded.jar:./libs/evosuite-shaded-1.0.6-SNAPSHOT.jar:./libs/args4j-2.32.jar:./libs/log4j-api-2.14.0.jar:./libs/log4j-core-2.14.0.jar:./libs/javaparser-core-3.15.9.jar tardis.Main -options_config_path ./my-config -options_config_class MyConfigurator
+
+(here we assume that we put the `MyConfigurator` classfile in the `./my-config` directory).
 
 ### Running TARDIS from the Docker environment
 
