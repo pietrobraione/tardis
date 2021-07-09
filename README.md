@@ -107,7 +107,7 @@ where `<classpath>` must be set according to the indications of the previous sec
 
     $ tardis <options>
 
-If you launch TARDIS without options it will print a help screen that lists all the available options with a brief explanation. If you prefer to launch TARDIS from code, this is a possible template:
+If you prefer to invoke TARDIS from code, this is a possible template:
 
 ```Java
 import tardis.Main;
@@ -116,7 +116,9 @@ import tardis.Options;
 public class Launcher {
   public static void main(String[] args) {
     final Options o = new Options();
-    o.set...
+    o.setZ3Path(...);
+    o.setTargetClass(...);
+    ...
     final Main m = new Main(o);
     m.start();
   }
@@ -140,19 +142,48 @@ If you are using the `tardis` script under the Docker environment, you do not ne
 
 You will find examples of the code-based way of configuring TARDIS in the [tardis-experiments](https://github.com/pietrobraione/tardis-experiments) project. A possible example of command line is the following:
 
-    java -Xms16G -Xmx16G -cp /usr/lib/jvm/java-8-openjdk-amd64/lib/tools.jar:./libs/tardis-master-0.2.0-SNAPSHOT.jar:./libs/sushi-lib-0.2.0-SNAPSHOT.jar:./libs/jbse-0.10.0-SNAPSHOT-shaded.jar:./libs/evosuite-shaded-1.0.6-SNAPSHOT.jar:./libs/args4j-2.32.jar:./libs/log4j-api-2.14.0.jar:./libs/log4j-core-2.14.0.jar:./libs/javaparser-core-3.15.9.jar tardis.Main -jbse_lib ./libs/jbse-0.10.0-SNAPSHOT-shaded.jar -sushi_lib ./libs/sushi-lib-0.2.0-SNAPSHOT.jar -evosuite ./libs/evosuite-shaded-1.0.6-SNAPSHOT.jar -z3 /usr/bin/z3 -classes ./my-application/bin -target_class my/Class -tmp_base ./tmp -out ./tests
+    $ java -Xms16G -Xmx16G -cp /usr/lib/jvm/java-8-openjdk-amd64/lib/tools.jar:./libs/tardis-master-0.2.0-SNAPSHOT.jar:./libs/sushi-lib-0.2.0-SNAPSHOT.jar:./libs/jbse-0.10.0-SNAPSHOT-shaded.jar:./libs/evosuite-shaded-1.0.6-SNAPSHOT.jar:./libs/args4j-2.32.jar:./libs/log4j-api-2.14.0.jar:./libs/log4j-core-2.14.0.jar:./libs/javaparser-core-3.15.9.jar tardis.Main -jbse_lib ./libs/jbse-0.10.0-SNAPSHOT-shaded.jar -sushi_lib ./libs/sushi-lib-0.2.0-SNAPSHOT.jar -evosuite ./libs/evosuite-shaded-1.0.6-SNAPSHOT.jar -z3 /usr/bin/z3 -classes ./my-application/bin -target_class my/Class -tmp_base ./tmp -out ./tests
     
 where we assume that all the jars except for `tools.jar` are in `./libs`, that the software to be tested is in `./my-application/bin`, that the class to generate tests for is `my.Class`, that a work directory where TARDIS can put intermediate files is `./tmp`, and that we want TARDIS to emit the generated tests in `./tests`. In the case you prefer (at your own risk) to use the TARDIS uber-jar the command line becomes a bit, but not that much, shorter:
 
-    java -Xms16G -Xmx16G -cp /usr/lib/jvm/java-8-openjdk-amd64/lib/tools.jar:./libs/tardis-master-0.2.0-SNAPSHOT-shaded.jar:./libs/evosuite-shaded-1.0.6-SNAPSHOT.jar tardis.Main -jbse_lib ./libs/tardis-master-0.2.0-SNAPSHOT-shaded.jar -sushi_lib ./libs/tardis-master-0.2.0-SNAPSHOT-shaded.jar -evosuite ./libs/evosuite-shaded-1.0.6-SNAPSHOT.jar -z3 /usr/bin/z3 -classes ./my-application/bin -target_class my/Class -tmp_base ./tmp -out ./tests
+    $ java -Xms16G -Xmx16G -cp /usr/lib/jvm/java-8-openjdk-amd64/lib/tools.jar:./libs/tardis-master-0.2.0-SNAPSHOT-shaded.jar:./libs/evosuite-shaded-1.0.6-SNAPSHOT.jar tardis.Main -jbse_lib ./libs/tardis-master-0.2.0-SNAPSHOT-shaded.jar -sushi_lib ./libs/tardis-master-0.2.0-SNAPSHOT-shaded.jar -evosuite ./libs/evosuite-shaded-1.0.6-SNAPSHOT.jar -z3 /usr/bin/z3 -classes ./my-application/bin -target_class my/Class -tmp_base ./tmp -out ./tests
+
+There is a third, sort-of-intermediate way of launching TARDIS: You launch it from the command line, but you pass the `<options>` through an object of class `tardis.Options`. The thing works this way: You must define a class that implements the interface `tardis.OptionsConfigurator`. This interface declares only one method `configure`, that you must override and use to configure a `tardis.Options` object as in the following example:
+
+```Java
+import tardis.OptionsConfigurator;
+
+public final class MyConfigurator implements OptionsConfigurator {
+  @Override
+  public void configure(Options o) {
+    o.setZ3Path(...);
+    o.setTargetClass(...);
+    ...
+  }
+}
+```
+
+As you can see, the code resembles the one used to directly invoke TARDIS from a `main` method, but you do not need to explicitly create the `tardis.Options` object (it is passed as a parameter) nor to create the `tardis.Main` object and start it. Once created your configurator class, compile it (remember to put the `tardis-master` jar in the compilation classpath), put the generated classfile where you prefer (let us suppose in a `./my-config` directory) and invoke TARDIS as follows:
+
+    $ java -Xms16G -Xmx16G -cp /usr/lib/jvm/java-8-openjdk-amd64/lib/tools.jar:./libs/tardis-master-0.2.0-SNAPSHOT.jar:./libs/sushi-lib-0.2.0-SNAPSHOT.jar:./libs/jbse-0.10.0-SNAPSHOT-shaded.jar:./libs/evosuite-shaded-1.0.6-SNAPSHOT.jar:./libs/args4j-2.32.jar:./libs/log4j-api-2.14.0.jar:./libs/log4j-core-2.14.0.jar:./libs/javaparser-core-3.15.9.jar tardis.Main -options_config_path ./my-config -options_config_class MyConfigurator
 
 ### Running TARDIS from the Docker environment
 
-Under the Docker environment the previous example command would be very shorter:
+Under the Docker environment the previous example commands would be much shorter:
 
     $ tardis -classes ./my-application/bin -target_class my/Class -tmp_base ./tmp -out ./tests
+    
+with the options on the command line, and
 
-If you want to run TARDIS on the tardis-experiments subjects included in the Docker image you can exploit the launchers included in the project. For instance, if you want to generate tests for the AVL tree example, run the following command from the `/root` directory:
+    $ tardis -options_config_path ./my-config -options_config_class MyConfigurator
+    
+with the configurator classes
+
+If you want to run TARDIS on the tardis-experiments subjects included in the Docker image you can exploit the configurators and the launchers included in the project. For instance, if you want to generate tests for the AVL tree example, you can run the following command to exploit the configurator:
+
+    $ tardis -options_config_path /root/tardis-experiments/bin -options_config_class avl.AvlConfigurator
+    
+or you can directly invoke the launcher:
 
     $ java -cp ${CLASSPATH}:/root/tardis-experiments/bin avl.RunAvl
     

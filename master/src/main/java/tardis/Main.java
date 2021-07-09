@@ -12,6 +12,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.MalformedURLException;
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -421,6 +423,19 @@ public final class Main {
             printUsage(parser);
             System.exit(0);
         }
+        
+        //invokes the options configurator if present
+        if (o.hasOptionsConfigurator()) {
+        	try {
+				configureOptions(o);
+			} catch (IOException e) {
+				System.err.println("I/O error while reading the OptionsConfigurator " + o.getOptionsConfiguratorClass() + " at path " + o.getOptionsConfiguratorPath() + ": " + e.toString());
+				System.exit(1);
+			} catch (ReflectiveOperationException e) {
+				System.err.println("Reflective error while trying to apply the OptionsConfigurator " + o.getOptionsConfiguratorClass() + " at path " + o.getOptionsConfiguratorPath() + ": " + e.toString());
+				System.exit(1);
+			}
+        }
 
         //runs
         final Main m = new Main(o);
@@ -435,7 +450,7 @@ public final class Main {
      * @param args the {@link String}{@code []} from the command line.
      * @return a processed {@link String}{@code []}.
      */
-    private static String[] processArgs(final String[] args) {
+    private static String[] processArgs(String[] args) {
         final Pattern argPattern = Pattern.compile("(-[a-zA-Z_-]+)=(.*)");
         final Pattern quotesPattern = Pattern.compile("^['\"](.*)['\"]$");
         final List<String> processedArgs = new ArrayList<String>();
@@ -464,9 +479,30 @@ public final class Main {
      * 
      * @param parser a {@link CmdLineParser}.
      */
-    private static void printUsage(final CmdLineParser parser) {
+    private static void printUsage(CmdLineParser parser) {
         System.err.println("Usage: java " + Main.class.getName() + " <options>");
         System.err.println("where <options> are:");
         parser.printUsage(System.err);
     }
+    
+    /**
+     * Applies an {@link OptionsConfigurator} to an {@link Options} object.
+     * 
+     * @param o an {@link Options} object. It must contain the information
+     *        about the {@link OptionsConfigurator} that will be applied to 
+     *        configure it.
+     * @throws IOException if reading the {@link OptionsConfigurator} fails.
+     * @throws ReflectiveOperationException if creating or instantiating 
+     *         the {@link OptionsConfigurator} fails.
+     */
+    private static void configureOptions(Options o) throws IOException, ReflectiveOperationException {
+    	final URL url = o.getOptionsConfiguratorPath().toUri().toURL();    	
+    	@SuppressWarnings("resource")
+    	final URLClassLoader loader = new URLClassLoader(new URL[] { url });
+    	final Class<? extends OptionsConfigurator> clazz =  
+    	loader.loadClass(o.getOptionsConfiguratorClass()).
+    	asSubclass(OptionsConfigurator.class);
+    	final OptionsConfigurator configurator = clazz.newInstance();
+    	configurator.configure(o);
+   }
 }
