@@ -1,4 +1,4 @@
-# TARDIS <img width="20%" src="img/TARDIS.png">
+# TARDIS <img width="10%" src="img/TARDIS.png">
 
 ## About
 
