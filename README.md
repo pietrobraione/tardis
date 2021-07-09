@@ -15,14 +15,19 @@ There are two ways to install TARDIS. The easiest is via Docker; The less easy i
 A convenient package is available from the TARDIS GitHub page, that allows you to install a Docker image containing a setup of TARDIS and some examples to play with. From the command line run:
 
     $ docker pull ghcr.io/pietrobraione/tardis:master
-    
+
+Alternatively, download the `Dockerfile` to the current directory and from the command line run:
+
+    $ docker build -t tardis .
+    $ docker run -it tardis
+   
 The resulting environment is an Ubuntu container, where at the current (`/root`) directory you will find a clone of the head revision of the master branch of the TARDIS and of the [tardis-experiments](https://github.com/pietrobraione/tardis-experiments) repositories. On the path you will find a `tardis` command that alleviates the need of invoking Java and passing most of the command line parameters (see the "Usage" section below). The `tardis` script is at `/usr/local/bin` in the case you want to study it.
 
 ## Building TARDIS
 
 TARDIS is composed by several projects, some of which are imported as git submodules, and is built with Gradle version 6.7.1, that is included in the repository. First, ensure that all the dependencies are present, including Z3 (see section "Dependencies"). Then, clone the TARDIS git repository and init/update its submodules. If you work from the command line, this means running first `git clone`, and then `git submodule init && git submodule update`. Next, follow the instructions described in the section "Patching the tests" of the README.md file of the JBSE subproject. Finally, run the build Gradle task, e.g. by invoking `gradlew build` from the command line. 
 
-## Dependencies
+### Dependencies
 
 TARDIS has many dependencies. It must be built using a JDK version 8 - neither less, nor more. We suggest to use the latest [AdoptOpenJDK](https://adoptopenjdk.net/) v8 with HotSpot JVM (note that the JDK with the OpenJ9 JVM currently does not work, because there are some slight differences in the standard library classes). The Gradle wrapper `gradlew` included in the repository will take care to select the right version of Java. Gradle will automatically resolve and use the following compile-time-only dependencies:
 
@@ -52,7 +57,7 @@ Finally, two runtime dependencies that are not currently used by TARDIS at runti
 
 Gradle will download them to compile SUSHI-Lib, but you can avoid to deploy them.
 
-## Working under Eclipse
+### Working under Eclipse
 
 If you want to build (and possibly modify) TARDIS by using (as we do) Eclipse 2021-06 for Java Developers, you are lucky: All the Eclipse plugins that are necessary to import and build TARDIS are already present in the distribution. The only caveat is that, since starting from version 2020-09 Eclipse requires at least Java 11 to run, your development machine will need to have both a Java 11 (to run Eclipse) and a Java 8 setup (to build JBSE and TARDIS). Gradle will automatically select the right version of the JDK when building TARDIS. If you use a different flavor, or an earlier version, of Eclipse you might need to install the egit and the Buildship plugins, both available from the Eclipse Marketplace. After that, to import TARDIS under Eclipse follow these steps:
 
@@ -71,7 +76,7 @@ In the end, your Eclipse workspace should contain these projects:
 * sushi-lib: the [sushi-lib](https://github.com/pietrobraione/sushi-lib) submodule for the run-time library component of TARDIS; on the filesystem it is in the `runtime` subdirectory;
 * jbse: JBSE as a submodule; on the filesystem it is in the `jbse` subdirectory.
 
-## Deploying TARDIS
+### Deploying TARDIS
 
 Deploying TARDIS outside the build environment to a target machine is tricky. The `gradlew build` command will produce a SUSHI-Lib jar `runtime/build/libs/sushi-lib-<VERSION>.jar`, the JBSE jars in `jbse/build/libs` (refer to the JBSE project's README file for more information on them), and a jar for the main TARDIS application `master/build/libs/tardis-master-<VERSION>.jar`. Moreover, it will copy all the dependencies of the SUSHI-Lib, JBSE and TARDIS projects in `runtime/build/libs`, `jbse/build/libs`, and `master/build/libs` respectively. You need to deploy all of them plus the native files (Z3). The build process will also produce an uber-jar `master/build/libs/tardis-master-<VERSION>-shaded.jar` containing all the runtime dependencies excluded EvoSuite, `tools.jar`, and the native files. Deploying based on the uber-jar is easier, but to our experience a setup based on the uber-jar is more crash-prone (on the other hand, using the uber-jar for JBSE is safe). 
 
@@ -88,7 +93,7 @@ Here follow detailed instructions for deploying TARDIS based on the plain jars:
 * Deploy the log4j-api jar that you find in the Gradle cache. You will find a copy of it in the `master/build/libs` directory. This jar must be in the Java classpath.
 * Deploy the log4j-core jar that you find in the Gradle cache. You will find a copy of it in the `master/build/libs` directory. This jar must be in the Java classpath.
 
-You can study the `Dockerfile` as an example of a deployment workflow on Ubuntu.
+You can study the `Dockerfile` as an example of an automatic deployment workflow on Ubuntu.
 
 If you deploy the `tardis-master-<VERSION>-shaded.jar` uber-jar you do not need to deploy the JBSE, SUSHI-Lib, args4j, Javaparser, Javassist and Log4J 2 jars.
 
