@@ -7,7 +7,7 @@ def javaHome = javaToolchains.compilerFor { languageVersion = javaVersion }.get(
 
 repositories {
     flatDir {
-    	dirs "${javaHome}/lib", "${project(':jbse').projectDir.toString()}/libs"
+    	dirs "${javaHome}/lib", "${project(':jbse').projectDir.toString()}/libs" //for tools.jar and for the patched javassist.jar
     }
 }
 
@@ -16,24 +16,28 @@ dependencies {
     implementation 'com.github.javaparser:javaparser-core:3.15.9'
     implementation 'org.apache.logging.log4j:log4j-api:2.14.0'
     implementation 'org.apache.logging.log4j:log4j-core:2.14.0'
-    implementation name: 'javassist'
     implementation name: 'tools'
     implementation project(':sushi-lib')
     implementation project(':jbse')
 }
 
+task copyToLib(type: Copy) {
+    into "${buildDir}/libs"
+    from configurations.compileClasspath
+}
+
 shadowJar {
     classifier = 'shaded'
     exclude 'tools.jar'
-    relocate 'javassist', 'tardis.javassist'
-    relocate 'jbse', 'tardis.jbse'
     relocate 'com.github.javaparser', 'tardis.com.github.javaparser'
-    relocate 'org.jacoco', 'tardis.org.jacoco'
-    relocate 'org.objectweb', 'tardis.org.objectweb'
-    relocate 'org.kohsuke', 'tardis.org.kohsuke'
+    relocate 'javassist', 'tardis.javassist'
     relocate 'org.apache.logging.log4j', 'tardis.org.apache.logging.log4j'
-    relocate 'sushi', 'tardis'
+    relocate 'org.jacoco', 'tardis.org.jacoco'
+    relocate 'org.kohsuke', 'tardis.org.kohsuke'
+    relocate 'org.objectweb', 'tardis.org.objectweb'
 }
+
+build.dependsOn(copyToLib)
 
 build.dependsOn 'shadowJar'
 

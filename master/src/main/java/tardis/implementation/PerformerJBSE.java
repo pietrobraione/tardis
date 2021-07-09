@@ -137,17 +137,27 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             LOGGER.info("Run test case %s, path condition %s", tc.getClassName(), stringifyPathCondition(shorten(pathConditionFinal)));
             
             //skips the test case if its path was already covered,
-            //otherwise records its path
+            //otherwise records its path and calculates coverage
             final Set<String> coveredBranches = rp.getCoverage();
             final Set<String> newCoveredBranches;
+            final int branchCoverage;
+            final int branchCoverageTarget;
+            final int branchCoverageUnsafe;
             synchronized (this.treePath) {
                 if (this.treePath.containsPath(entryPoint, pathConditionFinal, true)) {
                     LOGGER.info("Test case %s redundant, skipped", tc.getClassName());
                     return;
                 }
                 newCoveredBranches = this.treePath.insertPath(entryPoint, pathConditionFinal, coveredBranches, Collections.emptySet(), true);
+        		branchCoverage = this.treePath.totalCovered();
+        		branchCoverageTarget = this.treePath.totalCovered(this.o.patternBranchesTarget());
+        		branchCoverageUnsafe = this.treePath.totalCovered(this.o.patternBranchesUnsafe());
             }
+        	final long pathCoverage = this.pathCoverage.incrementAndGet();
 
+            //emits coverage feedback
+        	LOGGER.info("Current coverage: %d path%s, %d branch%s (total), %d branch%s (target), %d failed assertion%s", pathCoverage, (pathCoverage == 1 ? "" : "s"), branchCoverage, (branchCoverage == 1 ? "" : "es"), branchCoverageTarget, (branchCoverageTarget == 1 ? "" : "es"), branchCoverageUnsafe, (branchCoverageUnsafe == 1 ? "" : "s"));
+            
             //possibly caches the initial state
             final State stateInitial = rp.getInitialState();
             possiblySetInitialStateCached(item, stateInitial);
@@ -161,9 +171,6 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 
             //emits the test if it covers something new
             emitTestIfCoversSomethingNew(item, newCoveredBranches);
-            
-            //calculates coverage and emits feedback
-            logCoverage();
             
             //reruns the test case at all the depths in the range, generates all the modified 
             //path conditions and puts all the output jobs in the output queue
@@ -265,16 +272,6 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
                 //falls through
             }
         }
-    }
-    
-    private void logCoverage() {
-    	synchronized (this.treePath) {
-    		final long pathCoverage = this.pathCoverage.incrementAndGet();
-    		final int branchCoverage = this.treePath.totalCovered();
-    		final int branchCoverageTarget = this.treePath.totalCovered(this.o.patternBranchesTarget());
-    		final int branchCoverageUnsafe = this.treePath.totalCovered(this.o.patternBranchesUnsafe());
-    		LOGGER.info("Current coverage: %d path%s, %d branch%s (total), %d branch%s (target), %d failed assertion%s", pathCoverage, (pathCoverage == 1 ? "" : "s"), branchCoverage, (branchCoverage == 1 ? "" : "es"), branchCoverageTarget, (branchCoverageTarget == 1 ? "" : "es"), branchCoverageUnsafe, (branchCoverageUnsafe == 1 ? "" : "s"));
-    	}
     }
     
     private void createOutputJobsForFrontiersAtAllDepths(RunnerPath rp, EvosuiteResult item, TestCase tc, State stateInitial, State stateFinal, int depthStart) 
