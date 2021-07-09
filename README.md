@@ -177,7 +177,7 @@ with the options on the command line, and
 
     $ tardis -options_config_path ./my-config -options_config_class MyConfigurator
     
-with the configurator classes
+with the configurator classes.
 
 If you want to run TARDIS on the tardis-experiments subjects included in the Docker image you can exploit the configurators and the launchers included in the project. For instance, if you want to generate tests for the AVL tree example, you can run the following command to exploit the configurator:
 
