@@ -21,7 +21,7 @@ Alternatively, download the `Dockerfile` to the current directory and from the c
     $ docker build -t tardis .
     $ docker run -it tardis
    
-The resulting environment is an Ubuntu container, where at the current (`/root`) directory you will find a clone of the head revision of the master branch of the TARDIS and of the [tardis-experiments](https://github.com/pietrobraione/tardis-experiments) repositories. On the path you will find a `tardis` command that alleviates the need of invoking Java and passing most of the command line parameters (see the "Usage" section below). The `tardis` script is at `/usr/local/bin` in the case you want to study it.
+The resulting environment is an Ubuntu container, where at the current (`/root`) directory you will find a clone of the head revision of the master branch of the TARDIS and of the [tardis-experiments](https://github.com/pietrobraione/tardis-experiments) repositories.
 
 ### Building TARDIS
 
@@ -168,15 +168,15 @@ As you can see, the resulting code resembles that of a TARDIS launcher, but you 
 
     $ java -Xms16G -Xmx16G -cp /usr/lib/jvm/java-8-openjdk-amd64/lib/tools.jar:./libs/tardis-master-0.2.0-SNAPSHOT.jar:./libs/sushi-lib-0.2.0-SNAPSHOT.jar:./libs/jbse-0.10.0-SNAPSHOT-shaded.jar:./libs/evosuite-shaded-1.0.6-SNAPSHOT.jar:./libs/args4j-2.32.jar:./libs/log4j-api-2.14.0.jar:./libs/log4j-core-2.14.0.jar:./libs/javaparser-core-3.15.9.jar tardis.Main -options_config_path ./my-config -options_config_class MyConfigurator
 
-(here we assume that we put the `MyConfigurator` classfile in the `./my-config` directory). You will find examples of both launcher and configurato classes in the [tardis-experiments](https://github.com/pietrobraione/tardis-experiments) project. 
+(here we assume that we put the `MyConfigurator` classfile in the `./my-config` directory). You will find examples of both launcher and configurator classes in the [tardis-experiments](https://github.com/pietrobraione/tardis-experiments) project. 
 
 ### Running TARDIS from the Docker environment
 
-Under the Docker environment we have provided a more convenient `tardis` script that invokes java, passes the classpath and some of the indispensable options, so you can invoke TARDIS as follows:
+Under the Docker environment we have provided a more convenient `tardis` script that is installed on the `PATH`. When invoked it runs java, passes to it the classpath and some of the indispensable options, and starts `tardis.Main`. This allows you to invoke TARDIS as follows:
 
     $ tardis <options>
 
-In this case you do not need to pass the `-java8_home`, `-evosuite`,  `-jbse_lib`, `-sushi_lib` and `-z3` options, because the script does it already for you. This way the previous example commands become much shorter:
+relieving you from most of the command line boilerplate. More precisely, you do not need to pass the `-java8_home`, `-evosuite`,  `-jbse_lib`, `-sushi_lib` and `-z3` options, because the script does it already for you. This way the previous example commands become much shorter:
 
     $ tardis -classes ./my-application/bin -target_class my/Class -tmp_base ./tmp -out ./tests
     
@@ -184,9 +184,9 @@ with the options on the command line, and
 
     $ tardis -options_config_path ./my-config -options_config_class MyConfigurator
     
-with the configurator classes.
+with the configurator classes. The `tardis` script is at `/usr/local/bin` in the case you want to study it.
 
-If you want to run TARDIS on the pre-built tardis-experiments subjects included in the Docker image you can exploit the configurators and the launchers included in the tardis-experiments project (see its `README.md` file for more information). For instance, if you want to generate tests for the AVL tree example, you can run the following command using the configurator:
+If you want to run TARDIS on the pre-built tardis-experiments subjects included in the Docker image you can exploit the configurators and the launchers included in the tardis-experiments project. For instance, if you want to generate tests for the AVL tree example, you can run the following command using the configurator:
 
     $ tardis -options_config_path /root/tardis-experiments/bin -options_config_class avl.AvlConfigurator
     
@@ -194,7 +194,7 @@ or you can invoke the launcher as follows:
 
     $ java -cp ${CLASSPATH}:/root/tardis-experiments/bin avl.RunAvl
     
-TARDIS will put the generated tests in `/root/tardis-experiments/tardis-test` and the intermediate files in a subdirectory of `/root/tardis-experiments/tardis-out`.
+See the `README.md` file of the tardis-experiment project for more information on where the configurators and the launchers are. TARDIS will put the generated tests in `/root/tardis-experiments/tardis-test` and the intermediate files in a subdirectory of `/root/tardis-experiments/tardis-out`.
 
 ## Generated tests
 
