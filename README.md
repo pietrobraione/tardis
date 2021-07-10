@@ -103,10 +103,7 @@ Compile the target program with the debug symbols, then launch TARDIS either fro
 
     $ java -Xms16G -Xmx16G -cp <classpath> tardis.Main <options>
 
-where `<classpath>` must be set according to the indications of the previous section. (Note that TARDIS is resource-consuming, thus we increased to 16 GB the memory allocated to the JVM running it).  Under the Docker container we have provided a more convenient `tardis` script that invokes java, passes the classpath and some of the indispensable options, so you can invoke TARDIS as follows:
-
-    $ tardis <options>
-
+where `<classpath>` must be set according to the indications of the previous section. (Note that TARDIS is resource-consuming, thus we increased to 16 GB the memory allocated to the JVM running it).
 If you prefer to invoke TARDIS programmatically, this is a possible template of a launcher class:
 
 ```Java
@@ -139,6 +136,7 @@ Shall you launch TARDIS via the command line or programmatically, you will need 
 * `-target_method` (command line) or `setTargetMethod` (`tardis.Options`): the signature of a method to test. The signature is a colon-separated list of: the name of the container class in internal classfile format; the [descriptor](https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-4.html#jvms-4.3.3) of the method; the name of the method. You can use the `javap` command, included with every JDK setup, to obtain the internal format signatures of methods: `javap -s my.Class` prints the list of all the methods in `my.Class` with their signatures in internal format.
 * `-tmp_base` (command line) or `setTmpDirectoryBase` (`tardis.Options`): a path to a temporary directory; TARDIS needs to create many intermediate files, and will put them in a subdirectory of the one that you specify with this option. The subdirectory will have as name the date and time when TARDIS was launched.
 * `-out` (command line) or `setOutDirectory` (`tardis.Options`): a path to a directory where TARDIS will put the generated tests.
+* `-evosuite_no_dependency` (command line) or `setEvosuiteNoDependency` (`tardis.Options`): when active, the generated test classes will not depend on the EvoSuite jar (i.e., no scaffolding class will be generated).
 
 There are many more options that allow to control several aspects of TARDIS behaviour. You can see a synthetic description of all of them by invoking TARDIS from the command line with the `-help` option.
 
@@ -173,7 +171,11 @@ As you can see, the code resembles that of a TARDIS launcher, but you do not nee
 
 ### Running TARDIS from the Docker environment
 
-Under the Docker environment you can using the `tardis` script. In this case you do not need to pass the `-java8_home`, `-evosuite`,  `-jbse_lib`, `-sushi_lib` and `-z3` options, because the script does it already. This way the previous example commands become much shorter:
+Under the Docker environment we have provided a more convenient `tardis` script that invokes java, passes the classpath and some of the indispensable options, so you can invoke TARDIS as follows:
+
+    $ tardis <options>
+
+In this case you do not need to pass the `-java8_home`, `-evosuite`,  `-jbse_lib`, `-sushi_lib` and `-z3` options, because the script does it already for you. This way the previous example commands become much shorter:
 
     $ tardis -classes ./my-application/bin -target_class my/Class -tmp_base ./tmp -out ./tests
     
@@ -183,11 +185,11 @@ with the options on the command line, and
     
 with the configurator classes.
 
-If you want to run TARDIS on the pre-built tardis-experiments subjects included in the Docker image you can exploit the configurators and the launchers included in the project (see its `README.md` file for more information). For instance, if you want to generate tests for the AVL tree example, you can run the following command to use the configurator:
+If you want to run TARDIS on the pre-built tardis-experiments subjects included in the Docker image you can exploit the configurators and the launchers included in the tardis-experiments project (see its `README.md` file for more information). For instance, if you want to generate tests for the AVL tree example, you can run the following command using the configurator:
 
     $ tardis -options_config_path /root/tardis-experiments/bin -options_config_class avl.AvlConfigurator
     
-or you can directly invoke the launcher:
+or you can invoke the launcher as follows:
 
     $ java -cp ${CLASSPATH}:/root/tardis-experiments/bin avl.RunAvl
     
@@ -195,9 +197,9 @@ TARDIS will put the generated tests in `/root/tardis-experiments/tardis-test` an
 
 ## Generated tests
 
-The tests are generated in EvoSuite format, where a test suite is composed by two classes: a scaffolding class, and the class containing all the test cases (the actual suite). TARDIS will produce many suites each containing exactly one test case: If, e.g., a run of TARDIS generates 10 test cases, then in the directory indicated with the `-out` command line parameter you will find 10 scaffolding classes, and 10 actual test suite classes each containing exactly 1 test case. Note that you do *not* need the scaffolding classes to compile and run the tests in the test suite classes, but these depend on JUnit and on the EvoSuite jar. You can safely remove the latter dependency by manually editing the generated files, otherwise you need to put the EvoSuite jar used to generate the tests in the classpath when compiling and running the generated test suites.
+The tests are generated in EvoSuite format, where a test suite is composed by two classes: a scaffolding class, and a class containing the actual test cases (the actual suite). In case the `-evosuite_no_dependency` option is active, the scaffolding class will not be generated, and the suite will be composed by the actual suite class only: Note, however, that without scaffolding the tests might be flaky. TARDIS will produce many suites each containing exactly one test case: If, e.g., a run of TARDIS generates 10 test cases, then in the directory indicated with the `-out` command line parameter you will find 10 scaffolding classes, and 10 actual test suite classes each containing exactly 1 test case. Note that all these classes depend on the JUnit and EvoSuite jars, therefore you will need to put these jars on the classpath when compiling and running the test suites. If the `-evosuite_no_dependency` option is active, the tests will not depend on EvoSuite so you will not need to put the EvoSuite jar on the classpath.
 
-The generated files have names structured as follows:
+The names of the generated files are structured as follows:
     
     <class name>_<number>_Test_scaffolding.java //the scaffolding class
     <class name>_<number>_Test.java             //the actual suite class
@@ -206,10 +208,8 @@ where `<class name>` is the name of the class under test, and `<number>` is a se
 
 The generated scaffolding/actual suite classes are declared in the same package as the class under test, so they can access its package-level members. This means, for example, that if you have specified the option `-out /your/out/dir`, an `avl_tree.AvlTree` class under test will produce a test `/your/out/dir/avl_tree/AvlTree_1_Test.java`. If you want to compile and execute the test suites add the output directory to the classpath and qualify the class name of the test suite with the package name, e.g.:
 
-    $ javac -cp junit.jar:evosuite-shaded-1.0.6-SNAPSHOT.jar:avltree.jar
-        /your/out/dir/avl_tree/AvlTree_1_Test.java
-    $ java -cp junit.jar:evosuite-shaded-1.0.6-SNAPSHOT.jar:avltree.jar:/your/out/dir
-        org.junit.runner.JUnitCore avl_tree.AvlTree_1_Test
+    $ javac -cp junit.jar:evosuite-shaded-1.0.6-SNAPSHOT.jar:avltree.jar /your/out/dir/avl_tree/AvlTree_1_Test.java
+    $ java -cp junit.jar:evosuite-shaded-1.0.6-SNAPSHOT.jar:avltree.jar:/your/out/dir org.junit.runner.JUnitCore avl_tree.AvlTree_1_Test
 
 ## Disclaimer
 
