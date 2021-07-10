@@ -151,6 +151,7 @@ where we assume that all the jars except for `tools.jar` are in `./libs`, that t
 There is a third way of launching TARDIS that mixes the two approaches: You can launch it from the command line, but by configuring the options through an object of class `tardis.Options`. At the purpose you must define a class implementing the interface `tardis.OptionsConfigurator`. This interface declares only one method `configure`, that you must override to configure a `tardis.Options` object as in the following example:
 
 ```Java
+import tardis.Options;
 import tardis.OptionsConfigurator;
 
 public final class MyConfigurator implements OptionsConfigurator {
@@ -163,7 +164,7 @@ public final class MyConfigurator implements OptionsConfigurator {
 }
 ```
 
-As you can see, the code resembles that of a TARDIS launcher, but you do not need to explicitly create the `tardis.Options` object (it is received as a parameter) nor to create the `tardis.Main` object and start it. Once created your configurator class, compile it (remember to put the `tardis-master` jar in the compilation classpath), put the generated classfile where you prefer and invoke TARDIS as follows:
+As you can see, the resulting code resembles that of a TARDIS launcher, but you do not need to explicitly create the `tardis.Options` object (it is received as a parameter) nor to create the `tardis.Main` object and start it. Once created your configurator class, compile it (remember to put the `tardis-master` jar in the compilation classpath), put the generated classfile where you prefer and invoke TARDIS as follows:
 
     $ java -Xms16G -Xmx16G -cp /usr/lib/jvm/java-8-openjdk-amd64/lib/tools.jar:./libs/tardis-master-0.2.0-SNAPSHOT.jar:./libs/sushi-lib-0.2.0-SNAPSHOT.jar:./libs/jbse-0.10.0-SNAPSHOT-shaded.jar:./libs/evosuite-shaded-1.0.6-SNAPSHOT.jar:./libs/args4j-2.32.jar:./libs/log4j-api-2.14.0.jar:./libs/log4j-core-2.14.0.jar:./libs/javaparser-core-3.15.9.jar tardis.Main -options_config_path ./my-config -options_config_class MyConfigurator
 
