@@ -172,7 +172,7 @@ As you can see, the resulting code resembles that of a TARDIS launcher, but you 
 
 ### Running TARDIS from the Docker environment
 
-Under the Docker environment we have provided a more convenient `tardis` script that is installed on the `PATH`. When invoked it runs java, passes to it the classpath and some of the indispensable options, and starts `tardis.Main`. This allows you to invoke TARDIS as follows:
+Under the Docker environment you can find a more convenient `tardis` script that is installed on the `PATH`. When invoked it runs java, passes to it the classpath and some of the indispensable options, and starts `tardis.Main`. This allows you to invoke TARDIS as follows:
 
     $ tardis <options>
 
