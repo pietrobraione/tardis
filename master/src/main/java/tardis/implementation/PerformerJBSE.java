@@ -35,7 +35,7 @@ import jbse.mem.Clause;
 import jbse.mem.State;
 import jbse.mem.exc.ContradictionException;
 import jbse.mem.exc.ThreadStackEmptyException;
-import sushi.configure.Coverage;
+import tardis.Coverage;
 import tardis.Options;
 import tardis.framework.InputBuffer;
 import tardis.framework.Performer;

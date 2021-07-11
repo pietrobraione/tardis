@@ -1,4 +1,4 @@
-package tardis;
+package tardis.optionhandlers;
 
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.OptionDef;

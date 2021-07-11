@@ -21,10 +21,11 @@ import org.kohsuke.args4j.spi.MapOptionHandler;
 import org.kohsuke.args4j.spi.PathOptionHandler;
 
 import jbse.bc.Classpath;
-import sushi.configure.SignatureHandler;
-import sushi.configure.Visibility;
-import sushi.configure.Coverage;
-import sushi.configure.MultiPathOptionHandlerPatched;
+import tardis.optionhandlers.LoggingLevelOptionHandler;
+import tardis.optionhandlers.MultiPathOptionHandlerPatched;
+import tardis.optionhandlers.MultiSignatureOptionHandler;
+import tardis.optionhandlers.PercentageOptionHandler;
+import tardis.optionhandlers.SignatureOptionHandler;
 
 /**
  * The configuration options for TARDIS.
@@ -66,7 +67,7 @@ public final class Options implements Cloneable {
             forbids = {"-initial_test_random"},
             depends = {"-initial_test_path"},
             usage = "Java signature of the initial test case method for seeding concolic exploration",
-            handler = SignatureHandler.class)
+            handler = SignatureOptionHandler.class)
     private List<String> initialTestCaseSignature = null;
 
     @Option(name = "-target_class",
@@ -77,7 +78,7 @@ public final class Options implements Cloneable {
     @Option(name = "-target_method",
             forbids = {"-options_config_class", "-target_class"},
             usage = "Java signature of the target method (the method to test)",
-            handler = SignatureHandler.class)
+            handler = SignatureOptionHandler.class)
     private List<String> targetMethodSignature;
 
     @Option(name = "-visibility",

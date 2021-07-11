@@ -30,8 +30,8 @@ import jbse.mem.ClauseAssumeExpands;
 import jbse.mem.ClauseAssumeNull;
 import jbse.val.Primitive;
 import jbse.val.Symbolic;
-import sushi.configure.Visibility;
 import tardis.Options;
+import tardis.Visibility;
 
 /**
  * Utility class gathering a number of common
