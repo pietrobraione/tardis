@@ -78,7 +78,7 @@ In the end, your Eclipse workspace should contain these projects:
 
 #### Deploying TARDIS
 
-Deploying TARDIS outside the build environment to a target machine is tricky. The `gradlew build` command will produce a SUSHI-Lib jar `runtime/build/libs/sushi-lib-<VERSION>.jar`, the JBSE jars in `jbse/build/libs` (refer to the JBSE project's README file for more information on them), and a jar for the main TARDIS application `master/build/libs/tardis-master-<VERSION>.jar`. Moreover, it will copy all the dependencies of the SUSHI-Lib, JBSE and TARDIS projects in `runtime/build/libs`, `jbse/build/libs`, and `master/build/libs` respectively. You need to deploy all of them plus the native files (Z3). The build process will also produce an uber-jar `master/build/libs/tardis-master-<VERSION>-shaded.jar` containing all the runtime dependencies excluded EvoSuite, `tools.jar`, and the native files. Deploying based on the uber-jar is easier, but to our experience a setup based on the uber-jar is more crash-prone (on the other hand, using the uber-jar for JBSE is safe). 
+Deploying TARDIS outside the build environment to a target machine is tricky. The `gradlew build` command will produce a SUSHI-Lib jar `runtime/build/libs/sushi-lib-<VERSION>.jar`, the JBSE jars in `jbse/build/libs` (refer to the JBSE project's README file for more information on them), and a jar for the main TARDIS application `master/build/libs/tardis-master-<VERSION>.jar`. Moreover, it will copy all the dependencies of the SUSHI-Lib, JBSE and TARDIS projects in `runtime/deps`, `jbse/deps`, and `master/deps` respectively. You need to deploy all of them plus the native files (Z3). The build process will also produce an uber-jar `master/build/libs/tardis-master-<VERSION>-shaded.jar` containing all the runtime dependencies excluded EvoSuite, `tools.jar`, and the native files. Deploying based on the uber-jar is easier, but to our experience a setup based on the uber-jar is more crash-prone (on the other hand, using the uber-jar for JBSE is safe). 
 
 Here follow detailed instructions for deploying TARDIS based on the plain jars:
 
@@ -88,10 +88,10 @@ Here follow detailed instructions for deploying TARDIS based on the plain jars:
 * Deploy the `sushi-lib-<VERSION>.jar` and set the Java classpath to point at it.
 * Deploy the EvoSuite jar contained in the `libs` directory. While EvoSuite is run in separate processes, TARDIS will nevertheless try to load some of the EvoSuite classes, therefore you need to put the EvoSuite jar in the Java classpath. 
 * TARDIS requires a full JDK (not just a JRE) version 8 installed on the platform it runs. Add the `tools.jar` of the JDK 8 installed on the platform to the classpath.
-* Deploy the args4j jar that you find in the Gradle cache. You will find a copy of it in the `master/build/libs` directory. This jar must be in the Java classpath.
-* Deploy the javaparser-core jar that you find in the Gradle cache. You will find a copy of it in the `master/build/libs` directory. This jar must be in the Java classpath.
-* Deploy the log4j-api jar that you find in the Gradle cache. You will find a copy of it in the `master/build/libs` directory. This jar must be in the Java classpath.
-* Deploy the log4j-core jar that you find in the Gradle cache. You will find a copy of it in the `master/build/libs` directory. This jar must be in the Java classpath.
+* Deploy the args4j jar that you find in the Gradle cache. You will find a copy of it in the `master/deps` directory. This jar must be in the Java classpath.
+* Deploy the javaparser-core jar that you find in the Gradle cache. You will find a copy of it in the `master/deps` directory. This jar must be in the Java classpath.
+* Deploy the log4j-api jar that you find in the Gradle cache. You will find a copy of it in the `master/deps` directory. This jar must be in the Java classpath.
+* Deploy the log4j-core jar that you find in the Gradle cache. You will find a copy of it in the `master/deps` directory. This jar must be in the Java classpath.
 
 You can study the `Dockerfile` as an example of an automatic deployment workflow on Ubuntu.
 
