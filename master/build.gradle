@@ -1,6 +1,6 @@
 plugins {
     id 'application'
-    id 'com.github.johnrengelman.shadow' version '6.1.0'
+    id 'com.github.johnrengelman.shadow' version '7.0.0'
 }
 
 def javaHome = javaToolchains.compilerFor { languageVersion = javaVersion }.get().metadata.installationPath.asFile.toString()
@@ -21,8 +21,12 @@ dependencies {
     implementation project(':jbse')
 }
 
+task wrapper(type: Wrapper) {
+    gradleVersion = '7.1.1'
+}
+
 task copyToLib(type: Copy) {
-    into "${buildDir}/libs"
+    into "deps"
     from configurations.compileClasspath
 }
 
@@ -42,7 +46,6 @@ build.dependsOn(copyToLib)
 build.dependsOn 'shadowJar'
 
 application {
-	mainClassName='tardis.Main' //deprecated, but still used by the shadow plugin
 	mainClass.set('tardis.Main')
 }
 
