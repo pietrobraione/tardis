@@ -122,18 +122,18 @@ public final class Launcher {
 }
 ```
 
-The launcher must create a `tardis.Options` object, configure it with the necessary options, then it must create a `tardis.Main` object and pass to its constructor the previously configured `tardis.Options` object. Finally, it must invoke the `tardis.Main.start()` method. Note that the command line TARDIS launcher is not much different from this example, the main difference being that the command line TARDIS launcher parses the command line arguments to create the `tardis.Options` object.
+The launcher must create a `tardis.Options` object, configure it with the necessary options, then it must create a `tardis.Main` object and pass to its constructor the previously configured `tardis.Options` object. Finally, it must invoke the `tardis.Main.start()` method. Note that the command line TARDIS launcher is not much different from this example, the main difference being that the command line launcher parses the command line arguments to create the `tardis.Options` object.
 
 Shall you launch TARDIS via the command line or programmatically, you will need to set a number of options for it to work. The indispensable ones, that you *must* set in order to obtain any result, are:
 
 * `-java8_home` (command line) or `setJava8Home` (`tardis.Options`): the path to the home directory of a Java 8 full JDK setup, in case the default JDK installed on the deploy platform is not Java 8, or should be overridden. If this parameter is not provided, TARDIS will try with the default JDK installed on the deploy platform.
-* `-evosuite` (command line) or `setEvosuitePath` (`tardis.Options`): the path to the EvoSuite jar file `evosuite-shaded-1.0.6-SNAPSHOT.jar` contained in the `lib/` folder. The same jar file must be put on the classpath (see previous section).
+* `-evosuite` (command line) or `setEvosuitePath` (`tardis.Options`): the path to the EvoSuite jar file `evosuite-shaded-1.0.6-SNAPSHOT.jar` contained in the `libs/` folder. The same jar file must be put on the classpath (see previous section).
 * `-jbse_lib` (command line) or `setJBSELibraryPath` (`tardis.Options`): this must be set to the path of the JBSE jar file from the `jbse/build/libs` directory. It must be the same you put in the classpath. If you chose to deploy the `tardis-master-<VERSION>-shaded.jar` uber-jar, set this option to point to it.
 * `-sushi_lib` (command line) or `setSushiLibPath` (`tardis.Options`): this must be set to the path of the SUSHI-Lib jar file from the `runtime/build/libs` directory.  If you chose to deploy the `tardis-master-<VERSION>-shaded.jar` uber-jar, set this option to point to it.
 * `-z3` (command line) or `setZ3Path` (`tardis.Options`): the path to the Z3 binary.
 * `-classes` (command line) or `setClassesPath` (`tardis.Options`): a colon- or semicolon-separated (depending on the OS) list of paths; It is the classpath of the software under test.
 * `-target_class` (command line) or `setTargetClass` (`tardis.Options`): the name in [internal classfile format](https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-4.html#jvms-4.2.1) of the class to test: TARDIS will generate tests for all the methods in the class. Or alternatively:
-* `-target_method` (command line) or `setTargetMethod` (`tardis.Options`): the signature of a method to test. The signature is a colon-separated list of: the name of the container class in internal classfile format; the [descriptor](https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-4.html#jvms-4.3.3) of the method; the name of the method. You can use the `javap` command, included with every JDK setup, to obtain the internal format signatures of methods: `javap -s my.Class` prints the list of all the methods in `my.Class` with their signatures in internal format.
+* `-target_method` (command line) or `setTargetMethod` (`tardis.Options`): the signature of a method to test. The signature is a colon-separated list of: the name of the container class in internal classfile format; the [descriptor](https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-4.html#jvms-4.3.3) of the method; the name of the method. You can use the `javap` command, included with every JDK setup, to obtain the internal format signatures of methods: `javap -s my.Class` prints the list of all the nonprivate methods in `my.Class` with their signatures in internal format.
 * `-tmp_base` (command line) or `setTmpDirectoryBase` (`tardis.Options`): a path to a temporary directory; TARDIS needs to create many intermediate files, and will put them in a subdirectory of the one that you specify with this option. The subdirectory will have as name the date and time when TARDIS was launched.
 * `-out` (command line) or `setOutDirectory` (`tardis.Options`): a path to a directory where TARDIS will put the generated tests.
 * `-evosuite_no_dependency` (command line) or `setEvosuiteNoDependency` (`tardis.Options`): when active, the generated test classes will not depend on the EvoSuite jar (i.e., no scaffolding class will be generated).
@@ -168,11 +168,11 @@ As you can see, the resulting code resembles that of a TARDIS launcher, but you 
 
     $ java -Xms16G -Xmx16G -cp /usr/lib/jvm/java-8-openjdk-amd64/lib/tools.jar:./libs/tardis-master-0.2.0-SNAPSHOT.jar:./libs/sushi-lib-0.2.0-SNAPSHOT.jar:./libs/jbse-0.10.0-SNAPSHOT-shaded.jar:./libs/evosuite-shaded-1.0.6-SNAPSHOT.jar:./libs/args4j-2.32.jar:./libs/log4j-api-2.14.0.jar:./libs/log4j-core-2.14.0.jar:./libs/javaparser-core-3.15.9.jar tardis.Main -options_config_path ./my-config -options_config_class MyConfigurator
 
-(here we assume that we put the `MyConfigurator` classfile in the `./my-config` directory). You will find examples of both launcher and configurator classes in the [tardis-experiments](https://github.com/pietrobraione/tardis-experiments) project. 
+(here we assume that we put the `MyConfigurator.class` classfile in the `./my-config` directory). You will find examples of both launcher and configurator classes in the [tardis-experiments](https://github.com/pietrobraione/tardis-experiments) project. 
 
 ### Running TARDIS from the Docker environment
 
-Under the Docker environment you can find a more convenient `tardis` script that is installed on the `PATH`. When invoked it runs java, passes to it the classpath and some of the indispensable options, and starts `tardis.Main`. This allows you to invoke TARDIS as follows:
+Under the Docker environment you can find a more convenient `tardis` script that is installed on the `PATH`. When invoked, it runs java, passes to it the classpath and some of the indispensable options, and starts `tardis.Main`. This allows you to invoke TARDIS as follows:
 
     $ tardis <options>
 
