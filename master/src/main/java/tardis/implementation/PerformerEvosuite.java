@@ -186,7 +186,12 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
     private void generateTestsAndScheduleJBSESeed(int testCountInitial, List<JBSEResult> items) {
         try {
             final boolean targetIsASetOfMethods = items.get(0).hasTargetMethod();
-            if (targetIsASetOfMethods) { //the target is a set of methods
+            
+            final List<String> evosuiteCommand;
+            if (targetIsASetOfMethods) {
+            	//updates testCount
+            	this.testCount += items.size();
+            	
                 //builds the EvoSuite wrappers
             	int testCount = testCountInitial;
             	for (JBSEResult item : items) {
@@ -225,67 +230,123 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
             		}
             	}
 
-                //builds the EvoSuite processes; note that every item
-        		//has different target method, so we must build a different
-        		//EvoSuite process for each
-            	testCount = testCountInitial;
-            	final Process[] processesEvosuite = new Process[items.size()];
-            	for (JBSEResult item : items) {
-            		final int i = testCount - testCountInitial;
-            		//builds the EvoSuite command line
-            		final List<String> evosuiteCommand = buildEvoSuiteCommand(testCount, Collections.singletonList(item));
+                //builds the EvoSuite command line
+        		evosuiteCommand = buildEvoSuiteCommand(testCountInitial, items);
+            } else {
+                //builds the EvoSuite command line
+                evosuiteCommand = buildEvoSuiteCommandSeedTargetClass(items.get(0));
+            }
 
-            		//launches EvoSuite
-            		final Path evosuiteLogFilePath = this.o.getTmpDirectoryPath().resolve("evosuite-log-" + testCount + ".txt");
-            		try {
-            			processesEvosuite[i] = launchProcess(evosuiteCommand, evosuiteLogFilePath);
-            			LOGGER.info("Launched EvoSuite seed process, command line: %s", evosuiteCommand.stream().reduce("", (s1, s2) -> { return s1 + " " + s2; }));
-            			++testCount;
-            		} catch (IOException e) {
-            			LOGGER.error("Unexpected I/O error while running EvoSuite seed process");
-            			LOGGER.error("Message: %s", e.toString());
-            			LOGGER.error("Stack trace:");
-            			for (StackTraceElement elem : e.getStackTrace()) {
-            				LOGGER.error("%s", elem.toString());
-            			}
-            			for (int k = 0; k <= i; ++k) {
-            				if (processesEvosuite[k] != null) {
-            					processesEvosuite[k].destroy();
-            				}
-            			}
-            			return;
-            		}
+            //launches EvoSuite
+            final Path evosuiteLogFilePath = this.o.getTmpDirectoryPath().resolve("evosuite-log-seed.txt");
+            final Process evosuiteProcess;
+            try {
+            	evosuiteProcess = (targetIsASetOfMethods ? launchProcess(evosuiteCommand) : launchProcess(evosuiteCommand, evosuiteLogFilePath));
+            	LOGGER.info("Launched EvoSuite seed process, command line: %s", evosuiteCommand.stream().reduce("", (s1, s2) -> { return s1 + " " + s2; }));
+            } catch (IOException e) {
+            	LOGGER.error("Unexpected I/O error while running EvoSuite seed process");
+            	LOGGER.error("Message: %s", e.toString());
+            	LOGGER.error("Stack trace:");
+            	for (StackTraceElement elem : e.getStackTrace()) {
+            		LOGGER.error("%s", elem.toString());
             	}
+            	return;
+            }
 
-                //waits for all the EvoSuite processes to end
+            if (targetIsASetOfMethods) {
+                //launches a thread that waits for tests and schedules 
+                //JBSE for exploring them
+                final Thread tJBSE;
                 try {
-                	for (Process processEvosuite : processesEvosuite) {
-                		processEvosuite.waitFor();
-                	}
-                } catch (InterruptedException e) {
-                    //this performer was shut down: kills the EvoSuite jobs
-                    //and return
-                	for (Process processEvosuite : processesEvosuite) {
-                		processEvosuite.destroy();
-                	}
+                	final TestDetector tdJBSE = new TestDetector(this.o, testCountInitial, items, evosuiteProcess.getInputStream(), evosuiteLogFilePath, this.in);
+                    tJBSE = new Thread(tdJBSE);
+                    tJBSE.start();
+                } catch (IOException e) {
+                    LOGGER.error("Unexpected I/O error while opening the EvoSuite output file");
+                    LOGGER.error("Message: %s", e.toString());
+                    LOGGER.error("Stack trace:");
+                    for (StackTraceElement elem : e.getStackTrace()) {
+                        LOGGER.error("%s", elem.toString());
+                    }
+                    evosuiteProcess.destroy();
                     return;
                 }
-
+                
+                boolean interrupted = false;
+                try {
+                	tJBSE.join();
+                } catch (InterruptedException e) {
+                	interrupted = true;
+                }
+                
+                try {
+                	if (interrupted) {
+                		evosuiteProcess.destroy();
+                	} else {
+                		evosuiteProcess.waitFor();
+                	}
+                } catch (InterruptedException e) {
+                	evosuiteProcess.destroy();
+                }
+            } else {
+                //waits for EvoSuite to end
+                try {
+                	evosuiteProcess.waitFor();
+                } catch (InterruptedException e) {
+                	//this performer was shut down: kills the EvoSuite jobs
+                	//and return
+                	evosuiteProcess.destroy();
+                	return;
+                }
+                
+                //splits output
+                final List<JBSEResult> splitItems;
+            	try {
+            		splitItems = splitEvosuiteSeed(testCountInitial, items.get(0).getTargetClassName());
+            	} catch (NoTestFileException e) {
+            		LOGGER.error("Failed to split the seed test case %s: the generated test class file does not seem to exist (perhaps EvoSuite must be blamed)", e.file.toAbsolutePath().toString());
+            		return;
+            	} catch (NoTestFileScaffoldingException e) {
+            		LOGGER.error("Failed to split the seed test case %s: the generated scaffolding class file does not seem to exist (perhaps EvoSuite must be blamed)", e.file.toAbsolutePath().toString());
+            		return;
+            	} catch (IOFileCreationException e) { 
+            		LOGGER.error("Unexpected I/O error during EvoSuite seed splitting while creating file %s", e.file.toAbsolutePath().toString());
+            		LOGGER.error("Message: %s", e.toString());
+            		LOGGER.error("Stack trace:");
+            		for (StackTraceElement elem : e.getStackTrace()) {
+            			LOGGER.error("%s", elem.toString());
+            		}
+            		return;
+            	} catch (IOException e) {
+            		LOGGER.error("Unexpected I/O error during EvoSuite seed splitting while invoking Javaparser");
+            		LOGGER.error("Message: %s", e.toString());
+            		LOGGER.error("Stack trace:");
+            		for (StackTraceElement elem : e.getStackTrace()) {
+            			LOGGER.error("%s", elem.toString());
+            		}
+            		return;
+            	}
+                
                 //schedules JBSE
-                testCount = testCountInitial;
-                for (JBSEResult item : items) {
+                int testCount = testCountInitial;
+                for (JBSEResult item : splitItems) {
                 	try {
-                		checkTestCompileAndScheduleJBSE(testCount++, item);
+                		checkTestCompileAndScheduleJBSE(testCount, item);
                 	} catch (NoTestFileException e) {
                 		LOGGER.error("Failed to generate the test case %s for path condition %s: the generated test class file does not seem to exist (perhaps EvoSuite must be blamed)", e.file.toAbsolutePath().toString(), e.pathCondition);
+                		//continue
                 	} catch (NoTestFileScaffoldingException e) {
                 		LOGGER.error("Failed to generate the test case %s for path condition %s: the generated scaffolding class file does not seem to exist (perhaps EvoSuite must be blamed)", e.file.toAbsolutePath().toString(), e.pathCondition);
+                		//continue
                 	} catch (NoTestMethodException e) {
                 		LOGGER.warn("Failed to generate the test case %s for path condition: %s: the generated files does not contain a test method (perhaps EvoSuite must be blamed)", e.file.toAbsolutePath().toString(), e.pathCondition);
+                		//continue
                 	} catch (CompilationFailedTestException e) {
                 		LOGGER.error("Internal error: EvoSuite test case %s compilation failed", e.file.toAbsolutePath().toString());
+                		//continue
                 	} catch (CompilationFailedTestScaffoldingException e) {
                 		LOGGER.error("Internal error: EvoSuite test case scaffolding %s compilation failed", e.file.toAbsolutePath().toString());
+                		//continue
                 	} catch (ClassFileAccessException e) {
                 		LOGGER.error("Unexpected error while verifying that class %s exists and has a test method", e.className);
                 		LOGGER.error("Message: %s", e.e.toString());
@@ -293,6 +354,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
                 		for (StackTraceElement elem : e.e.getStackTrace()) {
                 			LOGGER.error("%s", elem.toString());
                 		}
+                		//continue
                 	} catch (IOFileCreationException e) {
                 		LOGGER.error("Unexpected I/O error while creating test case compilation log file %s", e.file.toAbsolutePath().toString());
                 		LOGGER.error("Message: %s", e.e.toString());
@@ -300,116 +362,16 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
                 		for (StackTraceElement elem : e.e.getStackTrace()) {
                 			LOGGER.error("%s", elem.toString());
                 		}
+                		//continue
+                	} finally {
+                		++testCount;
                 	}
+                	
+                    //updates the counter
+                    this.testCount = testCount;
                 }
-
-                //updates the counter
-                this.testCount = testCount;
-            } else { //the target is a (single) class
-            	//gets the only item
-            	final JBSEResult item = items.get(0);
-            	
-                //builds the EvoSuite command line
-                final List<String> evosuiteCommand = buildEvoSuiteCommandSeedTargetClass(item); 
-
-                //launches EvoSuite
-                final Path evosuiteLogFilePath = this.o.getTmpDirectoryPath().resolve("evosuite-log-seed.txt");
-                final Process processEvosuite;
-                try {
-                    processEvosuite = launchProcess(evosuiteCommand, evosuiteLogFilePath);
-                    LOGGER.info("Launched EvoSuite seed process, command line: %s", evosuiteCommand.stream().reduce("", (s1, s2) -> { return s1 + " " + s2; }));
-                } catch (IOException e) {
-                    LOGGER.error("Unexpected I/O error while running EvoSuite seed process");
-                    LOGGER.error("Message: %s", e.toString());
-                    LOGGER.error("Stack trace:");
-                    for (StackTraceElement elem : e.getStackTrace()) {
-                        LOGGER.error("%s", elem.toString());
-                    }
-                    return;
-                }
-
-                //waits for EvoSuite to end
-                try {
-                    processEvosuite.waitFor();
-                } catch (InterruptedException e) {
-                    //this performer was shut down: kills the EvoSuite job
-                    //and return
-                    processEvosuite.destroy();
-                    return;
-                }
-
-                //splits output
-                final List<JBSEResult> splitItems;
-                try {
-                    splitItems = splitEvosuiteSeed(testCountInitial, item);
-                } catch (NoTestFileException e) {
-                    LOGGER.error("Failed to split the seed test case %s: the generated test class file does not seem to exist (perhaps EvoSuite must be blamed)", e.file.toAbsolutePath().toString());
-                    return;
-                } catch (NoTestFileScaffoldingException e) {
-                    LOGGER.error("Failed to split the seed test case %s: the generated scaffolding class file does not seem to exist (perhaps EvoSuite must be blamed)", e.file.toAbsolutePath().toString());
-                    return;
-                } catch (IOFileCreationException e) { 
-                    LOGGER.error("Unexpected I/O error during EvoSuite seed splitting while creating file %s", e.file.toAbsolutePath().toString());
-                    LOGGER.error("Message: %s", e.toString());
-                    LOGGER.error("Stack trace:");
-                    for (StackTraceElement elem : e.getStackTrace()) {
-                        LOGGER.error("%s", elem.toString());
-                    }
-                    return;
-                } catch (IOException e) {
-                    LOGGER.error("Unexpected I/O error during EvoSuite seed splitting while invoking Javaparser");
-                    LOGGER.error("Message: %s", e.toString());
-                    LOGGER.error("Stack trace:");
-                    for (StackTraceElement elem : e.getStackTrace()) {
-                        LOGGER.error("%s", elem.toString());
-                    }
-                    return;
-                }
-
-                //schedules JBSE
-                int testCount = testCountInitial;
-                for (JBSEResult splitItem : splitItems) {
-                    try {
-                        checkTestCompileAndScheduleJBSE(testCount, splitItem);
-                    } catch (NoTestFileException e) {
-                        LOGGER.error("Failed to generate the test case %s for path condition %s: the generated test class file does not seem to exist (perhaps EvoSuite must be blamed)", e.file.toAbsolutePath().toString(), e.pathCondition);
-                        //continue
-                    } catch (NoTestFileScaffoldingException e) {
-                        LOGGER.error("Failed to generate the test case %s for path condition %s: the generated scaffolding class file does not seem to exist (perhaps EvoSuite must be blamed)", e.file.toAbsolutePath().toString(), e.pathCondition);
-                        //continue
-                    } catch (NoTestMethodException e) {
-                        LOGGER.warn("Failed to generate the test case %s for path condition: %s: the generated files does not contain a test method (perhaps EvoSuite must be blamed)", e.file.toAbsolutePath().toString(), e.pathCondition);
-                        //continue
-                    } catch (CompilationFailedTestException e) {
-                        LOGGER.error("Internal error: EvoSuite test case %s compilation failed", e.file.toAbsolutePath().toString());
-                        //continue
-                    } catch (CompilationFailedTestScaffoldingException e) {
-                        LOGGER.error("Internal error: EvoSuite test case scaffolding %s compilation failed", e.file.toAbsolutePath().toString());
-                        //continue
-                    } catch (ClassFileAccessException e) {
-                        LOGGER.error("Unexpected error while verifying that class %s exists and has a test method", e.className);
-                        LOGGER.error("Message: %s", e.e.toString());
-                        LOGGER.error("Stack trace:");
-                        for (StackTraceElement elem : e.e.getStackTrace()) {
-                            LOGGER.error("%s", elem.toString());
-                        }
-                        //continue
-                    } catch (IOFileCreationException e) {
-                        LOGGER.error("Unexpected I/O error while creating test case compilation log file %s", e.file.toAbsolutePath().toString());
-                        LOGGER.error("Message: %s", e.e.toString());
-                        LOGGER.error("Stack trace:");
-                        for (StackTraceElement elem : e.e.getStackTrace()) {
-                            LOGGER.error("%s", elem.toString());
-                        }
-                        //continue
-                    } finally {
-                    	++testCount;
-                    }
-                }
-
-                //updates the counter
-                this.testCount = testCount;
             }
+
         } finally {
             //unlocks
             this.stopForSeeding = false;
@@ -428,15 +390,22 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
      */
     private void generateTestsAndScheduleJBSE(int testCountInitial, List<JBSEResult> items) {
         //splits items in sublists having same target method
-        final Map<String, List<JBSEResult>> splitItems = 
-        items.stream().collect(Collectors.groupingBy(r -> r.getTargetMethodClassName() + ":" + r.getTargetMethodDescriptor() + ":" + r.getTargetMethodName()));
+        final List<List<JBSEResult>> splitItems = new ArrayList<>();
+        for (int i = 0; i < items.size() / this.o.getNumMOSATargets(); ++i) {
+        	final int start = i * items.size();
+        	final int end = (i + 1) * items.size();
+        	splitItems.add(items.subList(start, end));
+        }
+        if (items.size() % this.o.getNumMOSATargets() != 0) {
+        	splitItems.add(items.subList((items.size() / this.o.getNumMOSATargets()) * items.size(), items.size()));
+        }
 
         //launches an EvoSuite process for each sublist
         final ArrayList<TestDetector> testDetectors = new ArrayList<>();
         final ArrayList<Thread> threads = new ArrayList<>();
         final ArrayList<Process> processes = new ArrayList<>();
         int testCountStart = testCountInitial;
-        for (List<JBSEResult> subItems : splitItems.values()) {
+        for (List<JBSEResult> subItems : splitItems) {
             final int testCount = testCountStart; //copy into final variable to keep compiler happy
             testCountStart += subItems.size(); //for the next iteration
 
@@ -497,9 +466,8 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
 
             //launches a thread that waits for tests and schedules 
             //JBSE for exploring them
-            final TestDetector tdJBSE;
             try {
-                tdJBSE = new TestDetector(this.o, testCount, subItems, evosuiteProcess.getInputStream(), evosuiteLogFilePath, this.in);
+            	final TestDetector tdJBSE = new TestDetector(this.o, testCount, subItems, evosuiteProcess.getInputStream(), evosuiteLogFilePath, this.in);
                 final Thread tJBSE = new Thread(tdJBSE);
                 tJBSE.start();
                 testDetectors.add(tdJBSE);
@@ -672,15 +640,15 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
             for (JBSEResult item : this.items) {
                 if (!generated.contains(testCount)) {
                     //logs the items whose test cases were not generated
-                    LOGGER.info("Failed to generate a test case for path condition: %s, log file: %s, wrapper: EvoSuiteWrapper_%d", stringifyPathCondition(shorten(item.getFinalState().getPathCondition())), this.evosuiteLogFilePath.toString(), testCount);
+                    LOGGER.info("Failed to generate a test case for path condition: %s, log file: %s, wrapper: EvoSuiteWrapper_%d", (item.getFinalState() == null ? "true" : stringifyPathCondition(shorten(item.getFinalState().getPathCondition()))), this.evosuiteLogFilePath.toString(), testCount);
                     
                     //learns for update of indices
-                    if (this.o.getUseIndexInfeasibility()) {
+                    if (this.o.getUseIndexInfeasibility() && item.getFinalState() != null) { //NB: item.getFinalState() == null for seed items when target is method
                     	this.in.learnPathConditionForIndexInfeasibility(item.getTargetMethodSignature(), item.getFinalState().getPathCondition(), false);
                     }
 
                     //TODO possibly lazier updates of index
-                    if (this.o.getUseIndexInfeasibility()) {
+                    if (this.o.getUseIndexInfeasibility() && item.getFinalState() != null) {
                     	this.in.updateIndexInfeasibilityAndReclassify();
                     }
                 }
@@ -689,6 +657,35 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         }
     }
     
+    /**
+     * Emits and compiles the EvoSuite wrapper for the path condition of some state
+     * (only for seed tests, and in the case the target is a method).
+     * 
+     * @param testCount an {@code int}, the number used to identify the test.
+     * @param targetMethodClassName a {@link String}, the name of the class
+     *        of the target method.
+     * @param targetMethodDescriptor a {@link String}, the descriptor
+     *        of the target method.
+     * @param targetMethodName a {@link String}, the name of 
+     *        the target method.
+     * @throws IOException
+     * @throws InvalidClassFileFactoryClassException
+     * @throws InvalidInputException
+     * @throws ClassFileNotFoundException
+     * @throws ClassFileIllFormedException
+     * @throws ClassFileNotAccessibleException
+     * @throws IncompatibleClassFileException
+     * @throws PleaseLoadClassException
+     * @throws BadClassFileVersionException
+     * @throws RenameUnsupportedException
+     * @throws WrongClassNameException
+     * @throws CannotAssumeSymbolicObjectException
+     * @throws MethodNotFoundException
+     * @throws MethodCodeNotFoundException
+     * @throws HeapMemoryExhaustedException
+     * @throws IOFileCreationException
+     * @throws CompilationFailedWrapperException
+     */
     private void emitAndCompileEvoSuiteWrapperSeedTargetMethod(int testCount, String targetMethodClassName, String targetMethodDescriptor, String targetMethodName) 
     throws IOException, InvalidClassFileFactoryClassException, InvalidInputException, ClassFileNotFoundException, 
     ClassFileIllFormedException, ClassFileNotAccessibleException, IncompatibleClassFileException, 
@@ -708,7 +705,6 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         final Set<Long> stringOthers = Collections.emptySet();
         emitAndCompileEvoSuiteWrapper(testCount, initialState, finalState, stringLiterals, stringOthers);
     }
-
     
     /**
      * Emits and compiles the EvoSuite wrapper for the path condition of some state.
@@ -772,7 +768,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
     
     /**
      * Builds the command line for invoking EvoSuite for the generation of the
-     * tests (common to seeds and nonseeds).
+     * tests (common part).
      * 
      * @param targetClass a {@code String}, the name of the target class.
      * @return a command line in the format of an {@link ArrayList}{@code <}{@link String}{@code >},
@@ -811,12 +807,13 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         retVal.add("-Dcrossover_function=SUSHI_HYBRID");
         retVal.add("-Dalgorithm=DYNAMOSA");
         retVal.add("-generateMOSuite");
+        
         return retVal;
     }
     
     /**
      * Builds the command line for invoking EvoSuite for the generation of the
-     * seed tests.
+     * seed tests with a class as target.
      * 
      * @param item a {@link JBSEResult} such that {@code item.}{@link JBSEResult#isSeed() isSeed}{@code () == true && }{@link JBSEResult#hasTargetMethod() hasTargetMethod}{@code () == false}.
      *        All the items in {@code items} must refer to the same target method, i.e., must have same
@@ -841,16 +838,14 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
      *        the generated tests. The test generated from {@code items.get(i)}
      *        will be numbered {@code testCountInitial + i}.
      * @param items a {@link List}{@code <}{@link JBSEResult}{@code >}, results of symbolic execution.
-     *        All the items in {@code items} must refer to the same target method, i.e., must have same
-     *        {@link JBSEResult#getTargetMethodClassName() class name}, {@link JBSEResult#getTargetMethodDescriptor() method descriptor}, and 
-     *        {@link JBSEResult#getTargetMethodName() method name}.
+     *        All the items in {@code items} must refer to the same target class, i.e., must have same
+     *        {@link JBSEResult#getTargetMethodClassName() class name}.
      * @return a command line in the format of an {@link ArrayList}{@code <}{@link String}{@code >},
      *         suitable to be passed to a {@link ProcessBuilder}.
      */
     private ArrayList<String> buildEvoSuiteCommand(int testCountInitial, List<JBSEResult> items) {
-        final String targetClass = items.get(0).getTargetMethodClassName().replace('/', '.');
-        final String targetMethodDescriptor = items.get(0).getTargetMethodDescriptor();
-        final String targetMethodName = items.get(0).getTargetMethodName();
+    	final JBSEResult item = items.get(0);
+        final String targetClass = item.getTargetMethodClassName().replace('/', '.');
         final ArrayList<String> retVal = buildEvoSuiteCommandCommon(targetClass);
         retVal.add("-Dcriterion=PATHCONDITION");             
         retVal.add("-Dsushi_statistics=true");
@@ -862,6 +857,9 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
             if (i > testCountInitial) {
                 optionPC.append(":");
             }
+            final int itemNumber = i - testCountInitial;
+            final String targetMethodDescriptor = items.get(itemNumber).getTargetMethodDescriptor();
+            final String targetMethodName = items.get(itemNumber).getTargetMethodName();
             final String targetPackage = targetClass.substring(0, targetClass.lastIndexOf('.'));
             optionPC.append(targetClass + "," + targetMethodName + targetMethodDescriptor + "," + targetPackage + ".EvoSuiteWrapper_" + i);
         }
@@ -933,8 +931,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
      * @param testCountInitial an {@code int}, the number used to identify 
      *        the generated tests. The test generated will be numbered starting 
      *        from {@code testCountInitial} henceforth.
-     * @param item a {@link JBSEResult}. It must be
-     *        {@code item.}{@link JBSEResult#isSeed() isSeed}{@code () == true && item.}{@link JBSEResult#hasTargetMethod() hasTargetMethod}{@code () == false}.
+     * @param targetClassName a {@link String}, the name of the target class.
      * @return a {@link List}{@code <}{@link JBSEResult}{@code >}.
      * @throws IOException if some I/O error occurs during the execution of Javaparser.
      * @throws IOFileCreationException if some I/O error occurs while creating the 
@@ -942,10 +939,10 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
      * @throws NoTestFileException if the test file does not exist.
      * @throws NoTestFileScaffoldingException if the scaffolding file does not exist. 
      */
-    private List<JBSEResult> splitEvosuiteSeed(int testCountInitial, JBSEResult item) 
+    private List<JBSEResult> splitEvosuiteSeed(int testCountInitial, String targetClassName) 
     throws IOException, IOFileCreationException, NoTestFileException, NoTestFileScaffoldingException {
         //parses the seed compilation unit
-        final String testClassName = (item.getTargetClassName() + "_Seed_Test");
+        final String testClassName = targetClassName + "_Seed_Test";
         final String scaffClassName = (this.o.getEvosuiteNoDependency() ? null : testClassName + "_scaffolding");
         final Path testFile = this.o.getTmpTestsDirectoryPath().resolve(testClassName + ".java");
         final Path scaffFile = (this.o.getEvosuiteNoDependency() ? null : this.o.getTmpTestsDirectoryPath().resolve(scaffClassName + ".java"));
@@ -1048,7 +1045,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
                     testClassDeclarationNew.remove(md);
                 }
                 testMethodDeclarationNew.setName("test0");
-                final String testClassNameNew = (item.getTargetClassName() + "_" + testCount + "_Test");
+                final String testClassNameNew = (targetClassName + "_" + testCount + "_Test");
                 final String testClassNameNew_Unqualified = testClassNameNew.substring(testClassNameNew.lastIndexOf('/') + 1);
                 final String scaffClassNameNew = (this.o.getEvosuiteNoDependency() ? null : testClassNameNew + "_scaffolding");
                 testClassDeclarationNew.setName(testClassNameNew_Unqualified);
