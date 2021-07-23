@@ -414,7 +414,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
             int i = testCount;
             for (JBSEResult item : subItems) {
                 try {
-                    emitAndCompileEvoSuiteWrapper(i, item.getInitialState(), item.getFinalState(), item.getStringLiterals(), item.getStringOthers());
+                    emitAndCompileEvoSuiteWrapper(i, item.getInitialState(), item.getPostFrontierState(), item.getStringLiterals(), item.getStringOthers(), item.getForbiddenExpansions());
                     compiled.add(item);
                 } catch (CompilationFailedWrapperException e) {
                     LOGGER.error("Internal error: EvoSuite wrapper %s compilation failed", e.file.toAbsolutePath().toString());
@@ -640,15 +640,15 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
             for (JBSEResult item : this.items) {
                 if (!generated.contains(testCount)) {
                     //logs the items whose test cases were not generated
-                    LOGGER.info("Failed to generate a test case for path condition: %s, log file: %s, wrapper: EvoSuiteWrapper_%d", (item.getFinalState() == null ? "true" : stringifyPathCondition(shorten(item.getFinalState().getPathCondition()))), this.evosuiteLogFilePath.toString(), testCount);
+                    LOGGER.info("Failed to generate a test case for post-frontier path condition: %s, log file: %s, wrapper: EvoSuiteWrapper_%d", stringifyPostFrontierPathCondition(item), this.evosuiteLogFilePath.toString(), testCount);
                     
                     //learns for update of indices
-                    if (this.o.getUseIndexInfeasibility() && item.getFinalState() != null) { //NB: item.getFinalState() == null for seed items when target is method
-                    	this.in.learnPathConditionForIndexInfeasibility(item.getTargetMethodSignature(), item.getFinalState().getPathCondition(), false);
+                    if (this.o.getUseIndexInfeasibility() && item.getPostFrontierState() != null) { //NB: item.getFinalState() == null for seed items when target is method
+                    	this.in.learnPathConditionForIndexInfeasibility(item.getTargetMethodSignature(), item.getPostFrontierState().getPathCondition(), false);
                     }
 
                     //TODO possibly lazier updates of index
-                    if (this.o.getUseIndexInfeasibility() && item.getFinalState() != null) {
+                    if (this.o.getUseIndexInfeasibility() && item.getPostFrontierState() != null) {
                     	this.in.updateIndexInfeasibilityAndReclassify();
                     }
                 }
@@ -703,7 +703,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         final State finalState = initialState.clone();
         final Map<Long, String> stringLiterals = Collections.emptyMap();
         final Set<Long> stringOthers = Collections.emptySet();
-        emitAndCompileEvoSuiteWrapper(testCount, initialState, finalState, stringLiterals, stringOthers);
+        emitAndCompileEvoSuiteWrapper(testCount, initialState, finalState, stringLiterals, stringOthers, null);
     }
     
     /**
@@ -724,11 +724,14 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
      *         that must contain it, or the compilation log file.
      * @throws CompilationFailedWrapperException if the compilation of the wrapper class fails.
      */
-    private void emitAndCompileEvoSuiteWrapper(int testCount, State initialState, State finalState, Map<Long, String> stringLiterals, Set<Long> stringOthers) 
+    private void emitAndCompileEvoSuiteWrapper(int testCount, State initialState, State finalState, Map<Long, String> stringLiterals, Set<Long> stringOthers, List<String> forbiddenExpansions) 
     throws FrozenStateException, IOFileCreationException, CompilationFailedWrapperException {
         final StateFormatterSushiPathCondition fmt = new StateFormatterSushiPathCondition(testCount, () -> initialState, true);
         fmt.setStringsConstant(stringLiterals);
         fmt.setStringsNonconstant(stringOthers);
+        if (forbiddenExpansions != null) {
+        	fmt.setForbiddenExpansions(forbiddenExpansions);
+        }
         fmt.formatPrologue();
         fmt.formatState(finalState);
         fmt.formatEpilogue();
@@ -1319,8 +1322,6 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
     private void checkTestCompileAndScheduleJBSE(int testCount, JBSEResult item) 
     throws NoTestFileException, NoTestFileScaffoldingException, NoTestMethodException, IOFileCreationException, 
     CompilationFailedTestException, CompilationFailedTestScaffoldingException, ClassFileAccessException {
-        final List<Clause> pathCondition = (item.getFinalState() == null ? null : item.getFinalState().getPathCondition());
-        final String pathConditionString = (pathCondition == null ? "true" : stringifyPathCondition(shorten(pathCondition)));
         
         //checks if EvoSuite generated the files
         final String testCaseClassName = (item.hasTargetMethod() ? item.getTargetMethodClassName() : item.getTargetClassName()) + "_" + testCount + "_Test";
@@ -1356,13 +1357,21 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         try {
             checkTestExists(testCaseClassName);
             final int depth = item.getDepth();
-            LOGGER.info("Generated test case %s, depth: %d, path condition: %s", testCaseClassName, depth, pathConditionString);
+            LOGGER.info("Generated test case %s, depth: %d, post-frontier path condition: %s", testCaseClassName, depth, stringifyPostFrontierPathCondition(item));
             final TestCase newTestCase = new TestCase(testCaseClassName, "()V", "test0", this.o.getTmpTestsDirectoryPath(), (testCaseScaff != null));
-            this.getOutputBuffer().add(new EvosuiteResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), newTestCase, depth + 1));
+            this.getOutputBuffer().add(new EvosuiteResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), item.getPostFrontierState(), newTestCase, depth + 1));
         } catch (NoSuchMethodException e) { 
-            throw new NoTestMethodException(testCase, pathConditionString);
+            throw new NoTestMethodException(testCase, stringifyPostFrontierPathCondition(item));
         } catch (SecurityException | NoClassDefFoundError | ClassNotFoundException e) {
             throw new ClassFileAccessException(e, testCaseClassName);
         }
+    }
+    
+    private static String stringifyPostFrontierPathCondition(JBSEResult item) {
+        final List<Clause> pathCondition = (item.getPostFrontierState() == null ? null : item.getPostFrontierState().getPathCondition());
+        final List<String> forbiddenExpansions = item.getForbiddenExpansions();
+        final String excluded = ((forbiddenExpansions == null || forbiddenExpansions.isEmpty()) ? "" : (" excluded " + forbiddenExpansions.stream().collect(Collectors.joining(", "))));
+        final String retVal = (pathCondition == null ? "true" : (stringifyPathCondition(shorten(pathCondition)) + excluded));
+        return retVal;
     }
 }

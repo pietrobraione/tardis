@@ -191,13 +191,20 @@ final class RunnerPath implements AutoCloseable {
      * up to some depth, then peeks the states on the next branch.  
      * 
      * @param testDepth the maximum depth up to which {@code t} guides 
-     *        symbolic execution, or a negative value.
+     *        symbolic execution. When {@code testDepth == 0} the execution
+     *        will stop at the initial state. When {@code testDepth < 0}
+     *        the execution will completely execute the test case. For
+     *        values equal or greater than 1, the execution will execute
+     *        the test case up to the last branch (pre-frontier state) at depth 
+     *        {@code testDepth - 1}, and then explore the post-frontier 
+     *        states at depth {@code testDepth}.   
      * @return a {@link List}{@code <}{@link State}{@code >} containing
-     *         all the states on branch at depth {@code stateDepth + 1}. 
-     *         In case {@code stateDepth < 0} executes the test up to the 
-     *         final state and returns a list containing only the final state.
-     *         If the execution exhausts one of its bounds or terminates before 
-     *         arriving at the post-frontier branch, returns an empty {@link List}.  
+     *         all the states on branch at depth {@code testDepth}. 
+     *         When {@code testDepth < 0} executes the test up to the 
+     *         final state and returns a singleton list containing the final state.
+     *         If the execution exhausts one of its bounds or terminates (does 
+     *         not arrive at the pre-frontier branch) before the depth equals
+     *         {@code testDepth}, returns an empty {@link List}.  
      * @throws DecisionException
      * @throws CannotBuildEngineException
      * @throws InitializationException
@@ -218,13 +225,13 @@ final class RunnerPath implements AutoCloseable {
     ThreadStackEmptyException, ContradictionException, EngineStuckException, 
     FailureException {
         //runs up to the pre-frontier
-    	final int postFrontierDepth = Math.min(this.maxDepth, testDepth);
         if (this.runnerPreFrontier == null || 
-        !this.runnerPreFrontier.isAtPreFrontier() ||
+        !this.runnerPreFrontier.foundPreFrontier() ||
         this.runnerPreFrontier.getPreFrontierState().getDepth() >= testDepth) {
             makeRunnerPreFrontier();
         }
-        this.runnerPreFrontier.setTestDepth(testDepth < 0 ? this.maxDepth : postFrontierDepth);
+    	final int postFrontierDepth = Math.min(this.maxDepth, testDepth);
+        this.runnerPreFrontier.setPostFrontierDepth(testDepth < 0 ? this.maxDepth : postFrontierDepth);
         this.runnerPreFrontier.run();
         
         //returns the result
@@ -233,14 +240,14 @@ final class RunnerPath implements AutoCloseable {
         	//state is the final state of the guided execution: return it
         	final State finalState = this.runnerPreFrontier.getCurrentState().clone();
         	return Collections.singletonList(finalState);
-        } else if (this.runnerPreFrontier.isAtPreFrontier()) {
+        } else if (this.runnerPreFrontier.foundPreFrontier()) {
         	//steps to all the post-frontier states and gathers them
         	this.statePreFrontier = this.runnerPreFrontier.getPreFrontierState().clone();
         	makeRunnerPostFrontier();
         	if (this.runnerPostFrontier == null) {
         		return Collections.emptyList();
         	} else {
-        		this.runnerPostFrontier.setTestDepth(postFrontierDepth);
+        		this.runnerPostFrontier.setPostFrontierDepth(postFrontierDepth);
         		this.runnerPostFrontier.run();
         		return this.runnerPostFrontier.getStatesPostFrontier();
         	}
@@ -366,7 +373,7 @@ final class RunnerPath implements AutoCloseable {
      * @return a {@link State} or {@code null} if this method is invoked
      *         before an invocation of {@link #runProgram(int)}.
      */
-    public State getInitialState() {
+    public State getStateInitial() {
         State retVal = this.commonParamsSymbolic.getStartingState();
         if (retVal == null) {
         	if (this.runnerPreFrontier == null) {

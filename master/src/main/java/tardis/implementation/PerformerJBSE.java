@@ -9,12 +9,14 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -32,9 +34,13 @@ import jbse.jvm.exc.FailureException;
 import jbse.jvm.exc.InitializationException;
 import jbse.jvm.exc.NonexistingObservedVariablesException;
 import jbse.mem.Clause;
+import jbse.mem.ClauseAssumeExpands;
+import jbse.mem.Objekt;
 import jbse.mem.State;
 import jbse.mem.exc.ContradictionException;
+import jbse.mem.exc.FrozenStateException;
 import jbse.mem.exc.ThreadStackEmptyException;
+import jbse.val.ReferenceSymbolic;
 import tardis.Coverage;
 import tardis.Options;
 import tardis.framework.InputBuffer;
@@ -53,8 +59,10 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
     private final Options o;
     private final JBSEResultInputOutputBuffer out;
     private final TreePath treePath;
-    private final HashMap<String, State> initialStateCache = new HashMap<>();
-    private AtomicLong pathCoverage = new AtomicLong(0);
+    private final ConcurrentHashMap<String, State> initialStateCache = new ConcurrentHashMap<>();
+    private final AtomicLong pathCoverage = new AtomicLong(0);
+    private final ConcurrentHashMap<ReferenceSymbolic, JBSEResult> freshObjectsJBSEResults = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<ReferenceSymbolic, List<String>> freshObjectsExpansions = new ConcurrentHashMap<>();
 
     public PerformerJBSE(Options o, InputBuffer<EvosuiteResult> in, JBSEResultInputOutputBuffer out, TreePath treePath) {
         super(in, out, o.getNumOfThreadsJBSE(), 1, o.getThrottleFactorJBSE(), o.getGlobalTimeBudgetDuration(), o.getGlobalTimeBudgetUnit());
@@ -159,7 +167,7 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
         	LOGGER.info("Current coverage: %d path%s, %d branch%s (total), %d branch%s (target), %d failed assertion%s", pathCoverage, (pathCoverage == 1 ? "" : "s"), branchCoverage, (branchCoverage == 1 ? "" : "es"), branchCoverageTarget, (branchCoverageTarget == 1 ? "" : "es"), branchCoverageUnsafe, (branchCoverageUnsafe == 1 ? "" : "s"));
             
             //possibly caches the initial state
-            final State stateInitial = rp.getInitialState();
+            final State stateInitial = rp.getStateInitial();
             possiblySetInitialStateCached(item, stateInitial);
             
             //learns the new data for future update of indices
@@ -174,16 +182,28 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             
             //reruns the test case at all the depths in the range, generates all the modified 
             //path conditions and puts all the output jobs in the output queue
+            final int depthFinal = Math.min(depthStart + this.o.getMaxTestCaseDepth(), stateFinal.getDepth());
             try {
-				createOutputJobsForFrontiersAtAllDepths(rp, item, tc, stateInitial, stateFinal, depthStart);
+				createOutputJobsForFrontiersAtAllDepths(rp, item, tc, stateInitial, stateFinal, depthStart, depthFinal);
 			} catch (InterruptedException e) {
 				//the performer shut down
 				return;
 			}
+            
+            //emits an additional path condition for a new fresh object, in case the test
+            //has as a last clause an expands clause
+            createOutputJobForAdditionalFreshObjectClause(rp, depthFinal, item, stateFinal);
         } catch (NoTargetHitException e) {
             //prints some feedback
             LOGGER.warn("Run test case %s, does not reach the target method %s:%s:%s", item.getTestCase().getClassName(), item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName());
-        }
+        } catch (FrozenStateException e) {
+            LOGGER.error("Unexpected frozen state exception while trying to generate path condition for additional fresh object");
+            LOGGER.error("Message: %s", e.toString());
+            LOGGER.error("Stack trace:");
+            for (StackTraceElement elem : e.getStackTrace()) {
+                LOGGER.error("%s", elem.toString());
+            }
+		}
     }
     
     private State possiblyGetInitialStateCached(EvosuiteResult item) {
@@ -192,7 +212,7 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
         return (value == null ? null : value.clone());
     }
     
-    private void possiblySetInitialStateCached(EvosuiteResult item, State initialState) {
+    private synchronized void possiblySetInitialStateCached(EvosuiteResult item, State initialState) {
         final String key = item.getTargetMethodClassName() + ":" + item.getTargetMethodDescriptor() + ":" + item.getTargetMethodName();
         if (this.initialStateCache.containsKey(key)) {
             return;
@@ -261,7 +281,6 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
                     final Path destinationScaffolding = this.o.getOutDirectory().resolve(item.getTestCase().getClassName() + "_scaffolding.java");
                     Files.copy(sourceScaffolding, destinationScaffolding, StandardCopyOption.REPLACE_EXISTING);
                 }
-                
             } catch (IOException e) {
                 LOGGER.error("Unexpected I/O error while attempting to copy test case %s or its scaffolding to its destination directory", tc.getClassName());
                 LOGGER.error("Message: %s", e.toString());
@@ -274,13 +293,12 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
         }
     }
     
-    private void createOutputJobsForFrontiersAtAllDepths(RunnerPath rp, EvosuiteResult item, TestCase tc, State stateInitial, State stateFinal, int depthStart) 
+    private void createOutputJobsForFrontiersAtAllDepths(RunnerPath rp, EvosuiteResult item, TestCase tc, State stateInitial, State stateFinal, int depthStart, int depthFinal) 
     throws DecisionException, CannotBuildEngineException, InitializationException, InvalidClassFileFactoryClassException, NonexistingObservedVariablesException, 
     ClasspathException, CannotBacktrackException, CannotManageStateException, ThreadStackEmptyException, ContradictionException, EngineStuckException, 
     FailureException, InterruptedException {
-        final int depthFinal = Math.min(depthStart + this.o.getMaxTestCaseDepth(), stateFinal.getDepth() + 1);
         boolean noOutputJobGenerated = true;
-        for (int depthCurrent = depthStart; depthCurrent < depthFinal; ++depthCurrent) {
+        for (int depthCurrent = depthStart; depthCurrent <= depthFinal; ++depthCurrent) {
         	try {
         		final List<State> statesPostFrontier = rp.runProgram(depthCurrent);
 
@@ -327,16 +345,126 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             	this.treePath.insertPath(entryPoint, pathCondition, rp.getCoverage(), branchesPostFrontier, false);
             }
 
-            //emits the output job in the output buffer
+            //creates the output job
+            final boolean atJump = rp.getAtJump();
             final Map<Long, String> stringLiterals = rp.getStringLiterals().get(i);
             final Set<Long> stringOthers = rp.getStringOthers().get(i); 
-            final boolean atJump = rp.getAtJump();
-            final JBSEResult output = new JBSEResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), stateInitial, statePreFrontier, statePostFrontier, atJump, (atJump ? branchesPostFrontier.get(i) : null), stringLiterals, stringOthers, depthCurrent);
-            getOutputBuffer().add(output);
+            final JBSEResult output = 
+            new JBSEResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), 
+                           stateInitial, statePreFrontier, statePostFrontier, atJump, 
+                           (atJump ? branchesPostFrontier.get(i) : null), stringLiterals, stringOthers, depthCurrent);
+            
+            //if the last clause is an expands path condition, saves the expanded 
+            //reference data so it may generate fresh objects in the future
+            if (!pathCondition.isEmpty() && (pathCondition.get(pathCondition.size() - 1) instanceof ClauseAssumeExpands)) {
+            	final ClauseAssumeExpands clauseLast = (ClauseAssumeExpands) pathCondition.get(pathCondition.size() - 1);
+            	final ReferenceSymbolic clauseLastReference = clauseLast.getReference();
+        		this.freshObjectsJBSEResults.put(clauseLastReference, output);
+            }
+            
+            //emits the output job in the output buffer
+            this.out.add(output);
             LOGGER.info("From test case %s generated path condition %s%s", tc.getClassName(), stringifyPathCondition(shorten(pathCondition)), (atJump ? (" aimed at branch " + branchesPostFrontier.get(i)) : ""));
             noOutputJobGenerated = false;
         }
         return noOutputJobGenerated;
+    }
+    
+    private void createOutputJobForAdditionalFreshObjectClause(RunnerPath rp, int depthFinal, EvosuiteResult item, State stateFinal) 
+    throws FrozenStateException, DecisionException, CannotBuildEngineException, InitializationException, 
+    InvalidClassFileFactoryClassException, NonexistingObservedVariablesException, ClasspathException, 
+    CannotBacktrackException, CannotManageStateException, ThreadStackEmptyException, ContradictionException, 
+    EngineStuckException, FailureException {
+    	final TestCase tc = item.getTestCase();
+    	final State postFrontierState = item.getPostFrontierState();
+    	
+    	//gets the path condition that generated the test: if the test is seed
+    	//(i.e., postFrontierState == null), then we use the path condition of
+    	//the final state of the test itself, otherwise we use the path condition
+    	//of the post-frontier that was used to generate the test
+    	final List<Clause> pathConditionFinal = (postFrontierState == null ? stateFinal.getPathCondition() : postFrontierState.getPathCondition());
+    	
+    	if (!pathConditionFinal.isEmpty() && (pathConditionFinal.get(pathConditionFinal.size() - 1) instanceof ClauseAssumeExpands)) {
+    		final ClauseAssumeExpands clauseLast = (ClauseAssumeExpands) pathConditionFinal.get(pathConditionFinal.size() - 1);
+    		final ReferenceSymbolic clauseLastReference = clauseLast.getReference();
+
+    		//adds the current test case expansion to the set of the seen expansions 
+    		if (!this.freshObjectsExpansions.containsKey(clauseLastReference)) {
+    			this.freshObjectsExpansions.put(clauseLastReference, Collections.synchronizedList(new ArrayList<>()));
+    		}
+    		final List<String> expansions = this.freshObjectsExpansions.get(clauseLastReference);
+    		final Objekt objekt = stateFinal.getObject(clauseLastReference);
+    		expansions.add(objekt.getType().getClassName());
+
+    		final JBSEResult output;
+			final State statePostFrontier;
+			final boolean atJump;
+			final String targetBranch;
+    		if (this.freshObjectsJBSEResults.containsKey(clauseLastReference)) {
+    			//gets the previous JBSE result
+    			final JBSEResult jbseResult = this.freshObjectsJBSEResults.get(clauseLastReference);
+    			final String targetMethodClassName = jbseResult.getTargetMethodClassName();
+    			final String targetMethodDescriptor = jbseResult.getTargetMethodDescriptor();
+    			final String targetMethodName = jbseResult.getTargetMethodName();
+    			final State stateInitial = jbseResult.getInitialState();
+    			final State statePreFrontier = jbseResult.getPreFrontierState();
+    			statePostFrontier = jbseResult.getPostFrontierState();
+    			atJump = jbseResult.getAtJump();
+    			targetBranch = jbseResult.getTargetBranch();
+    			final Map<Long, String> stringLiterals = jbseResult.getStringLiterals();
+    			final Set<Long> stringOthers = jbseResult.getStringOthers();
+    			final int depth = jbseResult.getDepth();
+    			output =
+    			new JBSEResult(targetMethodClassName, targetMethodDescriptor, targetMethodName, 
+    			               stateInitial, statePreFrontier, statePostFrontier, atJump,
+    			               targetBranch, stringLiterals, stringOthers, depth, 
+    			               expansions);
+    		} else {
+    			//the current test is a seed test, therefore there are
+    			//no previous JBSE results: builds a JBSE result from 
+    			//the post-frontier state
+    			
+    			//first, finds the post-frontier state
+    			if (depthFinal == 0) {
+    				//this is a seed test with a trivial path condition {ROOT}:this expands and nothing else 
+    				return;
+    			}
+    			final List<State> statesPostFrontier = rp.runProgram(depthFinal);
+    			int i;
+    			boolean found = false;
+    			for (i = 0; i < statesPostFrontier.size(); ++i) {
+    				final State s = statesPostFrontier.get(i);
+    				final List<Clause> pathCondition = s.getPathCondition();
+    				final Clause lastPathConditionClause = pathCondition.get(pathCondition.size() - 1);
+    				if (lastPathConditionClause instanceof ClauseAssumeExpands) {
+    					found = true;
+    					break;
+    				}
+    			}
+    			if (!found) {
+    				return; //this should never happen, however gracefully exiting should be ok
+    			}
+    			
+    			final String targetMethodClassName = item.getTargetMethodClassName();
+    			final String targetMethodDescriptor = item.getTargetMethodDescriptor();
+    			final String targetMethodName = item.getTargetMethodName();
+    			final State stateInitial = rp.getStateInitial();
+    			final State statePreFrontier = rp.getStatePreFrontier();
+				statePostFrontier = statesPostFrontier.get(i);
+    			atJump = rp.getAtJump();
+				targetBranch = (atJump ? rp.getBranchesPostFrontier().get(i) : null);
+    			final Map<Long, String> stringLiterals = rp.getStringLiterals().get(i);
+    			final Set<Long> stringOthers = rp.getStringOthers().get(i);
+    			final int depth = depthFinal;
+    			output =
+    			new JBSEResult(targetMethodClassName, targetMethodDescriptor, targetMethodName, 
+    			               stateInitial, statePreFrontier, statePostFrontier, atJump,
+    			               targetBranch, stringLiterals, stringOthers, depth, 
+    			               expansions);
+    		}
+    		this.out.add(output);
+    		LOGGER.info("From test case %s generated path condition %s%s%s", tc.getClassName(), stringifyPathCondition(shorten(statePostFrontier.getPathCondition())), (expansions.isEmpty() ? "" : (" excluded " + expansions.stream().collect(Collectors.joining(", ")))),  (atJump ? (" aimed at branch " + targetBranch) : ""));
+        }
     }
 }
 

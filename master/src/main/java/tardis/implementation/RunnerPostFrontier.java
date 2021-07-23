@@ -78,7 +78,7 @@ final class RunnerPostFrontier implements AutoCloseable {
     private final ArrayList<State> statesPostFrontier = new ArrayList<>();
     private final ArrayList<String> branchesPostFrontier = new ArrayList<>();
     private final HashSet<String> coverage = new HashSet<>();
-    private int testDepth;
+    private int postFrontierDepth;
     private HashMap<Long, String> stringLiteralsCurrent;
     private HashSet<Long> stringOthersCurrent;
     private boolean firstPostFrontierToDo = true;
@@ -102,8 +102,8 @@ final class RunnerPostFrontier implements AutoCloseable {
         this.stringOthersCurrent = new HashSet<>(this.stringOthersAtFrontier);
     }
     
-    public void setTestDepth(int testDepth) {
-        this.testDepth = testDepth;
+    public void setPostFrontierDepth(int postFrontierDepth) {
+        this.postFrontierDepth = postFrontierDepth;
     }
     
     public void run() throws CannotBacktrackException, CannotManageStateException, ClasspathException, 
@@ -200,7 +200,7 @@ final class RunnerPostFrontier implements AutoCloseable {
                 possiblySaveStringConstant(currentState);
             }
 
-            if (currentState.getDepth() == RunnerPostFrontier.this.testDepth) {
+            if (currentState.getDepth() == RunnerPostFrontier.this.postFrontierDepth) {
                 //we are at a post-frontier state (including the first one)
                 recordState(currentState);
                 
@@ -241,7 +241,7 @@ final class RunnerPostFrontier implements AutoCloseable {
                 }
             }
             
-            if (currentState.getDepth() == RunnerPostFrontier.this.testDepth) {
+            if (currentState.getDepth() == RunnerPostFrontier.this.postFrontierDepth) {
                 //we are at a post-frontier state (excluding the first one)
                 recordState(currentState);
                 getEngine().stopCurrentPath();            

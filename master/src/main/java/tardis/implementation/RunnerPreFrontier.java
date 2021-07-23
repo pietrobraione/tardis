@@ -59,12 +59,12 @@ final class RunnerPreFrontier implements AutoCloseable {
     private final HashMap<Long, String> stringLiterals = new HashMap<>();
     private final HashSet<Long> stringOthers = new HashSet<>();
     private final HashSet<String> coverage = new HashSet<>();
-    private int testDepth = 0;
+    private int postFrontierDepth = 0;
     private boolean atJump = false;
     private int jumpPC = 0;
     private boolean atLoadConstant = false;
     private int loadConstantStackSize = 0;
-    private boolean atPreFrontier = false;
+    private boolean foundPreFrontier = false;
     private State preFrontierState;
 
     public RunnerPreFrontier(RunnerParameters runnerParameters, long maxCount) 
@@ -78,8 +78,16 @@ final class RunnerPreFrontier implements AutoCloseable {
         this.maxCount = maxCount;
     }
     
-    public void setTestDepth(int testDepth) {
-        this.testDepth = testDepth;
+    /**
+     * Sets the pre-frontier depth.
+     * 
+     * @param postFrontierDepth an {@code int}. If 0 stops
+     *        at the initial state. If greater than zero, 
+     *        stops at the frontier between {@code postFrontierDepth - 1}
+     *        and {@code postFrontierDepth}. 
+     */
+    public void setPostFrontierDepth(int postFrontierDepth) {
+        this.postFrontierDepth = postFrontierDepth;
     }
     
     public State getInitialState() {
@@ -90,8 +98,8 @@ final class RunnerPreFrontier implements AutoCloseable {
     	return this.runner.getEngine().getCurrentState();
     }
     
-    public boolean isAtPreFrontier() {
-    	return this.atPreFrontier;
+    public boolean foundPreFrontier() {
+    	return this.foundPreFrontier;
     }
     
     public State getPreFrontierState() {
@@ -126,7 +134,7 @@ final class RunnerPreFrontier implements AutoCloseable {
     private class ActionsRunnerPreFrontier extends Actions {
         @Override
         public boolean atInitial() {
-            if (RunnerPreFrontier.this.testDepth == 0) {
+            if (RunnerPreFrontier.this.postFrontierDepth == 0) {
                 return true;
             } else {
                 return super.atInitial();
@@ -158,9 +166,9 @@ final class RunnerPreFrontier implements AutoCloseable {
                     	RunnerPreFrontier.this.loadConstantStackSize = currentState.getStackSize();
                     }
                     
-                    //if at a symbolic branch bytecode, and at testDepth - 1,
+                    //if at a symbolic branch bytecode, and at postFrontierDepth - 1,
                     //saves the pre-state
-                	if (bytecodeBranch(currentInstruction) && currentState.getDepth() == RunnerPreFrontier.this.testDepth - 1) {
+                	if (bytecodeBranch(currentInstruction) && currentState.getDepth() == RunnerPreFrontier.this.postFrontierDepth - 1) {
                         RunnerPreFrontier.this.preFrontierState = currentState.clone();
                 	}
                 } catch (ThreadStackEmptyException | FrozenStateException e) {
@@ -237,8 +245,8 @@ final class RunnerPreFrontier implements AutoCloseable {
             }
 
             //stops if current state is at post-frontier
-            RunnerPreFrontier.this.atPreFrontier = (currentState.getDepth() == RunnerPreFrontier.this.testDepth);
-            if (RunnerPreFrontier.this.atPreFrontier) {
+            RunnerPreFrontier.this.foundPreFrontier = (currentState.getDepth() == RunnerPreFrontier.this.postFrontierDepth);
+            if (RunnerPreFrontier.this.foundPreFrontier) {
                 return true;
             } else if (currentState.getCount() >= RunnerPreFrontier.this.maxCount) {
                 return true;
@@ -251,13 +259,13 @@ final class RunnerPreFrontier implements AutoCloseable {
         public boolean atPathEnd() {
         	//this triggers end of unconstrained exploration when
         	//the path is shorter than the depth bound
-        	RunnerPreFrontier.this.atPreFrontier = false;
+        	RunnerPreFrontier.this.foundPreFrontier = false;
         	return true;
         }
         
         @Override
         public boolean atContradictionException(ContradictionException e) {
-        	RunnerPreFrontier.this.atPreFrontier = false;
+        	RunnerPreFrontier.this.foundPreFrontier = false;
             return true;
         }
     }
