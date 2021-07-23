@@ -1,7 +1,7 @@
-package tardis.implementation;
+package tardis.implementation.data;
 
-import static tardis.implementation.Util.shorten;
-import static tardis.implementation.Util.stringifyPathCondition;
+import static tardis.implementation.common.Util.shorten;
+import static tardis.implementation.common.Util.stringifyPathCondition;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -38,8 +38,8 @@ import jbse.val.WideningConversion;
  * @author Pietro Braione
  */
 
-public class SlicingManager {
-    public static String[][] slice(List<Clause> path) {
+final class SlicingManager {
+    static String[][] slice(List<Clause> path) {
         final Object[] clauseArray = shorten(path).toArray();
         final String pathConditionToString = stringifyPathCondition(shorten(path));
         //split pc clauses into array
@@ -128,7 +128,7 @@ public class SlicingManager {
      * Workflow: if operand is an expression, go deeper
      */
     
-    public static void getContainerPrimitive(Primitive p, HashSet<String> set) {
+    private static void getContainerPrimitive(Primitive p, HashSet<String> set) {
         if (p instanceof Simplex || p instanceof Any || p instanceof Term) {
             //do nothing, they have no container
         } else if (p instanceof PrimitiveSymbolicMemberArrayLength || p instanceof PrimitiveSymbolicMemberArray) {
@@ -149,7 +149,7 @@ public class SlicingManager {
         }
     }
     
-    public static void getContainerExpression(Expression p, HashSet<String> set) {
+    private static void getContainerExpression(Expression p, HashSet<String> set) {
         if (p.isUnary()) {
             final Primitive operand = p.getOperand();
             getContainerPrimitive(operand, set);
@@ -161,7 +161,7 @@ public class SlicingManager {
         }
     }
 
-    public static void getContainerPrimitiveSymbolicApply(PrimitiveSymbolicApply p, HashSet<String> set) {
+    private static void getContainerPrimitiveSymbolicApply(PrimitiveSymbolicApply p, HashSet<String> set) {
         for (Value arg : p.getArgs()) {
             if (arg instanceof Primitive) {
                 getContainerPrimitive((Primitive) arg, set);
@@ -171,12 +171,19 @@ public class SlicingManager {
         }
     }
 
-    public static String splitByDot(String originString) {
+    private static String splitByDot(String originString) {
         final int index = originString.lastIndexOf('.');
         if (index == -1) {
             return originString;
         } else {
             return originString.substring(0, index);
         }
+    }
+    
+    /**
+     * Do not instantiate!
+     */
+    private SlicingManager() {
+    	//nothing to do
     }
 }

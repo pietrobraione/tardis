@@ -1,4 +1,4 @@
-package tardis.implementation;
+package tardis.implementation.jbse;
 
 import java.util.ArrayList;
 import java.util.HashMap;

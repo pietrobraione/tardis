@@ -1,9 +1,9 @@
-package tardis.implementation;
+package tardis.implementation.jbse;
 
 import static jbse.apps.run.JAVA_MAP_Utils.assumptionViolated;
-import static tardis.implementation.Util.filterOnPattern;
-import static tardis.implementation.Util.shorten;
-import static tardis.implementation.Util.stringifyPathCondition;
+import static tardis.implementation.common.Util.filterOnPattern;
+import static tardis.implementation.common.Util.shorten;
+import static tardis.implementation.common.Util.stringifyPathCondition;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -45,6 +45,10 @@ import tardis.Coverage;
 import tardis.Options;
 import tardis.framework.InputBuffer;
 import tardis.framework.Performer;
+import tardis.implementation.data.JBSEResultInputOutputBuffer;
+import tardis.implementation.data.TreePath;
+import tardis.implementation.evosuite.EvosuiteResult;
+import tardis.implementation.evosuite.TestCase;
 
 /**
  * A {@link Performer} that consumes {@link EvosuiteResult}s by invoking JBSE

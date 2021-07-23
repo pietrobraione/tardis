@@ -1,4 +1,4 @@
-package tardis.implementation;
+package tardis.implementation.common;
 
 /**
  * Exception thrown whenever the Java compiler is missing.

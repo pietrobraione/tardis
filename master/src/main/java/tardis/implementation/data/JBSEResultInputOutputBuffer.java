@@ -1,6 +1,6 @@
-package tardis.implementation;
+package tardis.implementation.data;
 
-import static tardis.implementation.Util.filterOnPattern;
+import static tardis.implementation.common.Util.filterOnPattern;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -20,7 +20,8 @@ import jbse.mem.Clause;
 import tardis.Options;
 import tardis.framework.InputBuffer;
 import tardis.framework.OutputBuffer;
-import tardis.implementation.ClassifierKNN.ClassificationResult;
+import tardis.implementation.data.ClassifierKNN.ClassificationResult;
+import tardis.implementation.jbse.JBSEResult;
 
 /**
  * An {@link InputBuffer} and {@link OutputBuffer} for {@link JBSEResult}s that
@@ -168,12 +169,12 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
     
     /** The minimum size of the training set necessary for resorting the queues. */
     private final int trainingSetMinimumThreshold;
-
-    /** The queues where the {@link JBSEResult}s are stored. */
-    private final HashMap<Integer, LinkedBlockingQueue<JBSEResult>> queues = new HashMap<>();
     
     /** The {@link TreePath} used to store information about the path conditions. */
     private final TreePath treePath;
+
+    /** The queues where the {@link JBSEResult}s are stored. */
+    private final HashMap<Integer, LinkedBlockingQueue<JBSEResult>> queues = new HashMap<>();
     
     /** 
      * The number of training samples learned by the KNN classifier since
@@ -181,7 +182,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
      */
     private int trainingSetSize = 0;
     
-    public JBSEResultInputOutputBuffer(TreePath treePath, Options o) {
+    public JBSEResultInputOutputBuffer(Options o, TreePath treePath) {
     	this.useIndexImprovability = o.getUseIndexImprovability();
     	this.useIndexNovelty = o.getUseIndexNovelty();
     	this.useIndexInfeasibility = o.getUseIndexInfeasibility();
@@ -190,10 +191,10 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
     	this.queueRanking = queueRanking();
     	this.queueProbabilities = queueProbabilities();
     	this.trainingSetMinimumThreshold = o.getIndexInfeasibilityThreshold();
+        this.treePath = treePath;
         for (int i = 0; i < queueRanking.length; ++i) {
             this.queues.put(i, new LinkedBlockingQueue<>());
         }
-        this.treePath = treePath;
     }
 
     @Override
@@ -269,7 +270,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
      * @param newCoveredBranches a {@link Set}{@code <}{@link String}{@code >},
      *        the newly covered (i.e., not previously covered) branches.
      */
-    synchronized void learnCoverageForIndexImprovability(Set<String> newCoveredBranches) {
+    public synchronized void learnCoverageForIndexImprovability(Set<String> newCoveredBranches) {
     	final Set<String> filtered = filterOnPattern(newCoveredBranches, this.patternBranchesImprovability);
         this.coverageSetImprovability.addAll(filtered);
     }
@@ -281,7 +282,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
      * @param coveredBranches a {@link Set}{@code <}{@link String}{@code >},
      *        the covered branches.
      */
-    synchronized void learnCoverageForIndexNovelty(Set<String> coveredBranches) {
+    public synchronized void learnCoverageForIndexNovelty(Set<String> coveredBranches) {
     	final Set<String> filtered = filterOnPattern(coveredBranches, this.patternBranchesNovelty);
         this.coverageSetNovelty.addAll(filtered);
     }
@@ -298,7 +299,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
      * @param solved a {@code boolean}, {@code true} if the path
      *        condition was solved, {@code false} otherwise.
      */
-    synchronized void learnPathConditionForIndexInfeasibility(String entryPoint, List<Clause> path, boolean solved) {
+    public synchronized void learnPathConditionForIndexInfeasibility(String entryPoint, List<Clause> path, boolean solved) {
     	final HashSet<TrainingItem> trainingSet = new HashSet<>();
         if (solved) {
             //all the prefixes are also solved
@@ -318,7 +319,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
      * Recalculates the improvability index of all the {@link JBSEResult}s
      * stored in this buffer and reclassifies their priorities. 
      */
-    synchronized void updateIndexImprovabilityAndReclassify() {
+    public synchronized void updateIndexImprovabilityAndReclassify() {
         synchronized (this.treePath) {
             forAllQueuedItemsToUpdateImprovability((queueNumber, bufferedJBSEResult) -> {
             	final String entryPoint = bufferedJBSEResult.getTargetMethodSignature();
@@ -338,7 +339,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
      * Recalculates the novelty index of all the {@link JBSEResult}s
      * stored in this buffer and reclassifies their priorities. 
      */
-    synchronized void updateIndexNoveltyAndReclassify() {
+    public synchronized void updateIndexNoveltyAndReclassify() {
         synchronized (this.treePath) {
             forAllQueuedItemsToUpdateNovelty((queueNumber, bufferedJBSEResult) -> {
             	final String entryPoint = bufferedJBSEResult.getTargetMethodSignature();
@@ -358,7 +359,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
      * Recalculates the infeasibility index of all the {@link JBSEResult}s
      * stored in this buffer and reclassifies their priorities. 
      */
-    synchronized void updateIndexInfeasibilityAndReclassify() {
+    public synchronized void updateIndexInfeasibilityAndReclassify() {
         synchronized (this.treePath) {
             //reclassifies the queued items only if this.trainingSetSize is big enough
             if (this.trainingSetSize >= this.trainingSetMinimumThreshold) {

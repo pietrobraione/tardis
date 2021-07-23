@@ -1,11 +1,10 @@
-package tardis.implementation;
+package tardis.implementation.data;
 
 /**
  * Class that defines the ({@link BloomFilter}, label)
- * pair structure used in the training set. Used to
- * calculate the infeasibility index.
+ * pair structure used in the training set of the classifier 
+ * used to calculate the infeasibility index.
  */
-
 final class TrainingItem {
     private final BloomFilter bloomFilter;
     private final boolean label;

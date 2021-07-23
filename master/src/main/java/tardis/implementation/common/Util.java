@@ -1,4 +1,4 @@
-package tardis.implementation;
+package tardis.implementation.common;
 
 import java.io.File;
 import java.lang.reflect.Executable;
@@ -32,6 +32,7 @@ import jbse.val.Primitive;
 import jbse.val.Symbolic;
 import tardis.Options;
 import tardis.Visibility;
+import tardis.implementation.jbse.JBSEResult;
 
 /**
  * Utility class gathering a number of common
@@ -59,7 +60,7 @@ public final class Util {
      *         that are {@code instanceof }{@link ClauseAssumeClassInitialized}
      *         or {@link ClauseAssumeClassNotInitialized}.
      */
-    static Collection<Clause> shorten(Collection<Clause> pc) {
+    public static Collection<Clause> shorten(Collection<Clause> pc) {
         return pc.stream().filter(x -> !(x instanceof ClauseAssumeClassInitialized || x instanceof ClauseAssumeClassNotInitialized)).collect(Collectors.toList());
     }
 
@@ -69,7 +70,7 @@ public final class Util {
      * @param currentBytecode a {@code byte}.
      * @return {@code true} iff {@code currentBytecode} jumps.
      */
-    static boolean bytecodeJump(byte currentBytecode) {
+    public static boolean bytecodeJump(byte currentBytecode) {
         return (currentBytecode == Opcodes.OP_IF_ACMPEQ ||
         currentBytecode == Opcodes.OP_IF_ACMPNE ||	
         currentBytecode == Opcodes.OP_IFNONNULL ||	
@@ -112,7 +113,7 @@ public final class Util {
      * @param currentBytecode a {@code byte}.
      * @return {@code true} iff {@code currentBytecode} is branching.
      */
-    static boolean bytecodeBranch(byte currentBytecode) {
+    public static boolean bytecodeBranch(byte currentBytecode) {
         return (bytecodeJump(currentBytecode) ||
         bytecodeInvoke(currentBytecode) ||
         currentBytecode == Opcodes.OP_ALOAD ||
@@ -153,7 +154,7 @@ public final class Util {
      * @param currentBytecode a {@code byte}.
      * @return {@code true} iff {@code currentBytecode} is a load bytecode.
      */
-    static boolean bytecodeLoad(byte currentBytecode) {
+    public static boolean bytecodeLoad(byte currentBytecode) {
         return (currentBytecode == Opcodes.OP_LDC ||
         currentBytecode == Opcodes.OP_LDC_W ||
         currentBytecode == Opcodes.OP_LDC2_W || 
@@ -295,7 +296,7 @@ public final class Util {
      *         {@code null}. 
      * @throws SecurityException if a security violation arises.
      */
-    static ClassLoader getInternalClassloader() {
+    public static ClassLoader getInternalClassloader() {
         return internalClassLoader;
     }
 
@@ -368,7 +369,7 @@ public final class Util {
      * @return a {@link String} representation of {@code pathCondition}.
      * @throws NullPointerException if {@code pathCondition == null}.
      */
-    static final String stringifyPathCondition(Iterable<Clause> pathCondition) {
+    public static final String stringifyPathCondition(Iterable<Clause> pathCondition) {
         final StringBuilder retVal = new StringBuilder();
         boolean first = true;
         for (Clause c : pathCondition) {
@@ -401,8 +402,16 @@ public final class Util {
         }
         return retVal.toString();
     }
+
+	public static String stringifyPostFrontierPathCondition(JBSEResult item) {
+	    final List<Clause> pathCondition = (item.getPostFrontierState() == null ? null : item.getPostFrontierState().getPathCondition());
+	    final List<String> forbiddenExpansions = item.getForbiddenExpansions();
+	    final String excluded = ((forbiddenExpansions == null || forbiddenExpansions.isEmpty()) ? "" : (" excluded " + forbiddenExpansions.stream().collect(Collectors.joining(", "))));
+	    final String retVal = (pathCondition == null ? "true" : (stringifyPathCondition(shorten(pathCondition)) + excluded));
+	    return retVal;
+	}
         
-    static Set<String> filterOnPattern(Set<String> toFilter, String pattern) {
+    public static Set<String> filterOnPattern(Set<String> toFilter, String pattern) {
         final Pattern p = Pattern.compile(pattern); 
         final HashSet<String> retVal = toFilter.stream().filter(s -> { final Matcher m = p.matcher(s); return m.matches(); }).collect(Collectors.toCollection(HashSet::new));
         return retVal;

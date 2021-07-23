@@ -2,9 +2,8 @@ package tardis;
 
 import static java.nio.file.Files.createDirectory;
 import static java.nio.file.Files.exists;
-
-import static tardis.implementation.Util.getTargets;
-import static tardis.implementation.Util.stream;
+import static tardis.implementation.common.Util.getTargets;
+import static tardis.implementation.common.Util.stream;
 
 import java.io.BufferedOutputStream;
 import java.io.File;
@@ -43,16 +42,14 @@ import org.kohsuke.args4j.ParserProperties;
 
 import tardis.framework.QueueInputOutputBuffer;
 import tardis.framework.TerminationManager;
-import tardis.implementation.EvosuiteResult;
-import tardis.implementation.JBSEResult;
-import tardis.implementation.JBSEResultInputOutputBuffer;
-import tardis.implementation.NoJava8JVMException;
-import tardis.implementation.NoJava8ToolsJarException;
-import tardis.implementation.NoJavaCompilerException;
-import tardis.implementation.PerformerEvosuite;
-import tardis.implementation.PerformerJBSE;
-import tardis.implementation.TestCase;
-import tardis.implementation.TreePath;
+import tardis.implementation.common.NoJavaCompilerException;
+import tardis.implementation.data.JBSEResultInputOutputBuffer;
+import tardis.implementation.data.TreePath;
+import tardis.implementation.evosuite.EvosuiteResult;
+import tardis.implementation.evosuite.PerformerEvosuite;
+import tardis.implementation.evosuite.TestCase;
+import tardis.implementation.jbse.JBSEResult;
+import tardis.implementation.jbse.PerformerJBSE;
 
 /**
  * TARDIS main class.
@@ -105,13 +102,13 @@ public final class Main {
             final TreePath treePath = new TreePath();
 
             //...the communication buffers...
-            final JBSEResultInputOutputBuffer pathConditionBuffer = new JBSEResultInputOutputBuffer(treePath, this.o);
+            final JBSEResultInputOutputBuffer pathConditionBuffer = new JBSEResultInputOutputBuffer(this.o, treePath);
             final QueueInputOutputBuffer<EvosuiteResult> testCaseBuffer = new QueueInputOutputBuffer<>();
 
             //...the performers and the termination manager
             final PerformerEvosuite performerEvosuite = new PerformerEvosuite(this.o, pathConditionBuffer, testCaseBuffer);
             final PerformerJBSE performerJBSE = new PerformerJBSE(this.o, testCaseBuffer, pathConditionBuffer, treePath);
-            final TerminationManager terminationManager = new TerminationManager(this.o.getGlobalTimeBudgetDuration(), this.o.getGlobalTimeBudgetUnit(), performerJBSE, performerEvosuite);
+            final TerminationManager terminationManager = new TerminationManager(this.o, performerJBSE, performerEvosuite);
 
             //injects a seed into a performer
             injectSeed(performerEvosuite, performerJBSE);

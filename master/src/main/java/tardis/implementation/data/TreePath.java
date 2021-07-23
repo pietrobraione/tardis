@@ -1,6 +1,6 @@
-package tardis.implementation;
+package tardis.implementation.data;
 
-import static tardis.implementation.Util.filterOnPattern;
+import static tardis.implementation.common.Util.filterOnPattern;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -169,7 +169,7 @@ public final class TreePath {
      * 
      * @return a positive {@code int}, the total number of covered branches.
      */
-    synchronized int totalCovered() {
+    public synchronized int totalCovered() {
         return this.coverage.size();
     }
 
@@ -181,7 +181,7 @@ public final class TreePath {
      * @return a positive {@code int}, the total number of covered 
      *         branches matching {@code pattern}.
      */
-    synchronized int totalCovered(String pattern) {
+    public synchronized int totalCovered(String pattern) {
     	final Set<String> filtered = filterOnPattern(this.coverage, pattern);
         return filtered.size();
     }
@@ -222,7 +222,7 @@ public final class TreePath {
      *         {@code coveredBranches} that were not already covered before the 
      *         invocation of this method, otherwise returns {@code null}.
      */
-    synchronized Set<String> insertPath(String entryPoint, List<Clause> path, Collection<String> coveredBranches, Collection<String> branchesFrontier, boolean covered) {
+    public synchronized Set<String> insertPath(String entryPoint, List<Clause> path, Collection<String> coveredBranches, Collection<String> branchesFrontier, boolean covered) {
         int index = 0;
         Node currentInTree = ensureRoot(entryPoint);
         if (covered) {
@@ -288,7 +288,7 @@ public final class TreePath {
      *         and in case {@code covered == true}, if it is also covered 
      *         by a test.
      */
-    synchronized boolean containsPath(String entryPoint, List<Clause> path, boolean covered) {
+    public synchronized boolean containsPath(String entryPoint, List<Clause> path, boolean covered) {
         Node currentInTree = this.roots.get(entryPoint);
         if (currentInTree == null) {
         	return false;

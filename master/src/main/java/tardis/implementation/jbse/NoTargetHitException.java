@@ -1,4 +1,4 @@
-package tardis.implementation;
+package tardis.implementation.jbse;
 
 /**
  * Exception thrown when a test case does not hit 

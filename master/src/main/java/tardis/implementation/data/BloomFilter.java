@@ -1,4 +1,4 @@
-package tardis.implementation;
+package tardis.implementation.data;
 
 import java.util.Arrays;
 import java.util.BitSet;

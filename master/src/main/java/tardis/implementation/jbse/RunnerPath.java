@@ -1,4 +1,4 @@
-package tardis.implementation;
+package tardis.implementation.jbse;
 
 import static jbse.apps.run.DecisionProcedureGuidanceJDI.countNonRecursiveHits;
 import static jbse.bc.Signatures.JAVA_CHARSEQUENCE;
@@ -49,6 +49,8 @@ import jbse.rewr.RewriterZeroUnit;
 import jbse.rules.ClassInitRulesRepo;
 import jbse.rules.LICSRulesRepo;
 import tardis.Options;
+import tardis.implementation.evosuite.EvosuiteResult;
+import tardis.implementation.evosuite.TestCase;
 
 /**
  * A class that exploits JBSE to perform guided symbolic execution

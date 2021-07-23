@@ -3,6 +3,8 @@ package tardis.framework;
 import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
 
+import tardis.Options;
+
 /**
  * Component that detects if a set of {@link Performer}s is at a fixpoint, 
  * or if a timeout is expired, and in the case stops the {@link Performer}s.
@@ -47,19 +49,17 @@ public final class TerminationManager {
     /**
      * Constructor.
      * 
-     * @param timeoutDuration the duration of the timeout after which the {@code performers}   
-     *        must be stopped.
-     * @param timeoutTimeUnit the {@link TimeUnit} for {@code timeoutDuration}. 
+     * @param o the {@link Options}. 
      * @param performers a varargs of {@link Performer}s. The constructed {@link TerminationManager}
      *        will monitor them.
      * @throws NullPointerException if {@code timeUnit == null || performers == null}.
      */
-    public TerminationManager(long timeoutDuration, TimeUnit timeoutTimeUnit, Performer<?,?>... performers) {
-        if (timeoutTimeUnit == null || performers == null) {
+    public TerminationManager(Options o, Performer<?, ?>... performers) {
+        if (o == null || performers == null) {
             throw new NullPointerException("Invalid null parameter in termination manager constructor.");
         }
-        this.timeoutDuration = timeoutDuration;
-        this.timeoutTimeUnit = timeoutTimeUnit;
+        this.timeoutDuration = o.getGlobalTimeBudgetDuration();
+        this.timeoutTimeUnit = o.getGlobalTimeBudgetUnit();
         this.performers = performers.clone();
         this.timedOut = false;
         this.detectorTimeout = new Thread(() -> {

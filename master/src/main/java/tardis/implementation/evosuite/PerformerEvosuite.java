@@ -1,23 +1,15 @@
-package tardis.implementation;
+package tardis.implementation.evosuite;
 
 import static jbse.bc.ClassLoaders.CLASSLOADER_APP;
-import static jbse.common.Type.splitParametersDescriptors;
-
-import static tardis.implementation.Util.getInternalClassloader;
-import static tardis.implementation.Util.getTargets;
-import static tardis.implementation.Util.shorten;
-import static tardis.implementation.Util.stream;
-import static tardis.implementation.Util.stringifyPathCondition;
+import static tardis.implementation.common.Util.getTargets;
+import static tardis.implementation.common.Util.stream;
+import static tardis.implementation.evosuite.SeedSplitter.splitEvosuiteSeed;
 
 import java.io.BufferedOutputStream;
-import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.OutputStream;
-import java.lang.reflect.Array;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
@@ -28,38 +20,15 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import javax.tools.JavaCompiler;
 import javax.tools.ToolProvider;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-
-import com.github.javaparser.StaticJavaParser;
-import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.ImportDeclaration;
-import com.github.javaparser.ast.NodeList;
-import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
-import com.github.javaparser.ast.body.MethodDeclaration;
-import com.github.javaparser.ast.body.Parameter;
-import com.github.javaparser.ast.body.VariableDeclarator;
-import com.github.javaparser.ast.expr.Expression;
-import com.github.javaparser.ast.expr.MethodCallExpr;
-import com.github.javaparser.ast.expr.Name;
-import com.github.javaparser.ast.expr.ObjectCreationExpr;
-import com.github.javaparser.ast.expr.SimpleName;
-import com.github.javaparser.ast.stmt.ExpressionStmt;
-import com.github.javaparser.ast.type.ClassOrInterfaceType;
-import com.github.javaparser.ast.type.Type;
-import com.github.javaparser.ast.visitor.ModifierVisitor;
-import com.github.javaparser.ast.visitor.Visitable;
 
 import jbse.bc.ClassFile;
 import jbse.bc.ClassFileFactoryJavassist;
@@ -77,7 +46,6 @@ import jbse.bc.exc.PleaseLoadClassException;
 import jbse.bc.exc.RenameUnsupportedException;
 import jbse.bc.exc.WrongClassNameException;
 import jbse.common.exc.InvalidInputException;
-import jbse.mem.Clause;
 import jbse.mem.State;
 import jbse.mem.exc.CannotAssumeSymbolicObjectException;
 import jbse.mem.exc.FrozenStateException;
@@ -88,6 +56,10 @@ import sushi.formatters.StateFormatterSushiPathCondition;
 import tardis.Options;
 import tardis.framework.OutputBuffer;
 import tardis.framework.Performer;
+import tardis.implementation.common.NoJavaCompilerException;
+import tardis.implementation.common.Util;
+import tardis.implementation.data.JBSEResultInputOutputBuffer;
+import tardis.implementation.jbse.JBSEResult;
 
 /**
  * A {@link Performer} that consumes {@link JBSEResult}s by invoking Evosuite
@@ -258,7 +230,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
                 //JBSE for exploring them
                 final Thread tJBSE;
                 try {
-                	final TestDetector tdJBSE = new TestDetector(this.o, testCountInitial, items, evosuiteProcess.getInputStream(), evosuiteLogFilePath, this.in);
+                	final TestDetector tdJBSE = new TestDetector(this, this.o, testCountInitial, items, evosuiteProcess.getInputStream(), evosuiteLogFilePath, this.in);
                     tJBSE = new Thread(tdJBSE);
                     tJBSE.start();
                 } catch (IOException e) {
@@ -302,7 +274,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
                 //splits output
                 final List<JBSEResult> splitItems;
             	try {
-            		splitItems = splitEvosuiteSeed(testCountInitial, items.get(0).getTargetClassName());
+            		splitItems = splitEvosuiteSeed(this.o, this.visibleTargetMethods, testCountInitial, items.get(0).getTargetClassName());
             	} catch (NoTestFileException e) {
             		LOGGER.error("Failed to split the seed test case %s: the generated test class file does not seem to exist (perhaps EvoSuite must be blamed)", e.file.toAbsolutePath().toString());
             		return;
@@ -467,7 +439,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
             //launches a thread that waits for tests and schedules 
             //JBSE for exploring them
             try {
-            	final TestDetector tdJBSE = new TestDetector(this.o, testCount, subItems, evosuiteProcess.getInputStream(), evosuiteLogFilePath, this.in);
+            	final TestDetector tdJBSE = new TestDetector(this, this.o, testCount, subItems, evosuiteProcess.getInputStream(), evosuiteLogFilePath, this.in);
                 final Thread tJBSE = new Thread(tdJBSE);
                 tJBSE.start();
                 testDetectors.add(tdJBSE);
@@ -515,148 +487,6 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         }
     }
 
-    /**
-     * Class for a {@link Runnable} that listens for the output produced by 
-     * an instance of EvoSuite, and when this produces a test
-     * schedules JBSE for its analysis.
-     * 
-     * @author Pietro Braione
-     */
-    private final class TestDetector implements Runnable {
-    	private final Options o;
-        private final int testCountInitial;
-        private final List<JBSEResult> items;
-        private final BufferedReader evosuiteBufferedReader;
-        private final Path evosuiteLogFilePath;
-        private final BufferedWriter evosuiteLogFileWriter;
-        private final JBSEResultInputOutputBuffer in;
-
-        /**
-         * Constructor.
-         * 
-         * @param testCountInitial an {@code int}, the number used to identify 
-         *        the generated tests. The test generated from {@code items.get(i)}
-         *        will be numbered {@code testCountInitial + i}.
-         * @param items a {@link List}{@code <}{@link JBSEResult}{@code >}, results of symbolic execution.
-         * @param evosuiteInputStream the {@link InputStream} connected to the stdout of the EvoSuite process.
-         * @param evosuiteLogFilePath the {@link Path} of the EvoSuite log file.
-         * @param in the {@link JBSEResultInputOutputBuffer} to instruct about the
-         *        path conditions EvoSuite fails to solve.
-         * @throws IOException if opening a writer to the Evosuite log file fails.
-         */
-        public TestDetector(Options o, int testCountInitial, List<JBSEResult> items, InputStream evosuiteInputStream, Path evosuiteLogFilePath, JBSEResultInputOutputBuffer in) throws IOException {
-        	this.o = o;
-        	this.testCountInitial = testCountInitial;
-            this.items = items;
-            this.evosuiteBufferedReader = new BufferedReader(new InputStreamReader(evosuiteInputStream));
-            this.evosuiteLogFilePath = evosuiteLogFilePath;
-            this.evosuiteLogFileWriter = Files.newBufferedWriter(this.evosuiteLogFilePath);
-            this.in = in;
-        }
-
-        @Override
-        public void run() {
-            //reads/copies the standard input and detects the generated tests
-            final HashSet<Integer> generated = new HashSet<>();
-            try {
-                final Pattern patternEmittedTest = Pattern.compile("^.*\\* EMITTED TEST CASE: .*EvoSuiteWrapper_(\\d+), \\w+\\z");
-                String line;
-                while ((line = this.evosuiteBufferedReader.readLine()) != null) {
-                    if (Thread.interrupted()) {
-                        //the performer was shut down
-                        break;
-                    }
-                    
-                    //copies the line to the EvoSuite log file
-                    this.evosuiteLogFileWriter.write(line);
-                    this.evosuiteLogFileWriter.newLine();
-                    
-                    //check if the read line reports the emission of a test case
-                    //and in the positive case schedule JBSE to analyze it
-                    final Matcher matcherEmittedTest = patternEmittedTest.matcher(line);
-                    if (matcherEmittedTest.matches()) {
-                        final int testCount = Integer.parseInt(matcherEmittedTest.group(1));
-                        generated.add(testCount);
-                        final JBSEResult item = this.items.get(testCount - this.testCountInitial);
-                        try {
-                            checkTestCompileAndScheduleJBSE(testCount, item);
-                        } catch (NoTestFileException e) {
-                            LOGGER.error("Failed to generate the test case %s for path condition %s: the generated test class file does not seem to exist (perhaps EvoSuite must be blamed)", e.file.toAbsolutePath().toString(), e.pathCondition);
-                            //continue
-                        } catch (NoTestFileScaffoldingException e) {
-                            LOGGER.error("Failed to generate the test case %s for path condition %s: the generated scaffolding class file does not seem to exist (perhaps EvoSuite must be blamed)", e.file.toAbsolutePath().toString(), e.pathCondition);
-                            //continue
-                        } catch (NoTestMethodException e) {
-                            LOGGER.warn("Failed to generate the test case %s for path condition: %s: the generated files does not contain a test method (perhaps EvoSuite must be blamed)", e.file.toAbsolutePath().toString(), e.pathCondition);
-                            //continue
-                        } catch (CompilationFailedTestException e) {
-                            LOGGER.error("Internal error: EvoSuite test case %s compilation failed", e.file.toAbsolutePath().toString());
-                            //continue
-                        } catch (CompilationFailedTestScaffoldingException e) {
-                            LOGGER.error("Internal error: EvoSuite test case scaffolding %s compilation failed", e.file.toAbsolutePath().toString());
-                            //continue
-                        } catch (ClassFileAccessException e) {
-                            LOGGER.error("Unexpected error while verifying that class %s exists and has a test method", e.className);
-                            LOGGER.error("Message: %s", e.e.toString());
-                            LOGGER.error("Stack trace:");
-                            for (StackTraceElement elem : e.e.getStackTrace()) {
-                                LOGGER.error("%s", elem.toString());
-                            }
-                            //continue
-                        } catch (IOFileCreationException e) {
-                            LOGGER.error("Unexpected I/O error while creating test case compilation log file %s", e.file.toAbsolutePath().toString());
-                            LOGGER.error("Message: %s", e.e.toString());
-                            LOGGER.error("Stack trace:");
-                            for (StackTraceElement elem : e.e.getStackTrace()) {
-                                LOGGER.error("%s", elem.toString());
-                            }
-                            //continue
-                        }
-                    }
-                }
-            } catch (IOException e) {
-                LOGGER.error("Unexpected I/O error while reading the standard output of an Evosuite process or writing on the corresponding log file %s", this.evosuiteLogFilePath.toString());
-                LOGGER.error("Message: %s", e.toString());
-                LOGGER.error("Stack trace:");
-                for (StackTraceElement elem : e.getStackTrace()) {
-                    LOGGER.error("%s", elem.toString());
-                }
-            } finally {
-                try {
-                    this.evosuiteLogFileWriter.close();
-                } catch (IOException e) {
-                    LOGGER.error("Unexpected I/O error while closing the Evosuite process log file %s", this.evosuiteLogFilePath.toString());
-                    LOGGER.error("Message: %s", e.toString());
-                    LOGGER.error("Stack trace:");
-                    for (StackTraceElement elem : e.getStackTrace()) {
-                        LOGGER.error("%s", elem.toString());
-                    }
-                }
-            }
-
-            //ended reading EvoSuite log file: determines the test that
-            //were not generated
-            int testCount = this.testCountInitial;
-            for (JBSEResult item : this.items) {
-                if (!generated.contains(testCount)) {
-                    //logs the items whose test cases were not generated
-                    LOGGER.info("Failed to generate a test case for post-frontier path condition: %s, log file: %s, wrapper: EvoSuiteWrapper_%d", stringifyPostFrontierPathCondition(item), this.evosuiteLogFilePath.toString(), testCount);
-                    
-                    //learns for update of indices
-                    if (this.o.getUseIndexInfeasibility() && item.getPostFrontierState() != null) { //NB: item.getFinalState() == null for seed items when target is method
-                    	this.in.learnPathConditionForIndexInfeasibility(item.getTargetMethodSignature(), item.getPostFrontierState().getPathCondition(), false);
-                    }
-
-                    //TODO possibly lazier updates of index
-                    if (this.o.getUseIndexInfeasibility() && item.getPostFrontierState() != null) {
-                    	this.in.updateIndexInfeasibilityAndReclassify();
-                    }
-                }
-                ++testCount;
-            }
-        }
-    }
-    
     /**
      * Emits and compiles the EvoSuite wrapper for the path condition of some state
      * (only for seed tests, and in the case the target is a method).
@@ -900,389 +730,6 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         final Process pr = pb.start();
         return pr;
     }
-    
-    private static final class RenamerVisitor extends ModifierVisitor<Void> {
-        private final String from, to;
-        
-        public RenamerVisitor(String from, String to) {
-            this.from = from;
-            this.to = to;
-        }
-        
-        @Override
-        public Visitable visit(SimpleName n, Void arg) {
-            if (n.asString().equals(this.from)) {
-                n.setIdentifier(this.to);
-            }
-            return super.visit(n, arg);
-        }
-        
-        @Override
-        public Visitable visit(Name n, Void arg) {
-            if (n.asString().equals(this.from)) {
-                n.setIdentifier(this.to);
-            }
-            return super.visit(n, arg);
-        }
-    }
-
-    /**
-     * Splits a seed test class generated by EvoSuite, 
-     * with multiple test methods, into multiple classes
-     * with a single test method.
-     * 
-     * @param testCountInitial an {@code int}, the number used to identify 
-     *        the generated tests. The test generated will be numbered starting 
-     *        from {@code testCountInitial} henceforth.
-     * @param targetClassName a {@link String}, the name of the target class.
-     * @return a {@link List}{@code <}{@link JBSEResult}{@code >}.
-     * @throws IOException if some I/O error occurs during the execution of Javaparser.
-     * @throws IOFileCreationException if some I/O error occurs while creating the 
-     *         test class or scaffolding class, or the folder that must contain them.
-     * @throws NoTestFileException if the test file does not exist.
-     * @throws NoTestFileScaffoldingException if the scaffolding file does not exist. 
-     */
-    private List<JBSEResult> splitEvosuiteSeed(int testCountInitial, String targetClassName) 
-    throws IOException, IOFileCreationException, NoTestFileException, NoTestFileScaffoldingException {
-        //parses the seed compilation unit
-        final String testClassName = targetClassName + "_Seed_Test";
-        final String scaffClassName = (this.o.getEvosuiteNoDependency() ? null : testClassName + "_scaffolding");
-        final Path testFile = this.o.getTmpTestsDirectoryPath().resolve(testClassName + ".java");
-        final Path scaffFile = (this.o.getEvosuiteNoDependency() ? null : this.o.getTmpTestsDirectoryPath().resolve(scaffClassName + ".java"));
-        if (!testFile.toFile().exists()) {
-            throw new NoTestFileException(testFile);
-        }
-        if (scaffFile != null && !scaffFile.toFile().exists()) {
-            throw new NoTestFileScaffoldingException(scaffFile);
-        }
-        final CompilationUnit cuTestClass = StaticJavaParser.parse(testFile);
-        
-        //finds all the test method declarations 
-        //in the compilation unit
-        final ArrayList<MethodDeclaration> testMethodDeclarations = new ArrayList<>();
-        cuTestClass.findAll(MethodDeclaration.class).forEach(md -> {
-            if (md.isAnnotationPresent("Test")) {
-                testMethodDeclarations.add(md);
-            }
-        });
-        
-        final ArrayList<JBSEResult> retVal = new ArrayList<>();
-        int testCount = testCountInitial;
-        for (MethodDeclaration testMethodDeclaration : testMethodDeclarations) {
-            //builds a map of variable declarations (variable names to
-            //class names)
-            final HashMap<String, Class<?>> varDecls = new HashMap<>();
-            testMethodDeclaration.findAll(VariableDeclarator.class).forEach(vd -> {
-                varDecls.put(vd.getNameAsString(), javaTypeToClass(cuTestClass, vd.getTypeAsString()));
-            });
-            
-            //gets all the statements in the method
-            final List<ExpressionStmt> stmts = testMethodDeclaration.findAll(ExpressionStmt.class);
-            Collections.reverse(stmts); //from last to first one
-            
-            for (ExpressionStmt stmt : stmts) {
-                //finds a method call
-                final Expression expr;
-                if (stmt.getExpression().isMethodCallExpr()) {
-                    expr = stmt.getExpression();
-                } else if (stmt.getExpression().isObjectCreationExpr()) { //unlikely
-                    expr = stmt.getExpression();
-                } else if (stmt.getExpression().isAssignExpr() && stmt.getExpression().asAssignExpr().getValue().isMethodCallExpr()) {
-                    expr = stmt.getExpression().asAssignExpr().getValue();
-                } else if (stmt.getExpression().isAssignExpr() && stmt.getExpression().asAssignExpr().getValue().isObjectCreationExpr()) {
-                    expr = stmt.getExpression().asAssignExpr().getValue();
-                } else if (stmt.getExpression().isVariableDeclarationExpr() && stmt.getExpression().asVariableDeclarationExpr().getVariable(0).getInitializer().isPresent() &&
-                           stmt.getExpression().asVariableDeclarationExpr().getVariable(0).getInitializer().get().isMethodCallExpr()) {
-                    expr = stmt.getExpression().asVariableDeclarationExpr().getVariable(0).getInitializer().get();
-                } else if (stmt.getExpression().isVariableDeclarationExpr() && stmt.getExpression().asVariableDeclarationExpr().getVariable(0).getInitializer().isPresent() &&
-                           stmt.getExpression().asVariableDeclarationExpr().getVariable(0).getInitializer().get().isObjectCreationExpr()) {
-                    expr = stmt.getExpression().asVariableDeclarationExpr().getVariable(0).getInitializer().get();
-                } else {
-                    continue; //gives up
-                }
-                
-                //determines the invoked method/constructor
-                final String methodName = (expr instanceof MethodCallExpr ? ((MethodCallExpr) expr).getNameAsString() : "<init>" );
-                final ArrayList<Class<?>> argumentTypes = new ArrayList<>();
-                for (Expression e : (expr instanceof MethodCallExpr ? ((MethodCallExpr) expr).getArguments() : ((ObjectCreationExpr) expr).getArguments())) {
-                    argumentTypes.add(inferType(e, varDecls));
-                }
-                List<String> targetMethod = null;
-                visibleTargetMethodsLoop:
-                for (List<String> visibleTargetMethod : this.visibleTargetMethods) {
-                    if (visibleTargetMethod.get(2).equals(methodName)) {
-                        final String[] visibleTargetMethodArgumentTypes = splitParametersDescriptors(visibleTargetMethod.get(1));
-                        if (visibleTargetMethodArgumentTypes.length == argumentTypes.size()) {
-                            boolean allMatch = true;
-                            allMatchLoop:
-                            for (int i = 0; i < visibleTargetMethodArgumentTypes.length; ++i) {
-                                final Class<?> argClass = argumentTypes.get(i); 
-                                final Class<?> targetMethodArgClass = classFileTypeToClass(visibleTargetMethodArgumentTypes[i]);
-                                if (argClass != null && targetMethodArgClass != null && !targetMethodArgClass.isAssignableFrom(argClass)) {
-                                    allMatch = false;
-                                    break allMatchLoop;
-                                }
-                            }
-                            if (allMatch) {
-                                targetMethod = visibleTargetMethod;
-                                break visibleTargetMethodsLoop;
-                            }
-                        }
-                    }
-                }
-                if (targetMethod == null) {
-                    continue;
-                }
-
-                //creates a new test class declaration
-                final ClassOrInterfaceDeclaration testClassDeclaration = (ClassOrInterfaceDeclaration) testMethodDeclaration.getParentNode().get();
-                final ClassOrInterfaceDeclaration testClassDeclarationNew = testClassDeclaration.clone();
-                final MethodDeclaration testMethodDeclarationNew = testClassDeclarationNew.getMethodsBySignature(testMethodDeclaration.getNameAsString(), testMethodDeclaration.getParameters().stream().map(Parameter::getType).map(Type::toString).toArray(String[]::new)).get(0);
-                final ArrayList<MethodDeclaration> toExpunge = new ArrayList<>();
-                testClassDeclarationNew.findAll(MethodDeclaration.class).forEach(md -> {
-                    if (md.isAnnotationPresent("Test") && !md.equals(testMethodDeclarationNew)) {
-                        toExpunge.add(md);
-                    }
-                });
-                for (MethodDeclaration md : toExpunge) {
-                    testClassDeclarationNew.remove(md);
-                }
-                testMethodDeclarationNew.setName("test0");
-                final String testClassNameNew = (targetClassName + "_" + testCount + "_Test");
-                final String testClassNameNew_Unqualified = testClassNameNew.substring(testClassNameNew.lastIndexOf('/') + 1);
-                final String scaffClassNameNew = (this.o.getEvosuiteNoDependency() ? null : testClassNameNew + "_scaffolding");
-                testClassDeclarationNew.setName(testClassNameNew_Unqualified);
-
-                //creates the compilation unit for the scaffolding
-                final CompilationUnit cuTestScaffNew;
-                if (this.o.getEvosuiteNoDependency()) {
-                    cuTestScaffNew = null;
-                } else {
-                    //creates a new scaffolding class declaration
-                    cuTestScaffNew = StaticJavaParser.parse(scaffFile);
-                    final String scaffClassName_Unqualified = scaffClassName.substring(scaffClassName.lastIndexOf('/') + 1);
-                    final String scaffClassNameNew_Unqualified = scaffClassNameNew.substring(scaffClassNameNew.lastIndexOf('/') + 1);
-                    final ClassOrInterfaceDeclaration scaffClassDeclarationNew = cuTestScaffNew.findFirst(ClassOrInterfaceDeclaration.class, cid ->  cid.getName().asString().equals(scaffClassName_Unqualified)).get();
-                    scaffClassDeclarationNew.setName(scaffClassNameNew_Unqualified);
-
-                    //fixes the initializeClasses method
-                    final RenamerVisitor v = new RenamerVisitor(scaffClassName_Unqualified, scaffClassNameNew_Unqualified);
-                    cuTestScaffNew.accept(v, null);
-
-                    //changes the "extends" declaration of the new test class
-                    //declaration to point to the new scaffolding class declaration
-                    final NodeList<ClassOrInterfaceType> testClassExtensions = testClassDeclarationNew.getExtendedTypes();
-                    for (Iterator<ClassOrInterfaceType> it = testClassExtensions.iterator(); it.hasNext(); ) {
-                        final ClassOrInterfaceType testClassExtension = it.next();
-                        if (testClassExtension.getName().asString().equals(scaffClassName_Unqualified)) {
-                            it.remove();
-                            break;
-                        }
-                    }
-                    testClassDeclarationNew.addExtendedType(scaffClassNameNew_Unqualified);
-                }
-
-                //creates the compilation unit for the test class
-                final CompilationUnit cuTestClassNew = cuTestClass.clone();
-                final String testClassName_Unqualified = testClassName.substring(testClassName.lastIndexOf('/') + 1);
-                final ClassOrInterfaceDeclaration testClassDeclarationOld = cuTestClassNew.findFirst(ClassOrInterfaceDeclaration.class, cid -> cid.getName().asString().equals(testClassName_Unqualified)).get();
-                cuTestClassNew.replace(testClassDeclarationOld, testClassDeclarationNew);
-
-                //writes the compilation units to files
-                final Path testFileNew = this.o.getTmpTestsDirectoryPath().resolve(testClassNameNew + ".java");
-                try {
-                    Files.createDirectories(testFileNew.getParent());
-                } catch (IOException e) {
-                    throw new IOFileCreationException(e, testFileNew.getParent());
-                }
-                try (final BufferedWriter w = Files.newBufferedWriter(testFileNew)) {
-                    w.write(cuTestClassNew.toString());
-                } catch (IOException e) {
-                    throw new IOFileCreationException(e, testFileNew);
-                }
-                final Path scaffFileNew;
-                if (this.o.getEvosuiteNoDependency()) {
-                    scaffFileNew = null; //nothing else to write
-                } else {
-                    scaffFileNew = this.o.getTmpTestsDirectoryPath().resolve(scaffClassNameNew + ".java");
-                    try (final BufferedWriter w = Files.newBufferedWriter(scaffFileNew)) {
-                        w.write(cuTestScaffNew.toString());
-                    } catch (IOException e) {
-                        throw new IOFileCreationException(e, testFileNew);
-                    }
-                }
-                
-                //creates the new item
-                final JBSEResult newItem = new JBSEResult(targetMethod);
-                retVal.add(newItem);
-
-                ++testCount;
-            }
-        }
-        
-        return retVal;
-    }
-    
-    private static Class<?> javaTypeToClass(CompilationUnit cu, String type) {
-        if ("boolean".equals(type)) {
-            return boolean.class;
-        } else if ("byte".equals(type)) {
-            return byte.class;
-        } else if ("char".equals(type)) {
-            return char.class;
-        } else if ("double".equals(type)) {
-            return double.class;
-        } else if ("float".equals(type)) {
-            return float.class;
-        } else if ("int".equals(type)) {
-            return int.class;
-        } else if ("long".equals(type)) {
-            return long.class;
-        } else if ("short".equals(type)) {
-            return short.class;
-        } else if (type.endsWith("[]")) {
-            final Class<?> memberType = javaTypeToClass(cu, type.substring(0, type.length() - 2));
-            if (memberType == null) {
-                return null;
-            }
-            return Array.newInstance(memberType, 0).getClass();
-        } else { //class name
-            final ClassLoader ic = getInternalClassloader();
-            final String typeNoGenerics = eraseGenericParameters(type);
-            final ArrayList<String> possiblePackageQualifiers = possiblePackageQualifiers(cu, typeNoGenerics);
-            for (String possiblePackageQualifier : possiblePackageQualifiers) {
-                String typeNameLoop = typeNoGenerics;
-                do {
-                    Class<?> retVal = null;
-                    try {
-                        retVal = Class.forName(possiblePackageQualifier + typeNameLoop);
-                    } catch (ClassNotFoundException e) {
-                        try {
-                            retVal = ic.loadClass(possiblePackageQualifier + typeNameLoop);
-                        } catch (ClassNotFoundException e1) {
-                            retVal = null;
-                        }
-                    }
-                    if (retVal != null) {
-                        return retVal;
-                    }
-                    //tries to replace the last dot with a dollar and reload
-                    final int lastIndexOfDot = typeNameLoop.lastIndexOf('.');
-                    if (lastIndexOfDot == -1) {
-                        //nothing more to try with this package qualifier
-                        break;
-                    }
-                    final StringBuilder newTypeNameLoop = new StringBuilder(typeNameLoop);
-                    newTypeNameLoop.setCharAt(lastIndexOfDot, '$');
-                    typeNameLoop = newTypeNameLoop.toString();
-                } while (true);
-            }
-            return null; //nothing found
-        }
-    }
-    
-    private static String eraseGenericParameters(String type) {
-        final StringBuilder retVal = new StringBuilder();
-        int level = 0;
-        for (int i = 0; i < type.length(); ++i) {
-            final char current = type.charAt(i);
-            if (current == '<') {
-                ++level;
-            } else if (current == '>') {
-                --level;
-            } else if (level == 0) {
-                retVal.append(current);
-            }
-        }
-        return retVal.toString();
-    }
-    
-    private static ArrayList<String> possiblePackageQualifiers(CompilationUnit cu, String type) {
-        final ArrayList<String> retVal = new ArrayList<>();
-        retVal.add(""); //always tries with no package qualifier
-        retVal.add("java.lang."); //always tries with java.lang (for standard classes that are not imported)
-        cu.findAll(ImportDeclaration.class).forEach(id -> {
-            final String idString = id.getNameAsString();
-            if (id.isAsterisk()) {
-                retVal.add(idString + ".");
-            } else {
-                //if type is A.B.C tries first A, then A.B, then A.B.C
-                for (int i = 0; i <= type.length(); ++i) {
-                    if (i == type.length() || type.charAt(i) == '.') {
-                        final String typePrefix = type.substring(0, i);
-                        if (idString.endsWith("." + typePrefix)) {
-                            retVal.add(idString.substring(0, idString.length() - typePrefix.length()));
-                        }
-                    }
-                }
-            } //else, do not add it
-        });
-        return retVal;
-    }
-    
-    private static Class<?> inferType(Expression e, HashMap<String, Class<?>> varDecls) {
-        if (e.isBooleanLiteralExpr()) {
-            return boolean.class;
-        } else if (e.isCharLiteralExpr()) {
-            return char.class;
-        } else if (e.isDoubleLiteralExpr()) {
-            return double.class;
-        } else if (e.isIntegerLiteralExpr()) {
-            return int.class;
-        } else if (e.isLongLiteralExpr()) {
-            return long.class;
-        } else if (e.isArrayAccessExpr()) {
-            final Class<?> memberType = inferType(e.asArrayAccessExpr().getName(), varDecls);
-            if (memberType == null) {
-                return null;
-            }
-            return Array.newInstance(memberType, 0).getClass();
-        } else if (e.isNameExpr() && varDecls.containsKey(e.asNameExpr().getNameAsString())) {
-            return varDecls.get(e.asNameExpr().getNameAsString());
-        } else {
-            return null; //gives up
-        }
-    }
-    
-    private static Class<?> classFileTypeToClass(String type) {
-        final ClassLoader ic = getInternalClassloader();
-        final String typeName = internalToBinaryTypeName(type);
-        Class<?> retVal = null;
-        try {
-            retVal = Class.forName(typeName);
-        } catch (ClassNotFoundException e) {
-            try {
-                retVal = ic.loadClass(typeName);
-            } catch (ClassNotFoundException e1) {
-                retVal = null;
-            }
-        }
-        return retVal; 
-    }
-    
-    private static String internalToBinaryTypeName(String type) {
-        if ("B".equals(type)) {
-            return "byte";
-        } else if ("C".equals(type)) {
-            return "char";
-        } else if ("D".equals(type)) {
-            return "double";
-        } else if ("F".equals(type)) {
-            return "float";
-        } else if ("I".equals(type)) {
-            return "int";
-        } else if ("J".equals(type)) {
-            return "long";
-        } else if ("S".equals(type)) {
-            return "short";
-        } else if ("Z".equals(type)) {
-            return "boolean";
-        } else if (type.startsWith("L")){
-            return type.substring(1, type.length() - 1).replace('/', '.');
-        } else { //array, starts with '['
-            return '[' + internalToBinaryTypeName(type.substring(1));
-        }
-    }
 
     /**
      * Checks that an emitted test class has the {@code test0} method,
@@ -1319,7 +766,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
      * @throws CompilationFailedTestScaffoldingException if the compilation of the scaffolding class fails.
      * @throws ClassFileAccessException if the test class is not accessible.
      */
-    private void checkTestCompileAndScheduleJBSE(int testCount, JBSEResult item) 
+    void checkTestCompileAndScheduleJBSE(int testCount, JBSEResult item) 
     throws NoTestFileException, NoTestFileScaffoldingException, NoTestMethodException, IOFileCreationException, 
     CompilationFailedTestException, CompilationFailedTestScaffoldingException, ClassFileAccessException {
         
@@ -1357,21 +804,13 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         try {
             checkTestExists(testCaseClassName);
             final int depth = item.getDepth();
-            LOGGER.info("Generated test case %s, depth: %d, post-frontier path condition: %s", testCaseClassName, depth, stringifyPostFrontierPathCondition(item));
+            LOGGER.info("Generated test case %s, depth: %d, post-frontier path condition: %s", testCaseClassName, depth, Util.stringifyPostFrontierPathCondition(item));
             final TestCase newTestCase = new TestCase(testCaseClassName, "()V", "test0", this.o.getTmpTestsDirectoryPath(), (testCaseScaff != null));
-            this.getOutputBuffer().add(new EvosuiteResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), item.getPostFrontierState(), newTestCase, depth + 1));
+            getOutputBuffer().add(new EvosuiteResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), item.getPostFrontierState(), newTestCase, depth + 1));
         } catch (NoSuchMethodException e) { 
-            throw new NoTestMethodException(testCase, stringifyPostFrontierPathCondition(item));
+            throw new NoTestMethodException(testCase, Util.stringifyPostFrontierPathCondition(item));
         } catch (SecurityException | NoClassDefFoundError | ClassNotFoundException e) {
             throw new ClassFileAccessException(e, testCaseClassName);
         }
-    }
-    
-    private static String stringifyPostFrontierPathCondition(JBSEResult item) {
-        final List<Clause> pathCondition = (item.getPostFrontierState() == null ? null : item.getPostFrontierState().getPathCondition());
-        final List<String> forbiddenExpansions = item.getForbiddenExpansions();
-        final String excluded = ((forbiddenExpansions == null || forbiddenExpansions.isEmpty()) ? "" : (" excluded " + forbiddenExpansions.stream().collect(Collectors.joining(", "))));
-        final String retVal = (pathCondition == null ? "true" : (stringifyPathCondition(shorten(pathCondition)) + excluded));
-        return retVal;
     }
 }

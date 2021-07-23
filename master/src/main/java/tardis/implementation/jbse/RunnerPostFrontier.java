@@ -1,11 +1,11 @@
-package tardis.implementation;
+package tardis.implementation.jbse;
 
 import static jbse.algo.Util.valueString;
 import static jbse.bc.ClassLoaders.CLASSLOADER_BOOT;
 import static jbse.bc.Signatures.JAVA_OBJECT;
 import static jbse.bc.Signatures.JAVA_STRING;
-import static tardis.implementation.Util.bytecodeJump;
-import static tardis.implementation.Util.bytecodeLoad;
+import static tardis.implementation.common.Util.bytecodeJump;
+import static tardis.implementation.common.Util.bytecodeLoad;
 
 import java.util.ArrayList;
 import java.util.HashMap;

@@ -1,11 +1,11 @@
-package tardis.implementation;
+package tardis;
 
 /**
  * Exception thrown whenever the Java 8 JDK environment is missing.
  * 
  * @author Pietro Braione
  */
-public final class NoJava8ToolsJarException extends Exception {
+final class NoJava8ToolsJarException extends Exception {
     /**
      * The serial version UID of the {@link NoJava8ToolsJarException} objects.
      */
