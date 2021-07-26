@@ -213,6 +213,12 @@ final class RunnerPreFrontier implements AutoCloseable {
                 }
             }
 
+            //stops if current state is at post-frontier (before adding string literals)
+            RunnerPreFrontier.this.foundPreFrontier = (currentState.getDepth() == RunnerPreFrontier.this.postFrontierDepth);
+            if (RunnerPreFrontier.this.foundPreFrontier || currentState.getCount() >= RunnerPreFrontier.this.maxCount) {
+                return true;
+            }
+
             //manages string literals (they might be useful to EvoSuite)
             if (currentState.phase() != Phase.PRE_INITIAL && RunnerPreFrontier.this.atLoadConstant) {
                 try {
@@ -244,15 +250,7 @@ final class RunnerPreFrontier implements AutoCloseable {
                 }
             }
 
-            //stops if current state is at post-frontier
-            RunnerPreFrontier.this.foundPreFrontier = (currentState.getDepth() == RunnerPreFrontier.this.postFrontierDepth);
-            if (RunnerPreFrontier.this.foundPreFrontier) {
-                return true;
-            } else if (currentState.getCount() >= RunnerPreFrontier.this.maxCount) {
-                return true;
-            } else {
-                return super.atStepPost();
-            }
+            return super.atStepPost();
         }
 
         @Override
