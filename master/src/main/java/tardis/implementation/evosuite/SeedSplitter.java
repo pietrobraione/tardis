@@ -28,6 +28,7 @@ import com.github.javaparser.ast.expr.Name;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.SimpleName;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
+import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.visitor.ModifierVisitor;
@@ -54,174 +55,75 @@ final class SeedSplitter {
      * @throws NoTestFileScaffoldingException if the scaffolding file does not exist. 
      */
     static List<JBSEResult> splitEvosuiteSeed(Options o, List<List<String>> visibleTargetMethods, int testCountInitial, String targetClassName) 
-    throws IOException, IOFileCreationException, NoTestFileException, NoTestFileScaffoldingException {
-        //parses the seed compilation unit
+    throws NoTestFileException, NoTestFileScaffoldingException, IOException, IOFileCreationException {
+    	//defines the names of classes/compilation units, 
+    	//and checks their existence
         final String testClassName = targetClassName + "_Seed_Test";
         final String scaffClassName = (o.getEvosuiteNoDependency() ? null : testClassName + "_scaffolding");
         final Path testFile = o.getTmpTestsDirectoryPath().resolve(testClassName + ".java");
         final Path scaffFile = (o.getEvosuiteNoDependency() ? null : o.getTmpTestsDirectoryPath().resolve(scaffClassName + ".java"));
-        if (!testFile.toFile().exists()) {
-            throw new NoTestFileException(testFile);
-        }
-        if (scaffFile != null && !scaffFile.toFile().exists()) {
-            throw new NoTestFileScaffoldingException(scaffFile);
-        }
-        final CompilationUnit cuTestClass = StaticJavaParser.parse(testFile);
+        checkTestExistence(testFile, scaffFile);
+        
+        //parses the seed compilation unit
+    	final CompilationUnit cuTestClass = StaticJavaParser.parse(testFile);
         
         //finds all the test method declarations 
         //in the compilation unit
-        final ArrayList<MethodDeclaration> testMethodDeclarations = new ArrayList<>();
-        cuTestClass.findAll(MethodDeclaration.class).forEach(md -> {
-            if (md.isAnnotationPresent("Test")) {
-                testMethodDeclarations.add(md);
-            }
-        });
+        final ArrayList<MethodDeclaration> testMethodDeclarations = 
+        testMethodsInCompilationUnit(cuTestClass);
         
+        //generates all the split classes and the return value
         final ArrayList<JBSEResult> retVal = new ArrayList<>();
         int testCount = testCountInitial;
-        for (MethodDeclaration testMethodDeclaration : testMethodDeclarations) {
+        for (MethodDeclaration mdTest : testMethodDeclarations) {
             //builds a map of variable declarations (variable names to
             //class names)
-            final HashMap<String, Class<?>> varDecls = new HashMap<>();
-            testMethodDeclaration.findAll(VariableDeclarator.class).forEach(vd -> {
-                varDecls.put(vd.getNameAsString(), javaTypeToClass(cuTestClass, vd.getTypeAsString()));
-            });
+            final HashMap<String, Class<?>> varDecls = variableDeclarationsMap(cuTestClass, mdTest);
             
             //gets all the statements in the method
-            final List<ExpressionStmt> stmts = testMethodDeclaration.findAll(ExpressionStmt.class);
+            final List<ExpressionStmt> stmts = mdTest.findAll(ExpressionStmt.class);
             Collections.reverse(stmts); //from last to first one
             
+            //scans all the statements and builds a test class
+            //for each target method call
             for (ExpressionStmt stmt : stmts) {
-                //finds a method call
-                final Expression expr;
-                if (stmt.getExpression().isMethodCallExpr()) {
-                    expr = stmt.getExpression();
-                } else if (stmt.getExpression().isObjectCreationExpr()) { //unlikely
-                    expr = stmt.getExpression();
-                } else if (stmt.getExpression().isAssignExpr() && stmt.getExpression().asAssignExpr().getValue().isMethodCallExpr()) {
-                    expr = stmt.getExpression().asAssignExpr().getValue();
-                } else if (stmt.getExpression().isAssignExpr() && stmt.getExpression().asAssignExpr().getValue().isObjectCreationExpr()) {
-                    expr = stmt.getExpression().asAssignExpr().getValue();
-                } else if (stmt.getExpression().isVariableDeclarationExpr() && stmt.getExpression().asVariableDeclarationExpr().getVariable(0).getInitializer().isPresent() &&
-                           stmt.getExpression().asVariableDeclarationExpr().getVariable(0).getInitializer().get().isMethodCallExpr()) {
-                    expr = stmt.getExpression().asVariableDeclarationExpr().getVariable(0).getInitializer().get();
-                } else if (stmt.getExpression().isVariableDeclarationExpr() && stmt.getExpression().asVariableDeclarationExpr().getVariable(0).getInitializer().isPresent() &&
-                           stmt.getExpression().asVariableDeclarationExpr().getVariable(0).getInitializer().get().isObjectCreationExpr()) {
-                    expr = stmt.getExpression().asVariableDeclarationExpr().getVariable(0).getInitializer().get();
-                } else {
-                    continue; //gives up
+                //looks for a method/constructor call in the statement
+                final Expression expr = findMethodOrConstructorCall(stmt);
+                if (expr == null) {
+                	continue;
                 }
                 
-                //determines the invoked method/constructor
-                final String methodName = (expr instanceof MethodCallExpr ? ((MethodCallExpr) expr).getNameAsString() : "<init>" );
-                final ArrayList<Class<?>> argumentTypes = new ArrayList<>();
-                for (Expression e : (expr instanceof MethodCallExpr ? ((MethodCallExpr) expr).getArguments() : ((ObjectCreationExpr) expr).getArguments())) {
-                    argumentTypes.add(inferType(e, varDecls));
-                }
-                List<String> targetMethod = null;
-                visibleTargetMethodsLoop:
-                for (List<String> visibleTargetMethod : visibleTargetMethods) {
-                    if (visibleTargetMethod.get(2).equals(methodName)) {
-                        final String[] visibleTargetMethodArgumentTypes = splitParametersDescriptors(visibleTargetMethod.get(1));
-                        if (visibleTargetMethodArgumentTypes.length == argumentTypes.size()) {
-                            boolean allMatch = true;
-                            allMatchLoop:
-                            for (int i = 0; i < visibleTargetMethodArgumentTypes.length; ++i) {
-                                final Class<?> argClass = argumentTypes.get(i); 
-                                final Class<?> targetMethodArgClass = classFileTypeToClass(visibleTargetMethodArgumentTypes[i]);
-                                if (argClass != null && targetMethodArgClass != null && !targetMethodArgClass.isAssignableFrom(argClass)) {
-                                    allMatch = false;
-                                    break allMatchLoop;
-                                }
-                            }
-                            if (allMatch) {
-                                targetMethod = visibleTargetMethod;
-                                break visibleTargetMethodsLoop;
-                            }
-                        }
-                    }
-                }
+                //determines if the invoked method/constructor is a target method
+                final List<String> targetMethod = 
+                findVisibleTargetMethod(expr, varDecls, visibleTargetMethods);
                 if (targetMethod == null) {
                     continue;
                 }
 
-                //creates a new test class declaration
-                final ClassOrInterfaceDeclaration testClassDeclaration = (ClassOrInterfaceDeclaration) testMethodDeclaration.getParentNode().get();
-                final ClassOrInterfaceDeclaration testClassDeclarationNew = testClassDeclaration.clone();
-                final MethodDeclaration testMethodDeclarationNew = testClassDeclarationNew.getMethodsBySignature(testMethodDeclaration.getNameAsString(), testMethodDeclaration.getParameters().stream().map(Parameter::getType).map(Type::toString).toArray(String[]::new)).get(0);
-                final ArrayList<MethodDeclaration> toExpunge = new ArrayList<>();
-                testClassDeclarationNew.findAll(MethodDeclaration.class).forEach(md -> {
-                    if (md.isAnnotationPresent("Test") && !md.equals(testMethodDeclarationNew)) {
-                        toExpunge.add(md);
-                    }
-                });
-                for (MethodDeclaration md : toExpunge) {
-                    testClassDeclarationNew.remove(md);
-                }
-                testMethodDeclarationNew.setName("test0");
+                //defines the names of the new classes
                 final String testClassNameNew = (targetClassName + "_" + testCount + "_Test");
-                final String testClassNameNew_Unqualified = testClassNameNew.substring(testClassNameNew.lastIndexOf('/') + 1);
                 final String scaffClassNameNew = (o.getEvosuiteNoDependency() ? null : testClassNameNew + "_scaffolding");
-                testClassDeclarationNew.setName(testClassNameNew_Unqualified);
 
-                //creates the compilation unit for the scaffolding
+                //creates the declaration for the test class
+                final ClassOrInterfaceDeclaration cdeclTestClassNew = 
+                createDeclarationTestClass(targetClassName, testClassNameNew, mdTest, stmt);
+                
+                //creates the compilation unit for the scaffolding, 
+                //and possibly patches the declaration for the test class
                 final CompilationUnit cuTestScaffNew;
                 if (o.getEvosuiteNoDependency()) {
-                    cuTestScaffNew = null;
+                	cuTestScaffNew = null;
                 } else {
-                    //creates a new scaffolding class declaration
-                    cuTestScaffNew = StaticJavaParser.parse(scaffFile);
-                    final String scaffClassName_Unqualified = scaffClassName.substring(scaffClassName.lastIndexOf('/') + 1);
-                    final String scaffClassNameNew_Unqualified = scaffClassNameNew.substring(scaffClassNameNew.lastIndexOf('/') + 1);
-                    final ClassOrInterfaceDeclaration scaffClassDeclarationNew = cuTestScaffNew.findFirst(ClassOrInterfaceDeclaration.class, cid ->  cid.getName().asString().equals(scaffClassName_Unqualified)).get();
-                    scaffClassDeclarationNew.setName(scaffClassNameNew_Unqualified);
-
-                    //fixes the initializeClasses method
-                    final RenamerVisitor v = new RenamerVisitor(scaffClassName_Unqualified, scaffClassNameNew_Unqualified);
-                    cuTestScaffNew.accept(v, null);
-
-                    //changes the "extends" declaration of the new test class
-                    //declaration to point to the new scaffolding class declaration
-                    final NodeList<ClassOrInterfaceType> testClassExtensions = testClassDeclarationNew.getExtendedTypes();
-                    for (Iterator<ClassOrInterfaceType> it = testClassExtensions.iterator(); it.hasNext(); ) {
-                        final ClassOrInterfaceType testClassExtension = it.next();
-                        if (testClassExtension.getName().asString().equals(scaffClassName_Unqualified)) {
-                            it.remove();
-                            break;
-                        }
-                    }
-                    testClassDeclarationNew.addExtendedType(scaffClassNameNew_Unqualified);
+                	cuTestScaffNew = createCompilationUnitScaffoldingClass(scaffFile, scaffClassName, scaffClassNameNew);
+                	patchCompilationUnitTestClassSuperclass(cdeclTestClassNew, scaffClassName, scaffClassNameNew);
                 }
 
                 //creates the compilation unit for the test class
-                final CompilationUnit cuTestClassNew = cuTestClass.clone();
-                final String testClassName_Unqualified = testClassName.substring(testClassName.lastIndexOf('/') + 1);
-                final ClassOrInterfaceDeclaration testClassDeclarationOld = cuTestClassNew.findFirst(ClassOrInterfaceDeclaration.class, cid -> cid.getName().asString().equals(testClassName_Unqualified)).get();
-                cuTestClassNew.replace(testClassDeclarationOld, testClassDeclarationNew);
+                final CompilationUnit cuTestClassNew = 
+                createCompilationUnitTestClass(testClassName, cuTestClass, cdeclTestClassNew);
 
                 //writes the compilation units to files
-                final Path testFileNew = o.getTmpTestsDirectoryPath().resolve(testClassNameNew + ".java");
-                try {
-                    Files.createDirectories(testFileNew.getParent());
-                } catch (IOException e) {
-                    throw new IOFileCreationException(e, testFileNew.getParent());
-                }
-                try (final BufferedWriter w = Files.newBufferedWriter(testFileNew)) {
-                    w.write(cuTestClassNew.toString());
-                } catch (IOException e) {
-                    throw new IOFileCreationException(e, testFileNew);
-                }
-                final Path scaffFileNew;
-                if (o.getEvosuiteNoDependency()) {
-                    scaffFileNew = null; //nothing else to write
-                } else {
-                    scaffFileNew = o.getTmpTestsDirectoryPath().resolve(scaffClassNameNew + ".java");
-                    try (final BufferedWriter w = Files.newBufferedWriter(scaffFileNew)) {
-                        w.write(cuTestScaffNew.toString());
-                    } catch (IOException e) {
-                        throw new IOFileCreationException(e, testFileNew);
-                    }
-                }
+                writeCompilationUnits(o, testClassNameNew, cuTestClassNew, scaffClassNameNew, cuTestScaffNew);
                 
                 //creates the new item
                 final JBSEResult newItem = new JBSEResult(targetMethod);
@@ -234,6 +136,195 @@ final class SeedSplitter {
         return retVal;
     }
     
+    private static void checkTestExistence(Path testFile, Path scaffFile) 
+    throws NoTestFileException, NoTestFileScaffoldingException {
+        if (!testFile.toFile().exists()) {
+            throw new NoTestFileException(testFile);
+        }
+        if (scaffFile != null && !scaffFile.toFile().exists()) {
+            throw new NoTestFileScaffoldingException(scaffFile);
+        }
+    }
+    
+    private static ArrayList<MethodDeclaration> testMethodsInCompilationUnit(CompilationUnit cuTestClass) {
+        final ArrayList<MethodDeclaration> retVal = new ArrayList<>();
+        cuTestClass.findAll(MethodDeclaration.class).forEach(md -> {
+            if (md.isAnnotationPresent("Test")) {
+                retVal.add(md);
+            }
+        });
+        return retVal;
+    }
+    
+    private static HashMap<String, Class<?>> variableDeclarationsMap(CompilationUnit cuTestClass, MethodDeclaration mdTest) {
+        final HashMap<String, Class<?>> retVal = new HashMap<>();
+        mdTest.findAll(VariableDeclarator.class).forEach(vd -> {
+            retVal.put(vd.getNameAsString(), javaTypeToClass(cuTestClass, vd.getTypeAsString()));
+        });
+        return retVal;
+    }
+    
+    private static Expression findMethodOrConstructorCall(ExpressionStmt stmt) {
+    	final Expression expr;
+        if (stmt.getExpression().isMethodCallExpr()) {
+            expr = stmt.getExpression();
+        } else if (stmt.getExpression().isObjectCreationExpr()) { //unlikely
+            expr = stmt.getExpression();
+        } else if (stmt.getExpression().isAssignExpr() && stmt.getExpression().asAssignExpr().getValue().isMethodCallExpr()) {
+            expr = stmt.getExpression().asAssignExpr().getValue();
+        } else if (stmt.getExpression().isAssignExpr() && stmt.getExpression().asAssignExpr().getValue().isObjectCreationExpr()) {
+            expr = stmt.getExpression().asAssignExpr().getValue();
+        } else if (stmt.getExpression().isVariableDeclarationExpr() && stmt.getExpression().asVariableDeclarationExpr().getVariable(0).getInitializer().isPresent() &&
+                   stmt.getExpression().asVariableDeclarationExpr().getVariable(0).getInitializer().get().isMethodCallExpr()) {
+            expr = stmt.getExpression().asVariableDeclarationExpr().getVariable(0).getInitializer().get();
+        } else if (stmt.getExpression().isVariableDeclarationExpr() && stmt.getExpression().asVariableDeclarationExpr().getVariable(0).getInitializer().isPresent() &&
+                   stmt.getExpression().asVariableDeclarationExpr().getVariable(0).getInitializer().get().isObjectCreationExpr()) {
+            expr = stmt.getExpression().asVariableDeclarationExpr().getVariable(0).getInitializer().get();
+        } else {
+            expr = null; //gives up
+        }
+        return expr;
+    }
+    
+    private static List<String> findVisibleTargetMethod(Expression expr, HashMap<String, Class<?>> varDecls, List<List<String>> visibleTargetMethods) {
+    	//finds the name and the list of parameters type for the method specified by expr
+        final String methodName = (expr instanceof MethodCallExpr ? ((MethodCallExpr) expr).getNameAsString() : "<init>" );
+        final ArrayList<Class<?>> argumentTypes = new ArrayList<>();
+        for (Expression e : (expr instanceof MethodCallExpr ? ((MethodCallExpr) expr).getArguments() : ((ObjectCreationExpr) expr).getArguments())) {
+            argumentTypes.add(inferType(e, varDecls));
+        }
+        
+        //looks for a visible target method with same name and parameters list 
+        List<String> targetMethod = null;
+        visibleTargetMethodsLoop:
+        for (List<String> visibleTargetMethod : visibleTargetMethods) {
+            if (visibleTargetMethod.get(2).equals(methodName)) {
+                final String[] visibleTargetMethodArgumentTypes = splitParametersDescriptors(visibleTargetMethod.get(1));
+                if (visibleTargetMethodArgumentTypes.length == argumentTypes.size()) {
+                    boolean allMatch = true;
+                    allMatchLoop:
+                    for (int i = 0; i < visibleTargetMethodArgumentTypes.length; ++i) {
+                        final Class<?> argClass = argumentTypes.get(i); 
+                        final Class<?> targetMethodArgClass = classFileTypeToClass(visibleTargetMethodArgumentTypes[i]);
+                        if (argClass != null && targetMethodArgClass != null && !targetMethodArgClass.isAssignableFrom(argClass)) {
+                            allMatch = false;
+                            break allMatchLoop;
+                        }
+                    }
+                    if (allMatch) {
+                        targetMethod = visibleTargetMethod;
+                        break visibleTargetMethodsLoop;
+                    }
+                }
+            }
+        }
+        return targetMethod;
+    }
+    
+    private static ClassOrInterfaceDeclaration createDeclarationTestClass(String targetClassName, String testClassNameNew, MethodDeclaration mdTest, ExpressionStmt stmt) {
+        //creates a new test class declaration
+        final ClassOrInterfaceDeclaration cdeclTestClass = (ClassOrInterfaceDeclaration) mdTest.getParentNode().get();
+        final ClassOrInterfaceDeclaration retVal = cdeclTestClass.clone();
+        
+        //detects the test method to preserve
+        final MethodDeclaration mdTestNew = retVal.getMethodsBySignature(mdTest.getNameAsString(), mdTest.getParameters().stream().map(Parameter::getType).map(Type::toString).toArray(String[]::new)).get(0);
+        
+        //removes all the other test methods
+        final ArrayList<MethodDeclaration> toExpunge = new ArrayList<>();
+        retVal.findAll(MethodDeclaration.class).forEach(md -> {
+            if (md.isAnnotationPresent("Test") && !md.equals(mdTestNew)) {
+                toExpunge.add(md);
+            }
+        });
+        for (MethodDeclaration md : toExpunge) {
+            retVal.remove(md);
+        }
+        
+        //changes the name to the only test method
+        mdTestNew.setName("test0");
+        
+        //removes all the statements after stmt
+        final List<Statement> stmts = mdTestNew.findAll(Statement.class);
+        Collections.reverse(stmts); //from last to first one
+        for (Statement curStmt : stmts) {
+        	if (curStmt.equals(stmt)) {
+        		break;
+        	}
+        	mdTestNew.getBody().get().remove(curStmt);
+        }
+        
+        //changes the name to the test class
+        final String testClassNameNew_Unqualified = testClassNameNew.substring(testClassNameNew.lastIndexOf('/') + 1);
+        retVal.setName(testClassNameNew_Unqualified);
+        return retVal;
+    }
+    
+    private static CompilationUnit createCompilationUnitTestClass(String testClassName, CompilationUnit cuTestClass, ClassOrInterfaceDeclaration cdeclTestClassNew) {
+        final CompilationUnit retVal = cuTestClass.clone();
+        final String testClassName_Unqualified = testClassName.substring(testClassName.lastIndexOf('/') + 1);
+        final ClassOrInterfaceDeclaration cdeclTestClass = retVal.findFirst(ClassOrInterfaceDeclaration.class, cid -> cid.getName().asString().equals(testClassName_Unqualified)).get();
+        retVal.replace(cdeclTestClass, cdeclTestClassNew);
+        return retVal;
+    }
+    
+    private static CompilationUnit createCompilationUnitScaffoldingClass(Path scaffFile, String scaffClassName, String scaffClassNameNew) throws IOException {
+    	final String scaffClassName_Unqualified = scaffClassName.substring(scaffClassName.lastIndexOf('/') + 1);
+    	final String scaffClassNameNew_Unqualified = scaffClassNameNew.substring(scaffClassNameNew.lastIndexOf('/') + 1);
+    	
+    	//creates the compilation unit for the new scaffolding class
+    	final CompilationUnit cuTestScaffNew = StaticJavaParser.parse(scaffFile);
+    	final ClassOrInterfaceDeclaration scaffClassDeclarationNew = cuTestScaffNew.findFirst(ClassOrInterfaceDeclaration.class, cid ->  cid.getName().asString().equals(scaffClassName_Unqualified)).get();
+    	scaffClassDeclarationNew.setName(scaffClassNameNew_Unqualified);
+
+    	//fixes the initializeClasses method
+    	final RenamerVisitor v = new RenamerVisitor(scaffClassName_Unqualified, scaffClassNameNew_Unqualified);
+    	cuTestScaffNew.accept(v, null);
+    	    	
+    	return cuTestScaffNew;
+    }
+    
+    private static void patchCompilationUnitTestClassSuperclass(ClassOrInterfaceDeclaration cdeclTestClassNew, String scaffClassName, String scaffClassNameNew) {
+    	final String scaffClassName_Unqualified = scaffClassName.substring(scaffClassName.lastIndexOf('/') + 1);
+    	final String scaffClassNameNew_Unqualified = scaffClassNameNew.substring(scaffClassNameNew.lastIndexOf('/') + 1);
+    	
+    	//patches the "extends" declaration of the test class
+    	//declaration to point to the new scaffolding class declaration
+    	final NodeList<ClassOrInterfaceType> testClassExtensions = cdeclTestClassNew.getExtendedTypes();
+    	for (Iterator<ClassOrInterfaceType> it = testClassExtensions.iterator(); it.hasNext(); ) {
+    		final ClassOrInterfaceType testClassExtension = it.next();
+    		if (testClassExtension.getName().asString().equals(scaffClassName_Unqualified)) {
+    			it.remove();
+    			break;
+    		}
+    	}
+    	cdeclTestClassNew.addExtendedType(scaffClassNameNew_Unqualified);
+    }
+    
+    private static void writeCompilationUnits(Options o, String testClassNameNew, CompilationUnit cuTestClassNew, String scaffClassNameNew, CompilationUnit cuTestScaffNew) 
+    throws IOFileCreationException {
+        final Path testFileNew = o.getTmpTestsDirectoryPath().resolve(testClassNameNew + ".java");
+        try {
+            Files.createDirectories(testFileNew.getParent());
+        } catch (IOException e) {
+            throw new IOFileCreationException(e, testFileNew.getParent());
+        }
+        try (final BufferedWriter w = Files.newBufferedWriter(testFileNew)) {
+            w.write(cuTestClassNew.toString());
+        } catch (IOException e) {
+            throw new IOFileCreationException(e, testFileNew);
+        }
+        final Path scaffFileNew;
+        if (o.getEvosuiteNoDependency()) {
+            scaffFileNew = null; //nothing else to write
+        } else {
+            scaffFileNew = o.getTmpTestsDirectoryPath().resolve(scaffClassNameNew + ".java");
+            try (final BufferedWriter w = Files.newBufferedWriter(scaffFileNew)) {
+                w.write(cuTestScaffNew.toString());
+            } catch (IOException e) {
+                throw new IOFileCreationException(e, testFileNew);
+            }
+        }
+    }
     
     private static final class RenamerVisitor extends ModifierVisitor<Void> {
         private final String from, to;
