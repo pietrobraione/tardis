@@ -3,7 +3,6 @@ package tardis.implementation.evosuite;
 import static jbse.bc.ClassLoaders.CLASSLOADER_APP;
 import static tardis.implementation.common.Util.getTargets;
 import static tardis.implementation.common.Util.stream;
-import static tardis.implementation.evosuite.SeedSplitter.splitEvosuiteSeed;
 
 import java.io.BufferedOutputStream;
 import java.io.BufferedWriter;
@@ -333,7 +332,8 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
     	//splits output
     	final List<JBSEResult> splitItems;
     	try {
-    		splitItems = splitEvosuiteSeed(this.o, this.visibleTargetMethods, testCountInitial, items.get(0).getTargetClassName());
+    		final SeedSplitter seedSplitter = new SeedSplitter(this.o, items.get(0).getTargetClassName(), this.visibleTargetMethods, testCountInitial);
+    		splitItems = seedSplitter.split();
     	} catch (NoTestFileException e) {
     		LOGGER.error("Failed to split the seed test case %s: the generated test class file does not seem to exist (perhaps EvoSuite must be blamed)", e.file.toAbsolutePath().toString());
     		return;
