@@ -65,107 +65,25 @@ public final class Util {
     }
 
     /**
-     * Checks whether a bytecode is a jump bytecode.
+     * Checks whether a bytecode is a load bytecode
+     * (only for strings).
      * 
-     * @param currentBytecode a {@code byte}.
-     * @return {@code true} iff {@code currentBytecode} jumps.
+     * @param bytecode a {@code byte}.
+     * @return {@code true} iff {@code bytecode} is a load bytecode
+     *         that may be used to load a reference to a string.
      */
-    public static boolean bytecodeJump(byte currentBytecode) {
-        return (currentBytecode == Opcodes.OP_IF_ACMPEQ ||
-        currentBytecode == Opcodes.OP_IF_ACMPNE ||	
-        currentBytecode == Opcodes.OP_IFNONNULL ||	
-        currentBytecode == Opcodes.OP_IFNULL ||	
-        currentBytecode == Opcodes.OP_IFEQ ||
-        currentBytecode == Opcodes.OP_IFGE ||	
-        currentBytecode == Opcodes.OP_IFGT ||	
-        currentBytecode == Opcodes.OP_IFLE ||	
-        currentBytecode == Opcodes.OP_IFLT ||	
-        currentBytecode == Opcodes.OP_IFNE ||	
-        currentBytecode == Opcodes.OP_IF_ICMPEQ ||	
-        currentBytecode == Opcodes.OP_IF_ICMPGE ||	
-        currentBytecode == Opcodes.OP_IF_ICMPGT ||	
-        currentBytecode == Opcodes.OP_IF_ICMPLE ||	
-        currentBytecode == Opcodes.OP_IF_ICMPLT ||	
-        currentBytecode == Opcodes.OP_IF_ICMPNE ||	
-        currentBytecode == Opcodes.OP_LOOKUPSWITCH ||	
-        currentBytecode == Opcodes.OP_TABLESWITCH);
-
-    }
-
-    /**
-     * Checks whether a bytecode is an invoke* bytecode.
-     * 
-     * @param currentBytecode a {@code byte}.
-     * @return {@code true} iff {@code currentBytecode} is an invoke*.
-     */
-    static boolean bytecodeInvoke(byte currentBytecode) {
-        return (currentBytecode == Opcodes.OP_INVOKEVIRTUAL ||
-        currentBytecode == Opcodes.OP_INVOKESTATIC ||
-        currentBytecode == Opcodes.OP_INVOKEINTERFACE ||
-        currentBytecode == Opcodes.OP_INVOKESPECIAL ||
-        currentBytecode == Opcodes.OP_INVOKEDYNAMIC ||
-        currentBytecode == Opcodes.OP_INVOKEHANDLE);
-    }
-
-    /**
-     * Checks whether a bytecode is branching.
-     * 
-     * @param currentBytecode a {@code byte}.
-     * @return {@code true} iff {@code currentBytecode} is branching.
-     */
-    public static boolean bytecodeBranch(byte currentBytecode) {
-        return (bytecodeJump(currentBytecode) ||
-        bytecodeInvoke(currentBytecode) ||
-        currentBytecode == Opcodes.OP_ALOAD ||
-        currentBytecode == Opcodes.OP_ALOAD_0 ||
-        currentBytecode == Opcodes.OP_ALOAD_1 ||
-        currentBytecode == Opcodes.OP_ALOAD_2 ||
-        currentBytecode == Opcodes.OP_ALOAD_3 ||
-        currentBytecode == Opcodes.OP_IALOAD ||
-        currentBytecode == Opcodes.OP_LALOAD ||
-        currentBytecode == Opcodes.OP_FALOAD ||
-        currentBytecode == Opcodes.OP_DALOAD ||
-        currentBytecode == Opcodes.OP_AALOAD ||
-        currentBytecode == Opcodes.OP_BALOAD ||
-        currentBytecode == Opcodes.OP_CALOAD ||
-        currentBytecode == Opcodes.OP_SALOAD ||
-        currentBytecode == Opcodes.OP_IASTORE ||
-        currentBytecode == Opcodes.OP_LASTORE ||
-        currentBytecode == Opcodes.OP_FASTORE ||
-        currentBytecode == Opcodes.OP_DASTORE ||
-        currentBytecode == Opcodes.OP_AASTORE ||
-        currentBytecode == Opcodes.OP_BASTORE ||
-        currentBytecode == Opcodes.OP_CASTORE ||
-        currentBytecode == Opcodes.OP_LCMP ||
-        currentBytecode == Opcodes.OP_FCMPL ||
-        currentBytecode == Opcodes.OP_FCMPG ||
-        currentBytecode == Opcodes.OP_DCMPL ||
-        currentBytecode == Opcodes.OP_DCMPG ||
-        currentBytecode == Opcodes.OP_GETSTATIC ||
-        currentBytecode == Opcodes.OP_GETFIELD ||
-        currentBytecode == Opcodes.OP_NEWARRAY ||
-        currentBytecode == Opcodes.OP_ANEWARRAY ||
-        currentBytecode == Opcodes.OP_MULTIANEWARRAY);
-    }
-
-    /**
-     * Checks whether a bytecode is a load bytecode.
-     * 
-     * @param currentBytecode a {@code byte}.
-     * @return {@code true} iff {@code currentBytecode} is a load bytecode.
-     */
-    public static boolean bytecodeLoad(byte currentBytecode) {
-        return (currentBytecode == Opcodes.OP_LDC ||
-        currentBytecode == Opcodes.OP_LDC_W ||
-        currentBytecode == Opcodes.OP_LDC2_W || 
-        currentBytecode == Opcodes.OP_ALOAD || 
-        currentBytecode == Opcodes.OP_ALOAD_0 || 
-        currentBytecode == Opcodes.OP_ALOAD_1 || 
-        currentBytecode == Opcodes.OP_ALOAD_2 || 
-        currentBytecode == Opcodes.OP_ALOAD_3 || 
-        currentBytecode == Opcodes.OP_AALOAD || 
-        currentBytecode == Opcodes.OP_GETSTATIC ||
-        currentBytecode == Opcodes.OP_GETFIELD);
+    public static boolean isBytecodeLoad(byte bytecode) {
+        return (bytecode == Opcodes.OP_LDC ||
+        bytecode == Opcodes.OP_LDC_W ||
+        bytecode == Opcodes.OP_LDC2_W || 
+        bytecode == Opcodes.OP_ALOAD || 
+        bytecode == Opcodes.OP_ALOAD_0 || 
+        bytecode == Opcodes.OP_ALOAD_1 || 
+        bytecode == Opcodes.OP_ALOAD_2 || 
+        bytecode == Opcodes.OP_ALOAD_3 || 
+        bytecode == Opcodes.OP_AALOAD || 
+        bytecode == Opcodes.OP_GETSTATIC ||
+        bytecode == Opcodes.OP_GETFIELD);
     }
 
     /**

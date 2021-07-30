@@ -1,10 +1,10 @@
 package tardis.implementation.jbse;
 
 import static jbse.algo.Util.valueString;
+import static jbse.bc.Opcodes.isBytecodeBranch;
+import static jbse.bc.Opcodes.isBytecodeJump;
 import static jbse.bc.Signatures.JAVA_STRING;
-import static tardis.implementation.common.Util.bytecodeBranch;
-import static tardis.implementation.common.Util.bytecodeJump;
-import static tardis.implementation.common.Util.bytecodeLoad;
+import static tardis.implementation.common.Util.isBytecodeLoad;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -144,6 +144,14 @@ final class RunnerPreFrontier implements AutoCloseable {
         @Override
         public boolean atStepPre() {
             final State currentState = getEngine().getCurrentState();
+
+            //steps guidance
+            try {
+            	RunnerPreFrontier.this.guid.preStep(currentState);
+            } catch (GuidanceException e) {
+                throw new RuntimeException(e); //TODO better exception!
+            }
+            
             if (currentState.phase() != Phase.PRE_INITIAL) {
                 try {
                     final int currentProgramCounter = currentState.getCurrentProgramCounter();
@@ -155,20 +163,20 @@ final class RunnerPreFrontier implements AutoCloseable {
                     }
 
                     //if at a jump bytecode, saves the start program counter
-                    RunnerPreFrontier.this.atJump = bytecodeJump(currentInstruction);
+                    RunnerPreFrontier.this.atJump = isBytecodeJump(currentInstruction);
                     if (RunnerPreFrontier.this.atJump) {
                     	RunnerPreFrontier.this.jumpPC = currentProgramCounter;
                     }
 
                     //if at a load constant bytecode, saves the stack size
-                    RunnerPreFrontier.this.atLoadConstant = bytecodeLoad(currentInstruction);
+                    RunnerPreFrontier.this.atLoadConstant = isBytecodeLoad(currentInstruction);
                     if (RunnerPreFrontier.this.atLoadConstant) {
                     	RunnerPreFrontier.this.loadConstantStackSize = currentState.getStackSize();
                     }
                     
                     //if at a symbolic branch bytecode, and at postFrontierDepth - 1,
                     //saves the pre-state
-                	if (bytecodeBranch(currentInstruction) && currentState.getDepth() == RunnerPreFrontier.this.postFrontierDepth - 1) {
+                	if (isBytecodeBranch(currentInstruction) && currentState.getDepth() == RunnerPreFrontier.this.postFrontierDepth - 1) {
                         RunnerPreFrontier.this.preFrontierState = currentState.clone();
                 	}
                 } catch (ThreadStackEmptyException | FrozenStateException e) {
@@ -192,7 +200,7 @@ final class RunnerPreFrontier implements AutoCloseable {
 
             //steps guidance
             try {
-            	RunnerPreFrontier.this.guid.step(currentState);
+            	RunnerPreFrontier.this.guid.postStep(currentState);
             } catch (GuidanceException e) {
                 throw new RuntimeException(e); //TODO better exception!
             }

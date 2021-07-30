@@ -2,10 +2,10 @@ package tardis.implementation.jbse;
 
 import static jbse.algo.Util.valueString;
 import static jbse.bc.ClassLoaders.CLASSLOADER_BOOT;
+import static jbse.bc.Opcodes.isBytecodeJump;
 import static jbse.bc.Signatures.JAVA_OBJECT;
 import static jbse.bc.Signatures.JAVA_STRING;
-import static tardis.implementation.common.Util.bytecodeJump;
-import static tardis.implementation.common.Util.bytecodeLoad;
+import static tardis.implementation.common.Util.isBytecodeLoad;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -151,13 +151,13 @@ final class RunnerPostFrontier implements AutoCloseable {
                     final byte currentInstruction = currentState.getInstruction();
 
                     //if at a jump bytecode, saves the start program counter
-                    RunnerPostFrontier.this.atJump = bytecodeJump(currentInstruction);
+                    RunnerPostFrontier.this.atJump = isBytecodeJump(currentInstruction);
                     if (RunnerPostFrontier.this.atJump) {
                     	RunnerPostFrontier.this.jumpPC = currentState.getCurrentProgramCounter();
                     }
 
                     //if at a load constant bytecode, saves the stack size
-                    RunnerPostFrontier.this.atLoadConstant = bytecodeLoad(currentInstruction);
+                    RunnerPostFrontier.this.atLoadConstant = isBytecodeLoad(currentInstruction);
                     if (RunnerPostFrontier.this.atLoadConstant) {
                     	RunnerPostFrontier.this.loadConstantStackSize = currentState.getStackSize();
                     }
