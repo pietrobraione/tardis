@@ -323,7 +323,7 @@ public final class Util {
 
 	public static String stringifyPostFrontierPathCondition(JBSEResult item) {
 	    final List<Clause> pathCondition = (item.getPostFrontierState() == null ? null : item.getPostFrontierState().getPathCondition());
-	    final List<String> forbiddenExpansions = item.getForbiddenExpansions();
+	    final Set<String> forbiddenExpansions = item.getForbiddenExpansions();
 	    final String excluded = ((forbiddenExpansions == null || forbiddenExpansions.isEmpty()) ? "" : (" excluded " + forbiddenExpansions.stream().collect(Collectors.joining(", "))));
 	    final String retVal = (pathCondition == null ? "true" : (stringifyPathCondition(shorten(pathCondition)) + excluded));
 	    return retVal;

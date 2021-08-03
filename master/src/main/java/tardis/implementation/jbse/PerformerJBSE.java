@@ -9,8 +9,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -65,8 +65,9 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
     private final TreePath treePath;
     private final ConcurrentHashMap<String, State> initialStateCache = new ConcurrentHashMap<>();
     private final AtomicLong pathCoverage = new AtomicLong(0);
-    private final ConcurrentHashMap<ReferenceSymbolic, JBSEResult> freshObjectsJBSEResults = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<ReferenceSymbolic, List<String>> freshObjectsExpansions = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<MethodPathConditon, JBSEResult> freshObjectsJBSEResults = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<MethodPathConditon, List<String>> freshObjectsBranchesPostFrontier = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<MethodPathConditon, Set<String>> freshObjectsExpansions = new ConcurrentHashMap<>();
 
     public PerformerJBSE(Options o, InputBuffer<EvosuiteResult> in, JBSEResultInputOutputBuffer out, TreePath treePath) {
         super(in, out, o.getNumOfThreadsJBSE(), 1, o.getThrottleFactorJBSE(), o.getGlobalTimeBudgetDuration(), o.getGlobalTimeBudgetUnit());
@@ -361,9 +362,9 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             //if the last clause is an expands path condition, saves the expanded 
             //reference data so it may generate fresh objects in the future
             if (!pathCondition.isEmpty() && (pathCondition.get(pathCondition.size() - 1) instanceof ClauseAssumeExpands)) {
-            	final ClauseAssumeExpands clauseLast = (ClauseAssumeExpands) pathCondition.get(pathCondition.size() - 1);
-            	final ReferenceSymbolic clauseLastReference = clauseLast.getReference();
-        		this.freshObjectsJBSEResults.put(clauseLastReference, output);
+        		final MethodPathConditon methodPathCondition = new MethodPathConditon(entryPoint, pathCondition);
+        		this.freshObjectsJBSEResults.put(methodPathCondition, output);
+        		this.freshObjectsBranchesPostFrontier.put(methodPathCondition, branchesPostFrontier);
             }
             
             //emits the output job in the output buffer
@@ -379,6 +380,7 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
     InvalidClassFileFactoryClassException, NonexistingObservedVariablesException, ClasspathException, 
     CannotBacktrackException, CannotManageStateException, ThreadStackEmptyException, ContradictionException, 
     EngineStuckException, FailureException {
+    	final String entryPoint = item.getTargetMethodSignature();
     	final TestCase tc = item.getTestCase();
     	final State postFrontierState = item.getPostFrontierState();
     	
@@ -393,10 +395,11 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
     		final ReferenceSymbolic clauseLastReference = clauseLast.getReference();
 
     		//adds the current test case expansion to the set of the seen expansions 
-    		if (!this.freshObjectsExpansions.containsKey(clauseLastReference)) {
-    			this.freshObjectsExpansions.put(clauseLastReference, Collections.synchronizedList(new ArrayList<>()));
+    		final MethodPathConditon methodPathCondition = new MethodPathConditon(entryPoint, pathConditionFinal);
+    		if (!this.freshObjectsExpansions.containsKey(methodPathCondition)) {
+    			this.freshObjectsExpansions.put(methodPathCondition, Collections.synchronizedSet(new HashSet<>()));
     		}
-    		final List<String> expansions = this.freshObjectsExpansions.get(clauseLastReference);
+    		final Set<String> expansions = this.freshObjectsExpansions.get(methodPathCondition);
     		final Objekt objekt = stateFinal.getObject(clauseLastReference);
     		expansions.add(objekt.getType().getClassName());
 
@@ -404,9 +407,10 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 			final State statePostFrontier;
 			final boolean atJump;
 			final String targetBranch;
-    		if (this.freshObjectsJBSEResults.containsKey(clauseLastReference)) {
+			final List<String> branchesPostFrontier;
+    		if (this.freshObjectsJBSEResults.containsKey(methodPathCondition)) {
     			//gets the previous JBSE result
-    			final JBSEResult jbseResult = this.freshObjectsJBSEResults.get(clauseLastReference);
+    			final JBSEResult jbseResult = this.freshObjectsJBSEResults.get(methodPathCondition);
     			final String targetMethodClassName = jbseResult.getTargetMethodClassName();
     			final String targetMethodDescriptor = jbseResult.getTargetMethodDescriptor();
     			final String targetMethodName = jbseResult.getTargetMethodName();
@@ -423,6 +427,7 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
     			               stateInitial, statePreFrontier, statePostFrontier, atJump,
     			               targetBranch, stringLiterals, stringOthers, depth, 
     			               expansions);
+    			branchesPostFrontier = this.freshObjectsBranchesPostFrontier.get(methodPathCondition);
     		} else {
     			//the current test is a seed test, therefore there are
     			//no previous JBSE results: builds a JBSE result from 
@@ -465,9 +470,26 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
     			               stateInitial, statePreFrontier, statePostFrontier, atJump,
     			               targetBranch, stringLiterals, stringOthers, depth, 
     			               expansions);
+    			branchesPostFrontier = rp.getBranchesPostFrontier();
     		}
+    		
+    		final List<Clause> pathCondition = statePostFrontier.getPathCondition();
+            synchronized (this.treePath) {
+            	if (this.treePath.containsPath(entryPoint, pathCondition, false)) {
+            		return;
+            	}
+            	final ClassHierarchy hier = statePostFrontier.getClassHierarchy();
+            	if (!pathCondition.isEmpty() && assumptionViolated(hier, pathCondition.get(pathCondition.size() - 1))) {
+            		LOGGER.info("From test case %s skipping path condition due to violated assumption %s on initialMap in path condition %s", tc.getClassName(), pathCondition.get(pathCondition.size() - 1), stringifyPathCondition(shorten(pathCondition)));
+            		return;
+            	}
+
+            	//inserts the generated path in the treePath
+            	this.treePath.insertPath(entryPoint, pathCondition, rp.getCoverage(), branchesPostFrontier, false);
+            }
+    		
     		this.out.add(output);
-    		LOGGER.info("From test case %s generated path condition %s%s%s", tc.getClassName(), stringifyPathCondition(shorten(statePostFrontier.getPathCondition())), (expansions.isEmpty() ? "" : (" excluded " + expansions.stream().collect(Collectors.joining(", ")))),  (atJump ? (" aimed at branch " + targetBranch) : ""));
+    		LOGGER.info("From test case %s generated path condition %s%s%s", tc.getClassName(), stringifyPathCondition(shorten(pathCondition)), (expansions.isEmpty() ? "" : (" excluded " + expansions.stream().collect(Collectors.joining(", ")))),  (atJump ? (" aimed at branch " + targetBranch) : ""));
         }
     }
 }

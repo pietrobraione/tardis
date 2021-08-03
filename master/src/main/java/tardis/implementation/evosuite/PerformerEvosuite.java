@@ -607,7 +607,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
      *         that must contain it, or the compilation log file.
      * @throws CompilationFailedWrapperException if the compilation of the wrapper class fails.
      */
-    private void emitAndCompileEvoSuiteWrapper(int testCount, State initialState, State finalState, Map<Long, String> stringLiterals, Set<Long> stringOthers, List<String> forbiddenExpansions) 
+    private void emitAndCompileEvoSuiteWrapper(int testCount, State initialState, State finalState, Map<Long, String> stringLiterals, Set<Long> stringOthers, Set<String> forbiddenExpansions) 
     throws FrozenStateException, IOFileCreationException, CompilationFailedWrapperException {
         final StateFormatterSushiPathCondition fmt = new StateFormatterSushiPathCondition(testCount, () -> initialState, true);
         fmt.setStringsConstant(stringLiterals);

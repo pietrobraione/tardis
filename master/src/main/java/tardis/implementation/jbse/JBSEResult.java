@@ -96,11 +96,11 @@ public final class JBSEResult {
     private final int depth;
     
     /**
-     * The list of the class names of the expansions that are forbidden. 
+     * The set of the class names of the expansions that are forbidden. 
      * Used only if the last clause in the path condition of {@link #postState}
      * is an expands clause.
      */
-    private final ArrayList<String> forbiddenExpansions;
+    private final HashSet<String> forbiddenExpansions;
 
     /**
      * Constructor for seed item (target method).
@@ -226,7 +226,7 @@ public final class JBSEResult {
      */
     public JBSEResult(String targetMethodClassName, String targetMethodDescriptor, String targetMethodName, State initialState, 
                       State preState, State finalState, boolean atJump, String targetBranch, Map<Long, String> stringLiterals, 
-                      Set<Long> stringOthers, int depth, List<String> forbiddenExpansions) {
+                      Set<Long> stringOthers, int depth, Set<String> forbiddenExpansions) {
         this.targetClassName = null;
         this.targetMethodClassName = targetMethodClassName;
         this.targetMethodDescriptor = targetMethodDescriptor;
@@ -239,7 +239,7 @@ public final class JBSEResult {
         this.stringLiterals = new HashMap<>(stringLiterals); //safety copy
         this.stringOthers = new HashSet<>(stringOthers);     //safety copy
         this.depth = depth;
-        this.forbiddenExpansions = new ArrayList<>(forbiddenExpansions); //safety copy
+        this.forbiddenExpansions = new HashSet<>(forbiddenExpansions); //safety copy
     }
     
     /**
@@ -406,9 +406,9 @@ public final class JBSEResult {
      * Returns the list of the class names of the 
      * expansions that are forbidden.
      * 
-     * @return a {@link List}{@code <}{@link String}{@code >}.
+     * @return a {@link Set}{@code <}{@link String}{@code >}.
      */
-    public List<String> getForbiddenExpansions() {
+    public Set<String> getForbiddenExpansions() {
     	return this.forbiddenExpansions;
     }
 }
