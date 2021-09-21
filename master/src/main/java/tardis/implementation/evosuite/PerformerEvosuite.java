@@ -3,6 +3,7 @@ package tardis.implementation.evosuite;
 import static jbse.bc.ClassLoaders.CLASSLOADER_APP;
 import static tardis.implementation.common.Util.getTargets;
 import static tardis.implementation.common.Util.stream;
+import static tardis.implementation.common.Util.stringifyPostFrontierPathCondition;
 
 import java.io.BufferedOutputStream;
 import java.io.BufferedWriter;
@@ -56,7 +57,6 @@ import tardis.Options;
 import tardis.framework.OutputBuffer;
 import tardis.framework.Performer;
 import tardis.implementation.common.NoJavaCompilerException;
-import tardis.implementation.common.Util;
 import tardis.implementation.data.JBSEResultInputOutputBuffer;
 import tardis.implementation.jbse.JBSEResult;
 
@@ -364,13 +364,13 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
     		try {
     			checkTestCompileAndScheduleJBSE(testCount, item);
     		} catch (NoTestFileException e) {
-    			LOGGER.error("Failed to generate the test case %s for path condition %s: the generated test class file does not seem to exist (perhaps EvoSuite must be blamed)", e.file.toAbsolutePath().toString(), e.pathCondition);
+    			LOGGER.error("Failed to generate the test case %s for post-frontier path condition %s:%s: The generated test class file does not seem to exist (perhaps EvoSuite must be blamed)", e.file.toAbsolutePath().toString(), e.entryPoint, e.pathCondition);
     			//continue
     		} catch (NoTestFileScaffoldingException e) {
-    			LOGGER.error("Failed to generate the test case %s for path condition %s: the generated scaffolding class file does not seem to exist (perhaps EvoSuite must be blamed)", e.file.toAbsolutePath().toString(), e.pathCondition);
+    			LOGGER.error("Failed to generate the test case %s for post-frontier path condition %s:%s: The generated scaffolding class file does not seem to exist (perhaps EvoSuite must be blamed)", e.file.toAbsolutePath().toString(), e.entryPoint, e.pathCondition);
     			//continue
     		} catch (NoTestMethodException e) {
-    			LOGGER.warn("Failed to generate the test case %s for path condition: %s: the generated files does not contain a test method (perhaps EvoSuite must be blamed)", e.file.toAbsolutePath().toString(), e.pathCondition);
+    			LOGGER.warn("Failed to generate the test case %s for post-frontier path condition %s:%s: The generated files does not contain a test method (perhaps EvoSuite must be blamed)", e.file.toAbsolutePath().toString(), e.entryPoint, e.pathCondition);
     			//continue
     		} catch (CompilationFailedTestException e) {
     			LOGGER.error("Internal error: EvoSuite test case %s compilation failed", e.file.toAbsolutePath().toString());
@@ -822,7 +822,6 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
     void checkTestCompileAndScheduleJBSE(int testCount, JBSEResult item) 
     throws NoTestFileException, NoTestFileScaffoldingException, NoTestMethodException, IOFileCreationException, 
     CompilationFailedTestException, CompilationFailedTestScaffoldingException, ClassFileAccessException {
-        
         //checks if EvoSuite generated the files
         final String testCaseClassName = (item.hasTargetMethod() ? item.getTargetMethodClassName() : item.getTargetClassName()) + "_" + testCount + "_Test";
         final Path testCaseScaff = (this.o.getEvosuiteNoDependency() ? null : this.o.getTmpTestsDirectoryPath().resolve(testCaseClassName + "_scaffolding.java"));
@@ -857,11 +856,11 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         try {
             checkTestExists(testCaseClassName);
             final int depth = item.getDepth();
-            LOGGER.info("Generated test case %s, depth: %d, post-frontier path condition: %s", testCaseClassName, depth, Util.stringifyPostFrontierPathCondition(item));
+            LOGGER.info("Generated test case %s, depth: %d, post-frontier path condition: %s:%s", testCaseClassName, depth, item.getTargetMethodSignature(), stringifyPostFrontierPathCondition(item));
             final TestCase newTestCase = new TestCase(testCaseClassName, "()V", "test0", this.o.getTmpTestsDirectoryPath(), (testCaseScaff != null));
-            getOutputBuffer().add(new EvosuiteResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), item.getPostFrontierState(), newTestCase, depth + 1));
+            getOutputBuffer().add(new EvosuiteResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), newTestCase, depth + 1));
         } catch (NoSuchMethodException e) { 
-            throw new NoTestMethodException(testCase, Util.stringifyPostFrontierPathCondition(item));
+            throw new NoTestMethodException(testCase, item.getTargetMethodSignature(), stringifyPostFrontierPathCondition(item));
         } catch (SecurityException | NoClassDefFoundError | ClassNotFoundException e) {
             throw new ClassFileAccessException(e, testCaseClassName);
         }

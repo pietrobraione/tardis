@@ -9,6 +9,7 @@ import java.nio.file.Path;
  */
 final class NoTestFileException extends Exception {
     final Path file;
+	final Object entryPoint;
     final String pathCondition;
     
     /**
@@ -20,10 +21,13 @@ final class NoTestFileException extends Exception {
      * Constructor.
      * 
      * @param file the {@link Path} of the file for the test class.
+     * @param entryPoint the target method signature to which {@code pathCondition} 
+     *        refers as a {@link String}. 
      * @param pathCondition the path condition as a {@link String}.
      */
-    public NoTestFileException(Path file, String pathCondition) {
+    public NoTestFileException(Path file, String entryPoint, String pathCondition) {
         this.file = file;
+        this.entryPoint = entryPoint;
         this.pathCondition = pathCondition;
         
     }
@@ -34,6 +38,6 @@ final class NoTestFileException extends Exception {
      * @param testFile the {@link Path} of the file for the test class.
      */
     public NoTestFileException(Path testFile) {
-        this(testFile, null);
+        this(testFile, null, null);
     }
 }

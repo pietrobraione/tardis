@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import jbse.mem.Clause;
 import jbse.mem.State;
 
 /**
@@ -58,6 +59,13 @@ public final class JBSEResult {
      * {@code null} if this {@link JBSEResult} is a seed item.
      */
     private final State postState;
+    
+    /**
+     * The post-frontier (final) path condition, produced from
+     * {@link #postState}'s path condition, or {@code null}
+     * if this {@link JBSEResult} is a seed item.
+     */
+    private final List<Clause> pathConditionGenerated;
     
     /**
      * Set to {@code true} iff the frontier is a 
@@ -119,6 +127,7 @@ public final class JBSEResult {
         this.initialState = null;
         this.preState = null;
         this.postState = null;
+        this.pathConditionGenerated = null;
         this.atJump = false;
         this.targetBranch = null;
         this.stringLiterals = null;
@@ -140,6 +149,7 @@ public final class JBSEResult {
         this.initialState = null;
         this.preState = null;
         this.postState = null;
+        this.pathConditionGenerated = null;
         this.atJump = false;
         this.targetBranch = null;
         this.stringLiterals = null;
@@ -159,8 +169,11 @@ public final class JBSEResult {
      *        of the target method.
      * @param initialState the initial {@link State} of the path.
      * @param preState the pre-frontier {@link State} of the path.
-     * @param finalState the final (post-frontier) {@link State} 
+     * @param postState the post-frontier (final) {@link State} 
      *        of the path.
+     * @param pathConditionGenerated the post-frontier (final) 
+     *        path condition, produced from
+     *        {@code postState}'s path condition.
      * @param atJump a {@code boolean}, set to {@code true} iff 
      *        the frontier is a jump bytecode.
      * @param targetBranch a {@link String} that identifies the target
@@ -176,7 +189,7 @@ public final class JBSEResult {
      *        to the frontier.
      */
     public JBSEResult(String targetMethodClassName, String targetMethodDescriptor, String targetMethodName, State initialState, 
-                      State preState, State finalState, boolean atJump, String targetBranch, Map<Long, String> stringLiterals, 
+                      State preState, State postState, List<Clause> pathConditionGenerated, boolean atJump, String targetBranch, Map<Long, String> stringLiterals, 
                       Set<Long> stringOthers, int depth) {
         this.targetClassName = null;
         this.targetMethodClassName = targetMethodClassName;
@@ -184,7 +197,8 @@ public final class JBSEResult {
         this.targetMethodName = targetMethodName;
         this.initialState = initialState.clone();
         this.preState = preState.clone();
-        this.postState = finalState.clone();
+        this.postState = postState.clone();
+        this.pathConditionGenerated = new ArrayList<>(pathConditionGenerated); //safety copy
         this.atJump = atJump;
         this.targetBranch = (atJump ? targetBranch : null);
         this.stringLiterals = new HashMap<>(stringLiterals); //safety copy
@@ -204,8 +218,11 @@ public final class JBSEResult {
      *        of the target method.
      * @param initialState the initial {@link State} of the path.
      * @param preState the pre-frontier {@link State} of the path.
-     * @param finalState the final (post-frontier) {@link State} 
+     * @param postState the post-frontier (final) {@link State} 
      *        of the path.
+     * @param pathConditionGenerated the post-frontier (final) 
+     *        path condition, produced from
+     *        {@code postState}'s path condition.
      * @param atJump a {@code boolean}, set to {@code true} iff 
      *        the frontier is a jump bytecode.
      * @param targetBranch a {@link String} that identifies the target
@@ -225,7 +242,7 @@ public final class JBSEResult {
      *        is an expands clause.
      */
     public JBSEResult(String targetMethodClassName, String targetMethodDescriptor, String targetMethodName, State initialState, 
-                      State preState, State finalState, boolean atJump, String targetBranch, Map<Long, String> stringLiterals, 
+                      State preState, State postState, List<Clause> pathConditionGenerated, boolean atJump, String targetBranch, Map<Long, String> stringLiterals, 
                       Set<Long> stringOthers, int depth, Set<String> forbiddenExpansions) {
         this.targetClassName = null;
         this.targetMethodClassName = targetMethodClassName;
@@ -233,7 +250,8 @@ public final class JBSEResult {
         this.targetMethodName = targetMethodName;
         this.initialState = initialState.clone();
         this.preState = preState.clone();
-        this.postState = finalState.clone();
+        this.postState = postState.clone();
+        this.pathConditionGenerated = new ArrayList<>(pathConditionGenerated); //safety copy
         this.atJump = atJump;
         this.targetBranch = (atJump ? targetBranch : null);
         this.stringLiterals = new HashMap<>(stringLiterals); //safety copy
@@ -345,6 +363,18 @@ public final class JBSEResult {
      */
     public State getPostFrontierState() {
         return this.postState;
+    }
+    
+    /**
+     * Gets the post-frontier (final) 
+     * path condition, produced from
+     * the post-frontier state's path 
+     * condition.
+     * 
+     * @return a {@link List}{@code <}{@link Clause}{@code >}.
+     */
+    public List<Clause> getPathConditionGenerated() {
+    	return this.pathConditionGenerated;
     }
 
     /**

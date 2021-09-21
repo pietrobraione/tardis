@@ -200,7 +200,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
     @Override
     public synchronized boolean add(JBSEResult item) {
     	final String entryPoint = item.getTargetMethodSignature();
-        final List<Clause> pathCondition = item.getPostFrontierState().getPathCondition();
+        final List<Clause> pathCondition = item.getPathConditionGenerated();
         if (this.useIndexImprovability) {
         	updateIndexImprovability(entryPoint, pathCondition);
         }
@@ -323,7 +323,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
         synchronized (this.treePath) {
             forAllQueuedItemsToUpdateImprovability((queueNumber, bufferedJBSEResult) -> {
             	final String entryPoint = bufferedJBSEResult.getTargetMethodSignature();
-                final List<Clause> pathCondition = bufferedJBSEResult.getPostFrontierState().getPathCondition();
+                final List<Clause> pathCondition = bufferedJBSEResult.getPathConditionGenerated();
                 updateIndexImprovability(entryPoint, pathCondition);
                 final int queueNumberNew = calculateQueueNumber(entryPoint, pathCondition);
                 if (queueNumberNew != queueNumber) {
@@ -343,7 +343,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
         synchronized (this.treePath) {
             forAllQueuedItemsToUpdateNovelty((queueNumber, bufferedJBSEResult) -> {
             	final String entryPoint = bufferedJBSEResult.getTargetMethodSignature();
-                final List<Clause> pathCondition = bufferedJBSEResult.getPostFrontierState().getPathCondition();
+                final List<Clause> pathCondition = bufferedJBSEResult.getPathConditionGenerated();
                 updateIndexNovelty(entryPoint, pathCondition);
                 final int queueNumberNew = calculateQueueNumber(entryPoint, pathCondition);
                 if (queueNumberNew != queueNumber) {
@@ -365,7 +365,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
             if (this.trainingSetSize >= this.trainingSetMinimumThreshold) {
                 forAllQueuedItems((queueNumber, bufferedJBSEResult) -> {
                 	final String entryPoint = bufferedJBSEResult.getTargetMethodSignature();
-                    final List<Clause> pathCondition = bufferedJBSEResult.getPostFrontierState().getPathCondition();
+                    final List<Clause> pathCondition = bufferedJBSEResult.getPathConditionGenerated();
                     updateIndexInfeasibility(entryPoint, pathCondition);
                     final int queueNumberNew = calculateQueueNumber(entryPoint, pathCondition);
                     if (queueNumberNew != queueNumber) {
@@ -586,7 +586,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
     private void forAllQueuedItemsToUpdateImprovability(BiConsumer<Integer, JBSEResult> toDo) {
         forAllQueuedItems((queue, bufferedJBSEResult) -> {
         	final String entryPoint = bufferedJBSEResult.getTargetMethodSignature();
-            final List<Clause> pathCondition = bufferedJBSEResult.getPostFrontierState().getPathCondition();
+            final List<Clause> pathCondition = bufferedJBSEResult.getPathConditionGenerated();
             final Set<String> toCompareBranches = this.treePath.getBranchesNeighbor(entryPoint, pathCondition);
             if (!Collections.disjoint(toCompareBranches, this.coverageSetImprovability)) {
                 toDo.accept(queue, bufferedJBSEResult);
@@ -597,7 +597,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
     private void forAllQueuedItemsToUpdateNovelty(BiConsumer<Integer, JBSEResult> toDo) {
         forAllQueuedItems((queue, bufferedJBSEResult) -> {
         	final String entryPoint = bufferedJBSEResult.getTargetMethodSignature();
-            final List<Clause> pathCondition = bufferedJBSEResult.getPostFrontierState().getPathCondition();
+            final List<Clause> pathCondition = bufferedJBSEResult.getPathConditionGenerated();
             final Set<String> toCompareBranches = this.treePath.getBranchesCovered(entryPoint, pathCondition);
             if (!Collections.disjoint(toCompareBranches, this.coverageSetNovelty)) {
                 toDo.accept(queue, bufferedJBSEResult);

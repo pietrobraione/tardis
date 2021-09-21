@@ -1,7 +1,7 @@
 package tardis.implementation.data;
 
 import static tardis.implementation.common.Util.shorten;
-import static tardis.implementation.common.Util.stringifyPathCondition;
+import static tardis.implementation.common.Util.stringifyTestPathCondition;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -41,7 +41,7 @@ import jbse.val.WideningConversion;
 final class SlicingManager {
     static String[][] slice(List<Clause> path) {
         final Object[] clauseArray = shorten(path).toArray();
-        final String pathConditionToString = stringifyPathCondition(shorten(path));
+        final String pathConditionToString = stringifyTestPathCondition(path);
         //split pc clauses into array
         final String[] generalArray = pathConditionToString.split(" && ");
         final String[] specificArray = pathConditionToString.split(" && ");

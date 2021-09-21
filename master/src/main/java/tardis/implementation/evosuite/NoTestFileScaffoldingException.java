@@ -9,6 +9,7 @@ import java.nio.file.Path;
  */
 final class NoTestFileScaffoldingException extends Exception {
     final Path file;
+	final Object entryPoint;
     final String pathCondition;
    
     /**
@@ -20,10 +21,13 @@ final class NoTestFileScaffoldingException extends Exception {
      * Constructor.
      * 
      * @param file the {@link Path} of the file for the scaffolding class.
+     * @param entryPoint the target method signature to which {@code pathCondition} 
+     *        refers as a {@link String}. 
      * @param pathCondition the path condition as a {@link String}.
      */
-    public NoTestFileScaffoldingException(Path file, String pathCondition) {
+    public NoTestFileScaffoldingException(Path file, String entryPoint, String pathCondition) {
         this.file = file;
+        this.entryPoint = entryPoint;
         this.pathCondition = pathCondition;
     }
     
@@ -33,6 +37,6 @@ final class NoTestFileScaffoldingException extends Exception {
      * @param scaffFile the {@link Path} of the file for the scaffolding class.
      */
     public NoTestFileScaffoldingException(Path scaffFile) {
-        this(scaffFile, null);
+        this(scaffFile, null, null);
     }
 }

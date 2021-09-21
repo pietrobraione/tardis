@@ -93,13 +93,13 @@ final class TestDetector implements Runnable {
                     try {
                         this.performerEvosuite.checkTestCompileAndScheduleJBSE(testCount, item);
                     } catch (NoTestFileException e) {
-                        LOGGER.error("Failed to generate the test case %s for path condition %s: the generated test class file does not seem to exist (perhaps EvoSuite must be blamed)", e.file.toAbsolutePath().toString(), e.pathCondition);
+                        LOGGER.error("Failed to generate the test case %s for post-frontier path condition %s:%s: the generated test class file does not seem to exist (perhaps EvoSuite must be blamed)", e.file.toAbsolutePath().toString(), e.entryPoint, e.pathCondition);
                         //continue
                     } catch (NoTestFileScaffoldingException e) {
-                        LOGGER.error("Failed to generate the test case %s for path condition %s: the generated scaffolding class file does not seem to exist (perhaps EvoSuite must be blamed)", e.file.toAbsolutePath().toString(), e.pathCondition);
+                        LOGGER.error("Failed to generate the test case %s for post-frontier path condition %s:%s: the generated scaffolding class file does not seem to exist (perhaps EvoSuite must be blamed)", e.file.toAbsolutePath().toString(), e.entryPoint, e.pathCondition);
                         //continue
                     } catch (NoTestMethodException e) {
-                        LOGGER.warn("Failed to generate the test case %s for path condition: %s: the generated files does not contain a test method (perhaps EvoSuite must be blamed)", e.file.toAbsolutePath().toString(), e.pathCondition);
+                        LOGGER.warn("Failed to generate the test case %s for post-frontier path condition %s:%s: the generated files does not contain a test method (perhaps EvoSuite must be blamed)", e.file.toAbsolutePath().toString(), e.entryPoint, e.pathCondition);
                         //continue
                     } catch (CompilationFailedTestException e) {
                         LOGGER.error("Internal error: EvoSuite test case %s compilation failed", e.file.toAbsolutePath().toString());
@@ -152,11 +152,11 @@ final class TestDetector implements Runnable {
         for (JBSEResult item : this.items) {
             if (!generated.contains(testCount)) {
                 //logs the items whose test cases were not generated
-                LOGGER.info("Failed to generate a test case for post-frontier path condition: %s, log file: %s, wrapper: EvoSuiteWrapper_%d", stringifyPostFrontierPathCondition(item), this.evosuiteLogFilePath.toString(), testCount);
+                LOGGER.info("Failed to generate a test case for post-frontier path condition %s:%s, log file: %s, wrapper: EvoSuiteWrapper_%d", item.getTargetMethodSignature(), stringifyPostFrontierPathCondition(item), this.evosuiteLogFilePath.toString(), testCount);
                 
                 //learns for update of indices
                 if (this.o.getUseIndexInfeasibility() && item.getPostFrontierState() != null) { //NB: item.getFinalState() == null for seed items when target is method
-                	this.in.learnPathConditionForIndexInfeasibility(item.getTargetMethodSignature(), item.getPostFrontierState().getPathCondition(), false);
+                	this.in.learnPathConditionForIndexInfeasibility(item.getTargetMethodSignature(), item.getPathConditionGenerated(), false);
                 }
 
                 //TODO possibly lazier updates of index

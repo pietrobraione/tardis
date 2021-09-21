@@ -1,14 +1,16 @@
 package tardis.implementation.jbse;
 
-import static jbse.apps.run.JAVA_MAP_Utils.assumptionViolated;
+import static jbse.apps.run.JAVA_MAP_Utils.mapModelAssumptionViolated;
 import static tardis.implementation.common.Util.filterOnPattern;
 import static tardis.implementation.common.Util.shorten;
-import static tardis.implementation.common.Util.stringifyPathCondition;
+import static tardis.implementation.common.Util.stringifyPostFrontierPathCondition;
+import static tardis.implementation.common.Util.stringifyTestPathCondition;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -16,7 +18,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.stream.Collectors;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -26,6 +27,7 @@ import jbse.apps.run.UninterpretedNoContextException;
 import jbse.bc.ClassHierarchy;
 import jbse.bc.exc.InvalidClassFileFactoryClassException;
 import jbse.common.exc.ClasspathException;
+import jbse.common.exc.InvalidInputException;
 import jbse.dec.exc.DecisionException;
 import jbse.jvm.exc.CannotBacktrackException;
 import jbse.jvm.exc.CannotBuildEngineException;
@@ -35,7 +37,8 @@ import jbse.jvm.exc.InitializationException;
 import jbse.jvm.exc.NonexistingObservedVariablesException;
 import jbse.mem.Clause;
 import jbse.mem.ClauseAssumeExpands;
-import jbse.mem.Objekt;
+import jbse.mem.ClauseAssumeReferenceSymbolic;
+import jbse.mem.HeapObjekt;
 import jbse.mem.State;
 import jbse.mem.exc.ContradictionException;
 import jbse.mem.exc.FrozenStateException;
@@ -65,8 +68,6 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
     private final TreePath treePath;
     private final ConcurrentHashMap<String, State> initialStateCache = new ConcurrentHashMap<>();
     private final AtomicLong pathCoverage = new AtomicLong(0);
-    private final ConcurrentHashMap<MethodPathConditon, JBSEResult> freshObjectsJBSEResults = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<MethodPathConditon, List<String>> freshObjectsBranchesPostFrontier = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<MethodPathConditon, Set<String>> freshObjectsExpansions = new ConcurrentHashMap<>();
 
     public PerformerJBSE(Options o, InputBuffer<EvosuiteResult> in, JBSEResultInputOutputBuffer out, TreePath treePath) {
@@ -147,7 +148,7 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             final List<Clause> pathConditionFinal = stateFinal.getPathCondition();
 
             //prints some feedback
-            LOGGER.info("Run test case %s, path condition %s", tc.getClassName(), stringifyPathCondition(shorten(pathConditionFinal)));
+            LOGGER.info("Run test case %s, path condition %s:%s", tc.getClassName(), entryPoint, stringifyTestPathCondition(pathConditionFinal));
             
             //skips the test case if its path was already covered,
             //otherwise records its path and calculates coverage
@@ -194,13 +195,9 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
 				//the performer shut down
 				return;
 			}
-            
-            //emits an additional path condition for a new fresh object, in case the test
-            //has as a last clause an expands clause
-            createOutputJobForAdditionalFreshObjectClause(rp, depthFinal, item, stateFinal);
         } catch (NoTargetHitException e) {
             //prints some feedback
-            LOGGER.warn("Run test case %s, does not reach the target method %s:%s:%s", item.getTestCase().getClassName(), item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName());
+            LOGGER.warn("Run test case %s, does not reach the target method %s", item.getTestCase().getClassName(), item.getTargetMethodSignature());
         } catch (FrozenStateException e) {
             LOGGER.error("Unexpected frozen state exception while trying to generate path condition for additional fresh object");
             LOGGER.error("Message: %s", e.toString());
@@ -212,13 +209,13 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
     }
     
     private State possiblyGetInitialStateCached(EvosuiteResult item) {
-        final String key = item.getTargetMethodClassName() + ":" + item.getTargetMethodDescriptor() + ":" + item.getTargetMethodName();
+        final String key = item.getTargetMethodSignature();
         final State value = this.initialStateCache.get(key);
         return (value == null ? null : value.clone());
     }
     
     private synchronized void possiblySetInitialStateCached(EvosuiteResult item, State initialState) {
-        final String key = item.getTargetMethodClassName() + ":" + item.getTargetMethodDescriptor() + ":" + item.getTargetMethodName();
+        final String key = item.getTargetMethodSignature();
         if (this.initialStateCache.containsKey(key)) {
             return;
         } else {
@@ -301,7 +298,7 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
     private void createOutputJobsForFrontiersAtAllDepths(RunnerPath rp, EvosuiteResult item, TestCase tc, State stateInitial, State stateFinal, int depthStart, int depthFinal) 
     throws DecisionException, CannotBuildEngineException, InitializationException, InvalidClassFileFactoryClassException, NonexistingObservedVariablesException, 
     ClasspathException, CannotBacktrackException, CannotManageStateException, ThreadStackEmptyException, ContradictionException, EngineStuckException, 
-    FailureException, InterruptedException {
+    FailureException, InterruptedException, FrozenStateException {
         boolean noOutputJobGenerated = true;
         for (int depthCurrent = depthStart; depthCurrent <= depthFinal; ++depthCurrent) {
         	try {
@@ -313,9 +310,10 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
         		}
 
         		//creates all the output jobs
-        		noOutputJobGenerated = createOutputJobsForFrontier(rp, statesPostFrontier, item, tc, stateInitial, depthCurrent) && noOutputJobGenerated;
+        		noOutputJobGenerated = createOutputJobsForFrontier(rp, statesPostFrontier, item, tc, stateInitial, stateFinal, depthCurrent) && noOutputJobGenerated;
         	} catch (UninterpretedNoContextException e) {
-                LOGGER.info("From test case %s skipping a path condition because it invokes an uninterpreted function in the context of a model", tc.getClassName());
+                LOGGER.info("From test case %s stopping generation of path conditions at depth %d because of invocation of an uninterpreted function in the context of a model", tc.getClassName(), depthCurrent);
+                break;
         	}
         }
         if (noOutputJobGenerated) {
@@ -323,7 +321,8 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
         }
     }
     
-    private boolean createOutputJobsForFrontier(RunnerPath rp, List<State> statesPostFrontier, EvosuiteResult item, TestCase tc, State stateInitial, int depthCurrent) {
+    private boolean createOutputJobsForFrontier(RunnerPath rp, List<State> statesPostFrontier, EvosuiteResult item, TestCase tc, State stateInitial, State stateFinal, int depthCurrent) 
+    throws FrozenStateException {
         //gives some feedback if detects a contradiction
         if (statesPostFrontier.isEmpty()) {
             LOGGER.info("Test case %s, detected contradiction while generating path conditions at depth %d", tc.getClassName(), depthCurrent);
@@ -334,163 +333,105 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
         final State statePreFrontier = rp.getStatePreFrontier();
         final List<String> branchesPostFrontier = rp.getBranchesPostFrontier(); 
         for (int i = 0; i < statesPostFrontier.size(); ++i) {
+        	//gets the generated path condition
             final State statePostFrontier = statesPostFrontier.get(i);
-            final List<Clause> pathCondition = statePostFrontier.getPathCondition();
+            final List<Clause> pathConditionPostFrontier = statePostFrontier.getPathCondition();
+            final Clause pathConditionPostFrontierLastClause = pathConditionPostFrontier.get(pathConditionPostFrontier.size() - 1);
+            
+            //determines if the last clause is an expands one
+            final boolean lastClauseIsExpands = !pathConditionPostFrontier.isEmpty() && (pathConditionPostFrontierLastClause instanceof ClauseAssumeExpands);
+            
+            //creates the generated path condition
+            final List<Clause> pathConditionGenerated = new ArrayList<>(pathConditionPostFrontier);
+            final Set<String> expansions;
+            if (lastClauseIsExpands) {
+            	final ReferenceSymbolic referenceToExpand = ((ClauseAssumeExpands) pathConditionPostFrontierLastClause).getReference();
+
+            	//gets/creates the set of the seen expansions for the path condition
+            	final MethodPathConditon methodPathCondition = new MethodPathConditon(entryPoint, shorten(pathConditionGenerated));
+        		if (!this.freshObjectsExpansions.containsKey(methodPathCondition)) {
+        			this.freshObjectsExpansions.put(methodPathCondition, Collections.synchronizedSet(new HashSet<>()));
+        		}
+        		expansions = this.freshObjectsExpansions.get(methodPathCondition);
+        		
+        		//finds the clause in the test path condition that predicates
+        		//on the same symbolic reference as the last clause in the 
+        		//generated path condition
+            	Clause pathConditionFinalClause = null;
+            	for (Clause clause : stateFinal.getPathCondition()) {
+            		if (clause instanceof ClauseAssumeReferenceSymbolic && 
+            		((ClauseAssumeReferenceSymbolic) clause).getReference().equals(referenceToExpand)) {
+            			pathConditionFinalClause = clause;
+            			break;
+            		}
+            	}
+            	
+        		//if such clause is also an expands clause, puts its expansion 
+            	//in the set of the seen expansions for the path condition
+            	if (pathConditionFinalClause instanceof ClauseAssumeExpands) {
+            		final ClauseAssumeExpands pathConditionFinalClauseExpands = (ClauseAssumeExpands) pathConditionFinalClause;
+            		final HeapObjekt objectTest = stateFinal.getObject(pathConditionFinalClauseExpands.getReference());
+                	//skips the generated path condition if it contradicts
+                	//the current seen expansions
+            		final HeapObjekt objectPathCondition = ((ClauseAssumeExpands) pathConditionPostFrontierLastClause).getObjekt();
+            		if (objectPathCondition.getType().equals(objectTest.getType())) {
+                		expansions.add(objectTest.getType().getClassName());
+            		} else {
+            			continue;
+            		}
+            	} //else, leave the set of the seen expansions as it is
+
+            	//sets the last clause of the generated path condition
+            	final Clause pathConditionGeneratedLastClause;
+            	try {
+					pathConditionGeneratedLastClause = new ClauseAssumeExpandsSubtypes(referenceToExpand, expansions);
+				} catch (InvalidInputException e) {
+					//this should never happen
+	                LOGGER.error("Unexpected InvalidInputException while attempting to generate an unconstrained expansion path condition clause");
+	                LOGGER.error("Message: %s", e.toString());
+	                LOGGER.error("Stack trace:");
+	                for (StackTraceElement elem : e.getStackTrace()) {
+	                    LOGGER.error("%s", elem.toString());
+	                }
+	                continue;
+				}
+            	pathConditionGenerated.set(pathConditionGenerated.size() - 1, pathConditionGeneratedLastClause);
+            } else {
+            	expansions = Collections.emptySet();
+            }
+            
+        	//inserts the generated path condition in the treePath 
+            //it if is not already present and if it does not violate 
+            //some basic assumptions on model maps, otherwise skips
             synchronized (this.treePath) {
-            	if (this.treePath.containsPath(entryPoint, pathCondition, false)) {
+            	if (this.treePath.containsPath(entryPoint, pathConditionGenerated, false)) {
+            		LOGGER.info("From test case %s skipping generated post-frontier path condition %s:%s because redundant", tc.getClassName(), entryPoint, stringifyPostFrontierPathCondition(pathConditionGenerated));
             		continue;
             	}
             	final ClassHierarchy hier = statePostFrontier.getClassHierarchy();
-            	if (!pathCondition.isEmpty() && assumptionViolated(hier, pathCondition.get(pathCondition.size() - 1))) {
-            		LOGGER.info("From test case %s skipping path condition due to violated assumption %s on initialMap in path condition %s", tc.getClassName(), pathCondition.get(pathCondition.size() - 1), stringifyPathCondition(shorten(pathCondition)));
+            	if (!pathConditionGenerated.isEmpty() && mapModelAssumptionViolated(hier, pathConditionPostFrontierLastClause)) {
+            		LOGGER.info("From test case %s skipping generated post-frontier path condition %s:%s because clause %s contradicts initialMap assumptions", tc.getClassName(), entryPoint, stringifyPostFrontierPathCondition(pathConditionGenerated), pathConditionGenerated.get(pathConditionGenerated.size() - 1));
             		continue;
             	}
-
-            	//inserts the generated path in the treePath
-            	this.treePath.insertPath(entryPoint, pathCondition, rp.getCoverage(), branchesPostFrontier, false);
+            	this.treePath.insertPath(entryPoint, pathConditionGenerated, rp.getCoverage(), branchesPostFrontier, false);
             }
-
-            //creates the output job
+            
+            //creates the output job...
             final boolean atJump = rp.getAtJump();
             final Map<Long, String> stringLiterals = rp.getStringLiterals().get(i);
             final Set<Long> stringOthers = rp.getStringOthers().get(i); 
             final JBSEResult output = 
             new JBSEResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), 
-                           stateInitial, statePreFrontier, statePostFrontier, atJump, 
-                           (atJump ? branchesPostFrontier.get(i) : null), stringLiterals, stringOthers, depthCurrent);
-            
-            //if the last clause is an expands path condition, saves the expanded 
-            //reference data so it may generate fresh objects in the future
-            if (!pathCondition.isEmpty() && (pathCondition.get(pathCondition.size() - 1) instanceof ClauseAssumeExpands)) {
-        		final MethodPathConditon methodPathCondition = new MethodPathConditon(entryPoint, pathCondition);
-        		this.freshObjectsJBSEResults.put(methodPathCondition, output);
-        		this.freshObjectsBranchesPostFrontier.put(methodPathCondition, branchesPostFrontier);
-            }
-            
-            //emits the output job in the output buffer
+                           stateInitial, statePreFrontier, statePostFrontier, pathConditionGenerated, atJump, 
+                           (atJump ? branchesPostFrontier.get(i) : null), stringLiterals, stringOthers, 
+                           (lastClauseIsExpands ? depthCurrent - 1 : depthCurrent), expansions);
+
+            //...and emits it in the output buffer
             this.out.add(output);
-            LOGGER.info("From test case %s generated path condition %s%s", tc.getClassName(), stringifyPathCondition(shorten(pathCondition)), (atJump ? (" aimed at branch " + branchesPostFrontier.get(i)) : ""));
+            LOGGER.info("From test case %s generated post-frontier path condition %s:%s%s", tc.getClassName(), entryPoint, stringifyPostFrontierPathCondition(output), (atJump ? (" aimed at branch " + branchesPostFrontier.get(i)) : ""));
             noOutputJobGenerated = false;
         }
         return noOutputJobGenerated;
-    }
-    
-    private void createOutputJobForAdditionalFreshObjectClause(RunnerPath rp, int depthFinal, EvosuiteResult item, State stateFinal) 
-    throws FrozenStateException, DecisionException, CannotBuildEngineException, InitializationException, 
-    InvalidClassFileFactoryClassException, NonexistingObservedVariablesException, ClasspathException, 
-    CannotBacktrackException, CannotManageStateException, ThreadStackEmptyException, ContradictionException, 
-    EngineStuckException, FailureException {
-    	final String entryPoint = item.getTargetMethodSignature();
-    	final TestCase tc = item.getTestCase();
-    	final State postFrontierState = item.getPostFrontierState();
-    	
-    	//gets the path condition that generated the test: if the test is seed
-    	//(i.e., postFrontierState == null), then we use the path condition of
-    	//the final state of the test itself, otherwise we use the path condition
-    	//of the post-frontier that was used to generate the test
-    	final List<Clause> pathConditionFinal = (postFrontierState == null ? stateFinal.getPathCondition() : postFrontierState.getPathCondition());
-    	
-    	if (!pathConditionFinal.isEmpty() && (pathConditionFinal.get(pathConditionFinal.size() - 1) instanceof ClauseAssumeExpands)) {
-    		final ClauseAssumeExpands clauseLast = (ClauseAssumeExpands) pathConditionFinal.get(pathConditionFinal.size() - 1);
-    		final ReferenceSymbolic clauseLastReference = clauseLast.getReference();
-
-    		//adds the current test case expansion to the set of the seen expansions 
-    		final MethodPathConditon methodPathCondition = new MethodPathConditon(entryPoint, pathConditionFinal);
-    		if (!this.freshObjectsExpansions.containsKey(methodPathCondition)) {
-    			this.freshObjectsExpansions.put(methodPathCondition, Collections.synchronizedSet(new HashSet<>()));
-    		}
-    		final Set<String> expansions = this.freshObjectsExpansions.get(methodPathCondition);
-    		final Objekt objekt = stateFinal.getObject(clauseLastReference);
-    		expansions.add(objekt.getType().getClassName());
-
-    		final JBSEResult output;
-			final State statePostFrontier;
-			final boolean atJump;
-			final String targetBranch;
-			final List<String> branchesPostFrontier;
-    		if (this.freshObjectsJBSEResults.containsKey(methodPathCondition)) {
-    			//gets the previous JBSE result
-    			final JBSEResult jbseResult = this.freshObjectsJBSEResults.get(methodPathCondition);
-    			final String targetMethodClassName = jbseResult.getTargetMethodClassName();
-    			final String targetMethodDescriptor = jbseResult.getTargetMethodDescriptor();
-    			final String targetMethodName = jbseResult.getTargetMethodName();
-    			final State stateInitial = jbseResult.getInitialState();
-    			final State statePreFrontier = jbseResult.getPreFrontierState();
-    			statePostFrontier = jbseResult.getPostFrontierState();
-    			atJump = jbseResult.getAtJump();
-    			targetBranch = jbseResult.getTargetBranch();
-    			final Map<Long, String> stringLiterals = jbseResult.getStringLiterals();
-    			final Set<Long> stringOthers = jbseResult.getStringOthers();
-    			final int depth = jbseResult.getDepth();
-    			output =
-    			new JBSEResult(targetMethodClassName, targetMethodDescriptor, targetMethodName, 
-    			               stateInitial, statePreFrontier, statePostFrontier, atJump,
-    			               targetBranch, stringLiterals, stringOthers, depth, 
-    			               expansions);
-    			branchesPostFrontier = this.freshObjectsBranchesPostFrontier.get(methodPathCondition);
-    		} else {
-    			//the current test is a seed test, therefore there are
-    			//no previous JBSE results: builds a JBSE result from 
-    			//the post-frontier state
-    			
-    			//first, finds the post-frontier state
-    			if (depthFinal == 0) {
-    				//this is a seed test with a trivial path condition {ROOT}:this expands and nothing else 
-    				return;
-    			}
-    			final List<State> statesPostFrontier = rp.runProgram(depthFinal);
-    			int i;
-    			boolean found = false;
-    			for (i = 0; i < statesPostFrontier.size(); ++i) {
-    				final State s = statesPostFrontier.get(i);
-    				final List<Clause> pathCondition = s.getPathCondition();
-    				final Clause lastPathConditionClause = pathCondition.get(pathCondition.size() - 1);
-    				if (lastPathConditionClause instanceof ClauseAssumeExpands) {
-    					found = true;
-    					break;
-    				}
-    			}
-    			if (!found) {
-    				return; //this should never happen, however gracefully exiting should be ok
-    			}
-    			
-    			final String targetMethodClassName = item.getTargetMethodClassName();
-    			final String targetMethodDescriptor = item.getTargetMethodDescriptor();
-    			final String targetMethodName = item.getTargetMethodName();
-    			final State stateInitial = rp.getStateInitial();
-    			final State statePreFrontier = rp.getStatePreFrontier();
-				statePostFrontier = statesPostFrontier.get(i);
-    			atJump = rp.getAtJump();
-				targetBranch = (atJump ? rp.getBranchesPostFrontier().get(i) : null);
-    			final Map<Long, String> stringLiterals = rp.getStringLiterals().get(i);
-    			final Set<Long> stringOthers = rp.getStringOthers().get(i);
-    			final int depth = depthFinal;
-    			output =
-    			new JBSEResult(targetMethodClassName, targetMethodDescriptor, targetMethodName, 
-    			               stateInitial, statePreFrontier, statePostFrontier, atJump,
-    			               targetBranch, stringLiterals, stringOthers, depth, 
-    			               expansions);
-    			branchesPostFrontier = rp.getBranchesPostFrontier();
-    		}
-    		
-    		final List<Clause> pathCondition = statePostFrontier.getPathCondition();
-            synchronized (this.treePath) {
-            	if (this.treePath.containsPath(entryPoint, pathCondition, false)) {
-            		return;
-            	}
-            	final ClassHierarchy hier = statePostFrontier.getClassHierarchy();
-            	if (!pathCondition.isEmpty() && assumptionViolated(hier, pathCondition.get(pathCondition.size() - 1))) {
-            		LOGGER.info("From test case %s skipping path condition due to violated assumption %s on initialMap in path condition %s", tc.getClassName(), pathCondition.get(pathCondition.size() - 1), stringifyPathCondition(shorten(pathCondition)));
-            		return;
-            	}
-
-            	//inserts the generated path in the treePath
-            	this.treePath.insertPath(entryPoint, pathCondition, rp.getCoverage(), branchesPostFrontier, false);
-            }
-    		
-    		this.out.add(output);
-    		LOGGER.info("From test case %s generated path condition %s%s%s", tc.getClassName(), stringifyPathCondition(shorten(pathCondition)), (expansions.isEmpty() ? "" : (" excluded " + expansions.stream().collect(Collectors.joining(", ")))),  (atJump ? (" aimed at branch " + targetBranch) : ""));
-        }
     }
 }
 

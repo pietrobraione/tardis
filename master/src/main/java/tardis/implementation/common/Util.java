@@ -1,5 +1,7 @@
 package tardis.implementation.common;
 
+import static jbse.common.Type.className;
+
 import java.io.File;
 import java.lang.reflect.Executable;
 import java.lang.reflect.Method;
@@ -32,6 +34,7 @@ import jbse.val.Primitive;
 import jbse.val.Symbolic;
 import tardis.Options;
 import tardis.Visibility;
+import tardis.implementation.jbse.ClauseAssumeExpandsSubtypes;
 import tardis.implementation.jbse.JBSEResult;
 
 /**
@@ -60,7 +63,7 @@ public final class Util {
      *         that are {@code instanceof }{@link ClauseAssumeClassInitialized}
      *         or {@link ClauseAssumeClassNotInitialized}.
      */
-    public static Collection<Clause> shorten(Collection<Clause> pc) {
+    public static List<Clause> shorten(Collection<Clause> pc) {
         return pc.stream().filter(x -> !(x instanceof ClauseAssumeClassInitialized || x instanceof ClauseAssumeClassNotInitialized)).collect(Collectors.toList());
     }
 
@@ -282,20 +285,19 @@ public final class Util {
     /**
      * Converts a path condition to a {@link String}.
      * 
-     * @param pathCondition a sequence (more precisely, an {@link Iterable})
-     *        of {@link Clause}s.
+     * @param pathCondition a {@link List}{@code <}{@link Clause}{@code >}.
+     * @param generated a {@code boolean}; if {@code true}, the path 
+     *        condition was generated 
      * @return a {@link String} representation of {@code pathCondition}.
      * @throws NullPointerException if {@code pathCondition == null}.
      */
-    public static final String stringifyPathCondition(Iterable<Clause> pathCondition) {
+    private static final String stringifyPathCondition(List<Clause> pathCondition, boolean generated) {
         final StringBuilder retVal = new StringBuilder();
-        boolean first = true;
-        for (Clause c : pathCondition) {
-            if (first) {
-                first = false;
-            } else {
+        for (int i = 0; i < pathCondition.size(); ++i) {
+            if (i > 0) {
                 retVal.append(" && ");
             }
+            final Clause c = pathCondition.get(i);
             if (c instanceof ClauseAssume) {
                 final Primitive p = ((ClauseAssume) c).getCondition();
                 if (p instanceof Symbolic) {
@@ -306,7 +308,20 @@ public final class Util {
             } else if (c instanceof ClauseAssumeExpands) {
                 retVal.append(((ClauseAssumeExpands) c).getReference().asOriginString());
                 retVal.append(" fresh ");
-                retVal.append(((ClauseAssumeExpands) c).getObjekt().getType().getClassName());
+                if (generated && i == pathCondition.size() - 1) {
+                    retVal.append("subclass of ");
+                    retVal.append(((ClauseAssumeExpands) c).getReference().getStaticType());
+                } else {
+                	retVal.append(((ClauseAssumeExpands) c).getObjekt().getType().getClassName());
+                }
+            } else if (c instanceof ClauseAssumeExpandsSubtypes) {
+                retVal.append(((ClauseAssumeExpandsSubtypes) c).getReference().asOriginString());
+                retVal.append(" fresh subclass of ");
+                retVal.append(className(((ClauseAssumeExpandsSubtypes) c).getReference().getStaticType()));
+                if (!((ClauseAssumeExpandsSubtypes) c).forbiddenExpansions().isEmpty()) {
+                    retVal.append(" excluded ");
+                    retVal.append(((ClauseAssumeExpandsSubtypes) c).forbiddenExpansions().stream().collect(Collectors.joining(", ")));
+                }
             } else if (c instanceof ClauseAssumeAliases) {
                 retVal.append(((ClauseAssumeAliases) c).getReference().asOriginString());
                 retVal.append(" aliases ");
@@ -320,12 +335,18 @@ public final class Util {
         }
         return retVal.toString();
     }
+    
+    public static String stringifyTestPathCondition(List<Clause> pathCondition) {
+    	return stringifyPathCondition(shorten(pathCondition), false);
+    }
+
+    public static String stringifyPostFrontierPathCondition(List<Clause> pathCondition) {
+    	return stringifyPathCondition(shorten(pathCondition), true);
+    }
 
 	public static String stringifyPostFrontierPathCondition(JBSEResult item) {
-	    final List<Clause> pathCondition = (item.getPostFrontierState() == null ? null : item.getPostFrontierState().getPathCondition());
-	    final Set<String> forbiddenExpansions = item.getForbiddenExpansions();
-	    final String excluded = ((forbiddenExpansions == null || forbiddenExpansions.isEmpty()) ? "" : (" excluded " + forbiddenExpansions.stream().collect(Collectors.joining(", "))));
-	    final String retVal = (pathCondition == null ? "true" : (stringifyPathCondition(shorten(pathCondition)) + excluded));
+	    final List<Clause> pathCondition = item.getPathConditionGenerated();
+	    final String retVal = (pathCondition == null ? "true" : stringifyPostFrontierPathCondition(pathCondition));
 	    return retVal;
 	}
         
