@@ -15,7 +15,7 @@ ENV HOME /root
 ENV JAVA_HOME /usr/lib/jvm/java-8-openjdk-amd64
 ENV JARS_HOME /usr/share/java
 ENV Z3_HOME /usr/bin
-ENV CLASSPATH ${JAVA_HOME}/lib/tools.jar:${JARS_HOME}/jbse-0.10.0-SNAPSHOT-shaded.jar:${JARS_HOME}/tardis-master-0.2.0-SNAPSHOT.jar:${JARS_HOME}/args4j-2.32.jar:${JARS_HOME}/javaparser-core-3.15.9.jar:${JARS_HOME}/log4j-api-2.14.0.jar:${JARS_HOME}/log4j-core-2.14.0.jar:${JARS_HOME}/sushi-lib-0.2.0-SNAPSHOT.jar:${JARS_HOME}/asm-debug-all-5.0.1.jar:${JARS_HOME}/org.jacoco.core-0.7.5.201505241946.jar:${JARS_HOME}/evosuite-shaded-1.0.6-SNAPSHOT.jar
+ENV CLASSPATH ${JAVA_HOME}/lib/tools.jar:${JARS_HOME}/jbse-0.10.0-SNAPSHOT-shaded.jar:${JARS_HOME}/tardis-master-0.2.0-SNAPSHOT.jar:${JARS_HOME}/args4j-2.32.jar:${JARS_HOME}/javaparser-core-3.15.9.jar:${JARS_HOME}/log4j-api-2.14.0.jar:${JARS_HOME}/log4j-core-2.14.0.jar:${JARS_HOME}/sushi-lib-0.2.0-SNAPSHOT.jar:${JARS_HOME}/asm-debug-all-5.0.1.jar:${JARS_HOME}/org.jacoco.core-0.7.5.201505241946.jar:${JARS_HOME}/evosuite-shaded-1.1.1-SNAPSHOT.jar
 
 # Build and install
 WORKDIR ${HOME}
@@ -32,11 +32,11 @@ RUN cp master/deps/log4j-core-2.14.0.jar ${JARS_HOME}/.
 RUN cp runtime/build/libs/sushi-lib-0.2.0-SNAPSHOT.jar ${JARS_HOME}/.
 RUN cp runtime/deps/asm-debug-all-5.0.1.jar ${JARS_HOME}/.
 RUN cp runtime/deps/org.jacoco.core-0.7.5.201505241946.jar ${JARS_HOME}/.
-RUN cp libs/evosuite-shaded-1.0.6-SNAPSHOT.jar ${JARS_HOME}/.
+RUN cp libs/evosuite-shaded-1.1.1-SNAPSHOT.jar ${JARS_HOME}/.
 
 # Create script
 RUN echo "#!/bin/sh" > /usr/local/bin/tardis
-RUN echo "java -Xms16G -Xmx16G -cp ${CLASSPATH} tardis.Main -evosuite ${JARS_HOME}/evosuite-shaded-1.0.6-SNAPSHOT.jar -jbse_lib ${JARS_HOME}/jbse-0.10.0-SNAPSHOT-shaded.jar -sushi_lib ${JARS_HOME}/sushi-lib-0.2.0-SNAPSHOT.jar -z3 ${Z3_HOME}/z3 \$@" >> /usr/local/bin/tardis
+RUN echo "java -Xms16G -Xmx16G -cp ${CLASSPATH} tardis.Main -evosuite ${JARS_HOME}/evosuite-shaded-1.1.1-SNAPSHOT.jar -jbse_lib ${JARS_HOME}/jbse-0.10.0-SNAPSHOT-shaded.jar -sushi_lib ${JARS_HOME}/sushi-lib-0.2.0-SNAPSHOT.jar -z3 ${Z3_HOME}/z3 \$@" >> /usr/local/bin/tardis
 RUN chmod +x /usr/local/bin/tardis
 
 # Get some examples and compile them
