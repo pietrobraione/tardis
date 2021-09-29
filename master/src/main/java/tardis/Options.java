@@ -156,7 +156,7 @@ public final class Options implements Cloneable {
     @Option(name = "-evosuite",
             usage = "Path to EvoSuite",
             handler = PathOptionHandler.class)
-    private Path evosuitePath = Paths.get(".", "lib", "evosuite-shaded-1.0.6-SNAPSHOT.jar");
+    private Path evosuitePath = Paths.get(".", "lib", "evosuite-shaded-1.1.1-SNAPSHOT.jar");
 
     @Option(name = "-sushi_lib",
             usage = "Path to SUSHI library",
