@@ -65,7 +65,7 @@ public final class JBSEResult {
      * {@link #postState}'s path condition, or {@code null}
      * if this {@link JBSEResult} is a seed item.
      */
-    private final List<Clause> pathConditionGenerated;
+    private final ArrayList<Clause> pathConditionGenerated;
     
     /**
      * Set to {@code true} iff the frontier is a 

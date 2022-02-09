@@ -13,7 +13,9 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
+import java.util.ListIterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -24,6 +26,7 @@ import org.apache.logging.log4j.Logger;
 
 import jbse.algo.exc.CannotManageStateException;
 import jbse.apps.run.UninterpretedNoContextException;
+import jbse.bc.ClassFile;
 import jbse.bc.ClassHierarchy;
 import jbse.bc.exc.InvalidClassFileFactoryClassException;
 import jbse.common.exc.ClasspathException;
@@ -150,6 +153,12 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             //prints some feedback
             LOGGER.info("Run test case %s, path condition %s:%s", tc.getClassName(), entryPoint, stringifyTestPathCondition(pathConditionFinal));
             
+            //compares pathConditionFinal with the generating path condition, and
+            //complains if the former does not refine the latter
+            if (!refines(pathConditionFinal, item.getPathConditionGenerating())) {
+            	LOGGER.warn("Test case %s diverges from generating path condition %s", tc.getClassName(), stringifyPostFrontierPathCondition(item.getPathConditionGenerating()));
+            }            
+            
             //skips the test case if its path was already covered,
             //otherwise records its path and calculates coverage
             final Set<String> coveredBranches = rp.getCoverage();
@@ -206,6 +215,41 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
                 LOGGER.error("%s", elem.toString());
             }
 		}
+    }
+    
+    private static boolean refines(List<Clause> possiblyRefining, List<Clause> possiblyRefined) {
+        if (possiblyRefined == null) {
+        	return true;
+        }
+        final List<Clause> possiblyRefiningShortened = shorten(possiblyRefining);
+        final ListIterator<Clause> itPossiblyRefiningShortened = possiblyRefiningShortened.listIterator();
+        final List<Clause> possiblyRefinedShortened = shorten(possiblyRefined);
+        for (Clause cExpected: possiblyRefinedShortened) {
+        	if (!itPossiblyRefiningShortened.hasNext()) {
+        		return false;
+        	}
+        	final Clause cActual = itPossiblyRefiningShortened.next();
+        	if (cExpected instanceof ClauseAssumeExpandsSubtypes) {
+        		if (!(cActual instanceof ClauseAssumeExpands)) {
+        			return false;
+        		} else {
+        			final ClauseAssumeExpandsSubtypes caExpected = (ClauseAssumeExpandsSubtypes) cExpected;
+        			final ClauseAssumeExpands caActual = (ClauseAssumeExpands) cActual;
+        			if (!caExpected.getReference().equals(caActual.getReference())) {
+        				return false;
+        			}
+        			final String actualExpansion = caActual.getObjekt().getType().getClassName();
+        			for (String forbiddenExpansion : caExpected.forbiddenExpansions()) {
+        				if (forbiddenExpansion.equals(actualExpansion)) {
+        					return false;
+        				}
+        			}
+        		}
+        	} else if (!cExpected.equals(cActual)) {
+        		return false;
+        	}
+        }
+        return true;
     }
     
     private State possiblyGetInitialStateCached(EvosuiteResult item) {

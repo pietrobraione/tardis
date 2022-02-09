@@ -58,13 +58,13 @@ public final class Util {
      * Shortens a sequence of {@link Clause}s by dropping all the clauses
      * about class initialization.
      * 
-     * @param pc a {@link Collection}{@code <}{@link Clause}{@code >}.
-     * @return {@code pc} filtered, where the filter drops all the clauses
+     * @param pathCondition a {@link Collection}{@code <}{@link Clause}{@code >}.
+     * @return {@code pathCondition} filtered, where the filter drops all the clauses
      *         that are {@code instanceof }{@link ClauseAssumeClassInitialized}
      *         or {@link ClauseAssumeClassNotInitialized}.
      */
-    public static List<Clause> shorten(Collection<Clause> pc) {
-        return pc.stream().filter(x -> !(x instanceof ClauseAssumeClassInitialized || x instanceof ClauseAssumeClassNotInitialized)).collect(Collectors.toList());
+    public static List<Clause> shorten(Collection<Clause> pathCondition) {
+        return pathCondition.stream().filter(x -> !(x instanceof ClauseAssumeClassInitialized || x instanceof ClauseAssumeClassNotInitialized)).collect(Collectors.toList());
     }
 
     /**
