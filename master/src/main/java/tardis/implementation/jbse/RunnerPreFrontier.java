@@ -44,240 +44,253 @@ import jbse.val.ReferenceSymbolic;
 import jbse.val.Value;
 
 /**
- * Encapsulates a {@link Runner} that runs a test up to a frontier, i.e., up to some depth, 
- * guided by some concrete execution.
+ * Encapsulates a {@link Runner} that runs a test up to a frontier, i.e., up to
+ * some depth, guided by some concrete execution.
  * 
  * @author Pietro Braione
- *
  */
 final class RunnerPreFrontier implements AutoCloseable {
-    private static final Logger LOGGER = LogManager.getFormatterLogger(RunnerPreFrontier.class);
+	private static final Logger LOGGER = LogManager.getFormatterLogger(RunnerPreFrontier.class);
 
-    private final Runner runner;
-    private final DecisionProcedureGuidance guid;
-    private final long maxCount;
-    private final HashMap<Long, String> stringLiterals = new HashMap<>();
-    private final HashSet<Long> stringOthers = new HashSet<>();
-    private final HashSet<String> coverage = new HashSet<>();
-    private int postFrontierDepth = 0;
-    private boolean atJump = false;
-    private int jumpPC = 0;
-    private boolean atLoadConstant = false;
-    private int loadConstantStackSize = 0;
-    private boolean foundPreFrontier = false;
-    private State preFrontierState;
+	private final Runner runner;
+	private final DecisionProcedureGuidance guid;
+	private final long maxCount;
+	private final HashMap<Long, String> stringLiterals = new HashMap<>();
+	private final HashSet<Long> stringOthers = new HashSet<>();
+	private final HashSet<String> coverage = new HashSet<>();
+	private int postFrontierDepth = 0;
+	private boolean atJump = false;
+	private int jumpPC = 0;
+	private boolean atLoadConstant = false;
+	private int loadConstantStackSize = 0;
+	private boolean foundPreFrontier = false;
+	private boolean foundFinalState = false;
+	private State preFrontierState;
 
-    public RunnerPreFrontier(RunnerParameters runnerParameters, long maxCount) 
-    throws NotYetImplementedException, CannotBuildEngineException, DecisionException, 
-    InitializationException, InvalidClassFileFactoryClassException, NonexistingObservedVariablesException, 
-    ClasspathException, ContradictionException {
-    	runnerParameters.setActions(new ActionsRunnerPreFrontier());
-        final RunnerBuilder rb = new RunnerBuilder();
-        this.runner = rb.build(runnerParameters);
-        this.guid = (DecisionProcedureGuidance) runnerParameters.getDecisionProcedure();
-        this.maxCount = maxCount;
-    }
-    
-    /**
-     * Sets the pre-frontier depth.
-     * 
-     * @param postFrontierDepth an {@code int}. If 0 stops
-     *        at the initial state. If greater than zero, 
-     *        stops at the frontier between {@code postFrontierDepth - 1}
-     *        and {@code postFrontierDepth}. 
-     */
-    public void setPostFrontierDepth(int postFrontierDepth) {
-        this.postFrontierDepth = postFrontierDepth;
-    }
-    
-    public State getInitialState() {
-    	return this.runner.getEngine().getInitialState();
-    }
-    
-    public State getCurrentState() {
-    	return this.runner.getEngine().getCurrentState();
-    }
-    
-    public boolean foundPreFrontier() {
-    	return this.foundPreFrontier;
-    }
-    
-    public State getPreFrontierState() {
-    	return this.preFrontierState;
-    }
-    
-    public Map<Long, String> getStringLiterals() {
-    	return this.stringLiterals;
-    }
-    
-    public Set<Long> getStringOthers() {
-    	return this.stringOthers;
-    }
-    
-    public Set<String> getCoverage() {
-    	return this.coverage;
-    }
+	public RunnerPreFrontier(RunnerParameters runnerParameters, long maxCount) throws NotYetImplementedException,
+	CannotBuildEngineException, DecisionException, InitializationException, InvalidClassFileFactoryClassException,
+	NonexistingObservedVariablesException, ClasspathException, ContradictionException {
+		runnerParameters.setActions(new ActionsRunnerPreFrontier());
+		final RunnerBuilder rb = new RunnerBuilder();
+		this.runner = rb.build(runnerParameters);
+		this.guid = (DecisionProcedureGuidance) runnerParameters.getDecisionProcedure();
+		this.maxCount = maxCount;
+	}
 
-    public void run() 
-    throws CannotBacktrackException, CannotManageStateException, ClasspathException, 
-    ThreadStackEmptyException, ContradictionException, DecisionException, EngineStuckException, 
-    FailureException, NonexistingObservedVariablesException {
-    	this.runner.run();
-    }
-    
-    /**
-     * The {@link Actions} for this {@link RunnerPreFrontier}.
-     * 
-     * @author Pietro Braione
-     *
-     */
-    private class ActionsRunnerPreFrontier extends Actions {
-        @Override
-        public boolean atInitial() {
-            if (RunnerPreFrontier.this.postFrontierDepth == 0) {
-                return true;
-            } else {
-                return super.atInitial();
-            }
-        }
+	/**
+	 * Sets the pre-frontier depth.
+	 * 
+	 * @param postFrontierDepth an {@code int}. If 0 stops at the initial state. If
+	 *        greater than zero, stops at the frontier between
+	 *        {@code postFrontierDepth - 1} and {@code postFrontierDepth}.
+	 */
+	public void setPostFrontierDepth(int postFrontierDepth) {
+		this.postFrontierDepth = postFrontierDepth;
+	}
 
-        @Override
-        public boolean atStepPre() {
-            final State currentState = getEngine().getCurrentState();
+	public State getInitialState() {
+		return this.runner.getEngine().getInitialState();
+	}
 
-            //steps guidance
-            try {
-            	RunnerPreFrontier.this.guid.preStep(currentState);
-            } catch (GuidanceException e) {
-                throw new RuntimeException(e); //TODO better exception!
-            }
-            
-            if (currentState.phase() != Phase.PRE_INITIAL) {
-                try {
-                    final int currentProgramCounter = currentState.getCurrentProgramCounter();
-                    final byte currentInstruction = currentState.getInstruction();
-                    
-                    //if at entry of a method, add the entry point to coverage 
-                    if (currentProgramCounter == 0) {
-                    	RunnerPreFrontier.this.coverage.add(currentState.getCurrentMethodSignature().toString() + ":0:0");
-                    }
+	public State getCurrentState() {
+		return this.runner.getEngine().getCurrentState();
+	}
 
-                    //if at a jump bytecode, saves the start program counter
-                    RunnerPreFrontier.this.atJump = isBytecodeJump(currentInstruction);
-                    if (RunnerPreFrontier.this.atJump) {
-                    	RunnerPreFrontier.this.jumpPC = currentProgramCounter;
-                    }
+	public boolean foundPreFrontier() {
+		return this.foundPreFrontier;
+	}
 
-                    //if at a load constant bytecode, saves the stack size
-                    RunnerPreFrontier.this.atLoadConstant = isBytecodeLoad(currentInstruction);
-                    if (RunnerPreFrontier.this.atLoadConstant) {
-                    	RunnerPreFrontier.this.loadConstantStackSize = currentState.getStackSize();
-                    }
-                    
-                    //if at a symbolic branch bytecode, and at postFrontierDepth - 1,
-                    //saves the pre-state
-                	if (isBytecodeBranch(currentInstruction) && currentState.getDepth() == RunnerPreFrontier.this.postFrontierDepth - 1) {
-                        RunnerPreFrontier.this.preFrontierState = currentState.clone();
-                	}
-                } catch (ThreadStackEmptyException | FrozenStateException e) {
-                    //this should never happen
-                    LOGGER.error("Internal error when attempting to inspect the state before bytecode instruction execution");
-                    LOGGER.error("Message: %s", e.toString());
-                    LOGGER.error("Stack trace:");
-                    for (StackTraceElement elem : e.getStackTrace()) {
-                        LOGGER.error("%s", elem.toString());
-                    }
-                    throw new RuntimeException(e); //TODO throw better exception
-                }
-            }
-            
-            return super.atStepPre();
-        }
+	public State getPreFrontierState() {
+		return this.preFrontierState;
+	}
 
-        @Override
-        public boolean atStepPost() {
-            final State currentState = getEngine().getCurrentState();
+	public boolean foundFinalState() {
+		return this.foundFinalState;
+	}
 
-            //steps guidance
-            try {
-            	RunnerPreFrontier.this.guid.postStep(currentState);
-            } catch (GuidanceException e) {
-                throw new RuntimeException(e); //TODO better exception!
-            }
-            
-            //updates coverage
-            if (currentState.phase() != Phase.PRE_INITIAL && RunnerPreFrontier.this.atJump) {
-                try {
-                	RunnerPreFrontier.this.coverage.add(currentState.getCurrentMethodSignature().toString() + ":" + RunnerPreFrontier.this.jumpPC + ":" + currentState.getCurrentProgramCounter());
-                } catch (ThreadStackEmptyException e) {
-                    //this should never happen
-                    LOGGER.error("Internal error when attempting to update coverage");
-                    LOGGER.error("Message: %s", e.toString());
-                    LOGGER.error("Stack trace:");
-                    for (StackTraceElement elem : e.getStackTrace()) {
-                        LOGGER.error("%s", elem.toString());
-                    }
-                    throw new RuntimeException(e); //TODO throw better exception
-                }
-            }
+	public Map<Long, String> getStringLiterals() {
+		return this.stringLiterals;
+	}
 
-            //stops if current state is at post-frontier (before adding string literals)
-            RunnerPreFrontier.this.foundPreFrontier = (currentState.getDepth() == RunnerPreFrontier.this.postFrontierDepth);
-            if (RunnerPreFrontier.this.foundPreFrontier || currentState.getCount() >= RunnerPreFrontier.this.maxCount) {
-                return true;
-            }
+	public Set<Long> getStringOthers() {
+		return this.stringOthers;
+	}
 
-            //manages string literals (they might be useful to EvoSuite)
-            if (currentState.phase() != Phase.PRE_INITIAL && RunnerPreFrontier.this.atLoadConstant) {
-                try {
-                    if (RunnerPreFrontier.this.loadConstantStackSize == currentState.getStackSize()) {
-                        final Value operand = currentState.getCurrentFrame().operands(1)[0];
-                        if (operand instanceof Reference) {
-                            final Reference r = (Reference) operand;
-                            final Objekt o = currentState.getObject(r);
-                            if (o != null && JAVA_STRING.equals(o.getType().getClassName())) {
-                                final long heapPosition = (r instanceof ReferenceConcrete ? ((ReferenceConcrete) r).getHeapPosition() : currentState.getResolution((ReferenceSymbolic) r));
-                                final String s = valueString(currentState, r);
-                                if (s == null) {
-                                	RunnerPreFrontier.this.stringOthers.add(heapPosition);
-                                } else {
-                                	RunnerPreFrontier.this.stringLiterals.put(heapPosition, s);
-                                }
-                            } //TODO: constants for Integer, Float, Double ... boxed types; add generic stateful object graphs produced by pure methods
-                        }					
-                    }
-                } catch (FrozenStateException | InvalidNumberOfOperandsException | ThreadStackEmptyException e) {
-                    //this should never happen
-                    LOGGER.error("Internal error when attempting to manage String literals");
-                    LOGGER.error("Message: %s", e.toString());
-                    LOGGER.error("Stack trace:");
-                    for (StackTraceElement elem : e.getStackTrace()) {
-                        LOGGER.error("%s", elem.toString());
-                    }
-                    throw new RuntimeException(e); //TODO throw better exception
-                }
-            }
+	public Set<String> getCoverage() {
+		return this.coverage;
+	}
 
-            return super.atStepPost();
-        }
+	public void run() throws CannotBacktrackException, CannotManageStateException, ClasspathException,
+	ThreadStackEmptyException, ContradictionException, DecisionException, EngineStuckException, FailureException,
+	NonexistingObservedVariablesException {
+		this.runner.run();
+	}
 
-        @Override
-        public boolean atPathEnd() {
-        	//this triggers end of unconstrained exploration when
-        	//the path is shorter than the depth bound
-        	RunnerPreFrontier.this.foundPreFrontier = false;
-        	return true;
-        }
-        
-        @Override
-        public boolean atContradictionException(ContradictionException e) {
-        	RunnerPreFrontier.this.foundPreFrontier = false;
-            return true;
-        }
-    }
-    
-    @Override
-    public void close() throws DecisionException {
-    	this.runner.getEngine().close();
-    }
+	/**
+	 * The {@link Actions} for this {@link RunnerPreFrontier}.
+	 * 
+	 * @author Pietro Braione
+	 */
+	private class ActionsRunnerPreFrontier extends Actions {
+		@Override
+		public boolean atInitial() {
+			if (RunnerPreFrontier.this.postFrontierDepth == 0) {
+				return true;
+			} else {
+				return super.atInitial();
+			}
+		}
+
+		@Override
+		public boolean atStepPre() {
+			final State currentState = getEngine().getCurrentState();
+
+			// steps guidance
+			try {
+				RunnerPreFrontier.this.guid.preStep(currentState);
+			} catch (GuidanceException e) {
+				throw new RuntimeException(e); // TODO better exception!
+			}
+
+			if (currentState.phase() != Phase.PRE_INITIAL) {
+				try {
+					final int currentProgramCounter = currentState.getCurrentProgramCounter();
+					final byte currentInstruction = currentState.getInstruction();
+
+					// if at entry of a method, add the entry point to coverage
+					if (currentProgramCounter == 0) {
+						RunnerPreFrontier.this.coverage
+						.add(currentState.getCurrentMethodSignature().toString() + ":0:0");
+					}
+
+					// if at a jump bytecode, saves the start program counter
+					RunnerPreFrontier.this.atJump = isBytecodeJump(currentInstruction);
+					if (RunnerPreFrontier.this.atJump) {
+						RunnerPreFrontier.this.jumpPC = currentProgramCounter;
+					}
+
+					// if at a load constant bytecode, saves the stack size
+					RunnerPreFrontier.this.atLoadConstant = isBytecodeLoad(currentInstruction);
+					if (RunnerPreFrontier.this.atLoadConstant) {
+						RunnerPreFrontier.this.loadConstantStackSize = currentState.getStackSize();
+					}
+
+					// if at a symbolic branch bytecode, and at postFrontierDepth - 1,
+					// saves the pre-state
+					if (isBytecodeBranch(currentInstruction) &&
+					currentState.getDepth() == RunnerPreFrontier.this.postFrontierDepth - 1) {
+						RunnerPreFrontier.this.preFrontierState = currentState.clone();
+					}
+				} catch (ThreadStackEmptyException | FrozenStateException e) {
+					// this should never happen
+					LOGGER
+					.error("Internal error when attempting to inspect the state before bytecode instruction execution");
+					LOGGER.error("Message: %s", e.toString());
+					LOGGER.error("Stack trace:");
+					for (StackTraceElement elem : e.getStackTrace()) {
+						LOGGER.error("%s", elem.toString());
+					}
+					throw new RuntimeException(e); // TODO throw better exception
+				}
+			}
+
+			return super.atStepPre();
+		}
+
+		@Override
+		public boolean atStepPost() {
+			final State currentState = getEngine().getCurrentState();
+
+			// steps guidance
+			try {
+				RunnerPreFrontier.this.guid.postStep(currentState);
+			} catch (GuidanceException e) {
+				throw new RuntimeException(e); // TODO better exception!
+			}
+
+			// updates coverage
+			if (currentState.phase() != Phase.PRE_INITIAL && RunnerPreFrontier.this.atJump) {
+				try {
+					RunnerPreFrontier.this.coverage.add(currentState.getCurrentMethodSignature().toString() + ":" +
+					RunnerPreFrontier.this.jumpPC + ":" + currentState.getCurrentProgramCounter());
+				} catch (ThreadStackEmptyException e) {
+					// this should never happen
+					LOGGER.error("Internal error when attempting to update coverage");
+					LOGGER.error("Message: %s", e.toString());
+					LOGGER.error("Stack trace:");
+					for (StackTraceElement elem : e.getStackTrace()) {
+						LOGGER.error("%s", elem.toString());
+					}
+					throw new RuntimeException(e); // TODO throw better exception
+				}
+			}
+
+			// stops if current state is at post-frontier (before adding string literals)
+			// or if the state count exceeded the maximum count
+			RunnerPreFrontier.this.foundPreFrontier =
+			(currentState.getDepth() == RunnerPreFrontier.this.postFrontierDepth);
+			final boolean countExceeded = 
+			(currentState.phase() != Phase.PRE_INITIAL && currentState.getCount() >= RunnerPreFrontier.this.maxCount);
+			if (RunnerPreFrontier.this.foundPreFrontier || countExceeded) {
+				return true;
+			}
+
+			// manages string literals (they might be useful to EvoSuite)
+			if (currentState.phase() != Phase.PRE_INITIAL && RunnerPreFrontier.this.atLoadConstant) {
+				try {
+					if (RunnerPreFrontier.this.loadConstantStackSize == currentState.getStackSize()) {
+						final Value operand = currentState.getCurrentFrame().operands(1)[0];
+						if (operand instanceof Reference) {
+							final Reference r = (Reference) operand;
+							final Objekt o = currentState.getObject(r);
+							if (o != null && JAVA_STRING.equals(o.getType().getClassName())) {
+								final long heapPosition =
+								(r instanceof ReferenceConcrete ? ((ReferenceConcrete) r).getHeapPosition() :
+								currentState.getResolution((ReferenceSymbolic) r));
+								final String s = valueString(currentState, r);
+								if (s == null) {
+									RunnerPreFrontier.this.stringOthers.add(heapPosition);
+								} else {
+									RunnerPreFrontier.this.stringLiterals.put(heapPosition, s);
+								}
+							} // TODO: constants for Integer, Float, Double ... boxed types; add generic
+							  // stateful object graphs produced by pure methods
+						}
+					}
+				} catch (FrozenStateException | InvalidNumberOfOperandsException | ThreadStackEmptyException e) {
+					// this should never happen
+					LOGGER.error("Internal error when attempting to manage String literals");
+					LOGGER.error("Message: %s", e.toString());
+					LOGGER.error("Stack trace:");
+					for (StackTraceElement elem : e.getStackTrace()) {
+						LOGGER.error("%s", elem.toString());
+					}
+					throw new RuntimeException(e); // TODO throw better exception
+				}
+			}
+
+			return super.atStepPost();
+		}
+
+		@Override
+		public boolean atPathEnd() {
+			// this triggers end of unconstrained exploration when
+			// the path is shorter than the depth bound
+			RunnerPreFrontier.this.foundPreFrontier = false;
+			RunnerPreFrontier.this.foundFinalState = true;
+			return true;
+		}
+
+		@Override
+		public boolean atContradictionException(ContradictionException e) {
+			RunnerPreFrontier.this.foundPreFrontier = false;
+			RunnerPreFrontier.this.foundFinalState = false;
+			return true;
+		}
+	}
+
+	@Override
+	public void close() throws DecisionException {
+		this.runner.getEngine().close();
+	}
 }

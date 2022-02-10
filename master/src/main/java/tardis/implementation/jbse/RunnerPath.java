@@ -239,9 +239,14 @@ final class RunnerPath implements AutoCloseable {
         //returns the result
         if (testDepth < 0) {
         	//there is no frontier, and the runnerPreFrontier's final
-        	//state is the final state of the guided execution: return it
-        	final State finalState = this.runnerPreFrontier.getCurrentState().clone();
-        	return Collections.singletonList(finalState);
+        	//state is the final state of the guided execution
+        	if (this.runnerPreFrontier.foundFinalState()) {
+        		final State finalState = this.runnerPreFrontier.getCurrentState().clone();
+        		return Collections.singletonList(finalState);
+        	} else {
+        		//maxDepth was too shallow
+        		return Collections.emptyList();
+        	}
         } else if (this.runnerPreFrontier.foundPreFrontier()) {
         	//steps to all the post-frontier states and gathers them
         	this.statePreFrontier = this.runnerPreFrontier.getPreFrontierState().clone();
