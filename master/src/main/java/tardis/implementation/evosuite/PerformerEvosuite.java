@@ -112,6 +112,8 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         this.classpathCompilationWrapper = classesPathString + File.pathSeparator + this.o.getSushiLibPath().toString();
         this.testCount = (o.getInitialTestCase() == null ? 0 : 1);
         this.stopForSeeding = false;
+        
+        // Create registry for RMI communication
     }
     
     private static URL toURL(Path path) {
@@ -133,6 +135,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         } else {
             this.testCount += items.size();
         }
+        
         final Runnable job = (isSeed ? 
                               () -> generateTestsAndScheduleJBSESeed(testCountInitial, items) :
                               () -> generateTestsAndScheduleJBSE(testCountInitial, items));
@@ -693,6 +696,11 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         retVal.add("-Dcrossover_function=SUSHI_HYBRID");
         retVal.add("-Dalgorithm=DYNAMOSA");
         retVal.add("-generateMOSuite");
+        
+        //retVal.add("-Dexternal_rmi_registry_port=" + registryPort);
+        //retVal.add("-Dtest_listener_rmi_identifier=" + appRmiIdentifier);
+        //retVal.add("-Dinjected_path_conditions_checking_rate=50");
+        //retVal.add("-Ddismiss_path_conditions_no_improve_iterations=50");
         
         return retVal;
     }

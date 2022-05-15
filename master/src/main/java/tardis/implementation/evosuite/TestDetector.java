@@ -40,6 +40,8 @@ final class TestDetector implements Runnable {
     private final BufferedWriter evosuiteLogFileWriter;
     private final JBSEResultInputOutputBuffer in;
 
+//	private final PerformerEvosuiteNew performerEvosuiteNew;
+
     /**
      * Constructor.
      * 
@@ -66,12 +68,26 @@ final class TestDetector implements Runnable {
         this.in = in;
     }
 
-    @Override
+//    public TestDetector(PerformerEvosuiteNew performerEvosuiteNew, Options o2, int testCountInitial2,
+//			List<JBSEResult> items2, InputStream inputStream, Path evosuiteLogFilePath2,
+//			JBSEResultInputOutputBuffer in2) {
+//    	this.performerEvosuiteNew = performerEvosuiteNew;
+//    	this.o = o;
+//    	this.testCountInitial = testCountInitial;
+//        this.items = items;
+//        this.evosuiteBufferedReader = new BufferedReader(new InputStreamReader(evosuiteInputStream));
+//        this.evosuiteLogFilePath = evosuiteLogFilePath;
+//        this.evosuiteLogFileWriter = Files.newBufferedWriter(this.evosuiteLogFilePath);
+//        this.in = in;
+//	}
+
+	@Override
     public void run() {
         //reads/copies the standard input and detects the generated tests
         final HashSet<Integer> generated = new HashSet<>();
         try {
-            final Pattern patternEmittedTest = Pattern.compile("^.*\\* EMITTED TEST CASE: .*EvoSuiteWrapper_(\\d+), \\w+\\z");
+            final Pattern patternEmittedTest = Pattern.compile("^.*\\* EMITTED TEST CASE: .*EvoSuiteWrapper_(\\d+).*, \\w+\\z");
+            
             String line;
             while ((line = this.evosuiteBufferedReader.readLine()) != null) {
                 if (Thread.interrupted()) {
