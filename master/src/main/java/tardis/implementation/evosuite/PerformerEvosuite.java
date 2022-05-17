@@ -16,6 +16,10 @@ import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.rmi.NotBoundException;
+import java.rmi.RemoteException;
+import java.rmi.registry.LocateRegistry;
+import java.rmi.registry.Registry;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -52,6 +56,11 @@ import jbse.mem.exc.FrozenStateException;
 import jbse.mem.exc.HeapMemoryExhaustedException;
 import jbse.val.HistoryPoint;
 import jbse.val.SymbolFactory;
+import shaded.org.evosuite.ga.FitnessFunction;
+import shaded.org.evosuite.rmi.UtilsRMI;
+import shaded.org.evosuite.rmi.service.EvosuiteRemote;
+import shaded.org.evosuite.rmi.service.TestListenerRemote;
+import shaded.org.evosuite.utils.Randomness;
 import sushi.formatters.StateFormatterSushiPathCondition;
 import tardis.Options;
 import tardis.framework.OutputBuffer;
@@ -67,7 +76,7 @@ import tardis.implementation.jbse.JBSEResult;
  * 
  * @author Pietro Braione
  */
-public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
+public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> implements TestListenerRemote {
     private static final Logger LOGGER = LogManager.getFormatterLogger(PerformerEvosuite.class);
     
     private final List<List<String>> visibleTargetMethods;
@@ -79,11 +88,16 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
     private final URL[] classpathTestURLClassLoader;
     private final String classpathCompilationTest;
     private final String classpathCompilationWrapper;
+    public static final String appRmiIdentifier = "RmiEvoSuite";
     private int testCount;
     private volatile boolean stopForSeeding;
+    private int registryPort = -1;
+	private Registry registry;
+	EvosuiteRemote evosuiteMasterNode = null;
+	private final Process evosuiteProcess = null;
     
     public PerformerEvosuite(Options o, JBSEResultInputOutputBuffer in, OutputBuffer<EvosuiteResult> out) 
-    throws NoJavaCompilerException, ClassNotFoundException, MalformedURLException, SecurityException {
+    throws Exception {
         super(in, out, o.getNumOfThreadsEvosuite(), o.getNumMOSATargets(), o.getThrottleFactorEvosuite(), o.getTimeoutMOSATaskCreationDuration(), o.getTimeoutMOSATaskCreationUnit());
         this.visibleTargetMethods = getTargets(o);
         this.compiler = ToolProvider.getSystemJavaCompiler();
@@ -114,7 +128,32 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         this.stopForSeeding = false;
         
         // Create registry for RMI communication
+        createAndConnectRegistry();
     }
+
+	private void createAndConnectRegistry() throws Exception {
+		int port = 2000;
+		port += Randomness.nextInt(20000);
+
+		final int TRIES = 100;
+		for (int i = 0; i < TRIES; i++) {
+			try {
+				int candidatePort = port + i;
+				UtilsRMI.ensureRegistryOnLoopbackAddress();
+				registry = LocateRegistry.createRegistry(candidatePort);
+				registryPort = candidatePort;
+			} catch (RemoteException e) {
+			}
+		}
+		if (registry == null) {
+			throw new RuntimeException("unable to create registry");
+		}
+		System.out.println("Started registry on port " + registryPort);
+		
+		TestListenerRemote stub = (TestListenerRemote) UtilsRMI.exportObject(this);
+		registry.rebind(appRmiIdentifier, stub);
+		System.out.println("Connected to registry " + registryPort);
+	}
     
     private static URL toURL(Path path) {
         try {
@@ -231,20 +270,30 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
     	final List<String> evosuiteCommand = buildEvoSuiteCommand(testCountInitial, items);
 
     	//launches EvoSuite
+//    	final Path evosuiteLogFilePath = this.o.getTmpDirectoryPath().resolve("evosuite-log-seed.txt");
+//    	final Process evosuiteProcess;
+//    	try {
+//    		evosuiteProcess = launchProcess(evosuiteCommand);
+//    		LOGGER.info("Launched EvoSuite seed process, command line: %s", evosuiteCommand.stream().reduce("", (s1, s2) -> { return s1 + " " + s2; }));
+//    	} catch (IOException e) {
+//    		LOGGER.error("Unexpected I/O error while running EvoSuite seed process");
+//    		LOGGER.error("Message: %s", e.toString());
+//    		LOGGER.error("Stack trace:");
+//    		for (StackTraceElement elem : e.getStackTrace()) {
+//    			LOGGER.error("%s", elem.toString());
+//    		}
+//    		return;
+//    	}
+    	
     	final Path evosuiteLogFilePath = this.o.getTmpDirectoryPath().resolve("evosuite-log-seed.txt");
-    	final Process evosuiteProcess;
-    	try {
-    		evosuiteProcess = launchProcess(evosuiteCommand);
-    		LOGGER.info("Launched EvoSuite seed process, command line: %s", evosuiteCommand.stream().reduce("", (s1, s2) -> { return s1 + " " + s2; }));
-    	} catch (IOException e) {
-    		LOGGER.error("Unexpected I/O error while running EvoSuite seed process");
-    		LOGGER.error("Message: %s", e.toString());
-    		LOGGER.error("Stack trace:");
-    		for (StackTraceElement elem : e.getStackTrace()) {
-    			LOGGER.error("%s", elem.toString());
-    		}
-    		return;
+    	
+    	// Launch EvoSuite
+    	if (evosuiteProcess == null) {
+    		launchEvosuite(evosuiteCommand, evosuiteLogFilePath);
+    	} else {
+    		// TODO: update EvoSuite instance
     	}
+    			
 
     	//launches a thread that waits for tests and schedules 
     	//JBSE for exploring them
@@ -308,18 +357,25 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
 
     	//launches EvoSuite
     	final Path evosuiteLogFilePath = this.o.getTmpDirectoryPath().resolve("evosuite-log-seed.txt");
-    	final Process evosuiteProcess;
-    	try {
-    		evosuiteProcess = launchProcess(evosuiteCommand, evosuiteLogFilePath);
-    		LOGGER.info("Launched EvoSuite seed process, command line: %s", evosuiteCommand.stream().reduce("", (s1, s2) -> { return s1 + " " + s2; }));
-    	} catch (IOException e) {
-    		LOGGER.error("Unexpected I/O error while running EvoSuite seed process");
-    		LOGGER.error("Message: %s", e.toString());
-    		LOGGER.error("Stack trace:");
-    		for (StackTraceElement elem : e.getStackTrace()) {
-    			LOGGER.error("%s", elem.toString());
-    		}
-    		return;
+//    	final Process evosuiteProcess;
+//    	try {
+//    		evosuiteProcess = launchProcess(evosuiteCommand, evosuiteLogFilePath);
+//    		LOGGER.info("Launched EvoSuite seed process, command line: %s", evosuiteCommand.stream().reduce("", (s1, s2) -> { return s1 + " " + s2; }));
+//    	} catch (IOException e) {
+//    		LOGGER.error("Unexpected I/O error while running EvoSuite seed process");
+//    		LOGGER.error("Message: %s", e.toString());
+//    		LOGGER.error("Stack trace:");
+//    		for (StackTraceElement elem : e.getStackTrace()) {
+//    			LOGGER.error("%s", elem.toString());
+//    		}
+//    		return;
+//    	}
+    	
+    	// Launch EvoSuite
+    	if (evosuiteProcess == null) {
+    		launchEvosuite(evosuiteCommand, evosuiteLogFilePath);
+    	} else {
+    		// TODO: update EvoSuite instance
     	}
 
     	//waits for EvoSuite to end
@@ -475,22 +531,29 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
             //builds the EvoSuite command line
             final List<String> evosuiteCommand = buildEvoSuiteCommand(testCount, compiled); 
 
-            //launches EvoSuite
+//            //launches EvoSuite
             final Path evosuiteLogFilePath = this.o.getTmpDirectoryPath().resolve("evosuite-log-" + testCount + ".txt");
-            final Process evosuiteProcess;
-            try {
-                evosuiteProcess = launchProcess(evosuiteCommand);
-                processes.add(evosuiteProcess);
-                LOGGER.info("Launched EvoSuite process, command line: %s", evosuiteCommand.stream().reduce("", (s1, s2) -> { return s1 + " " + s2; }));
-            } catch (IOException e) {
-                LOGGER.error("Unexpected I/O error while running EvoSuite process");
-                LOGGER.error("Message: %s", e.toString());
-                LOGGER.error("Stack trace:");
-                for (StackTraceElement elem : e.getStackTrace()) {
-                    LOGGER.error("%s", elem.toString());
-                }
-                continue;
-            }
+//            final Process evosuiteProcess;
+//            try {
+//                evosuiteProcess = launchProcess(evosuiteCommand);
+//                processes.add(evosuiteProcess);
+//                LOGGER.info("Launched EvoSuite process, command line: %s", evosuiteCommand.stream().reduce("", (s1, s2) -> { return s1 + " " + s2; }));
+//            } catch (IOException e) {
+//                LOGGER.error("Unexpected I/O error while running EvoSuite process");
+//                LOGGER.error("Message: %s", e.toString());
+//                LOGGER.error("Stack trace:");
+//                for (StackTraceElement elem : e.getStackTrace()) {
+//                    LOGGER.error("%s", elem.toString());
+//                }
+//                continue;
+//            }
+            
+         // Launch EvoSuite
+        	if (evosuiteProcess == null) {
+        		launchEvosuite(evosuiteCommand, evosuiteLogFilePath);
+        	} else {
+        		// TODO: update EvoSuite instance
+        	}
 
             //launches a thread that waits for tests and schedules 
             //JBSE for exploring them
@@ -697,10 +760,10 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         retVal.add("-Dalgorithm=DYNAMOSA");
         retVal.add("-generateMOSuite");
         
-        //retVal.add("-Dexternal_rmi_registry_port=" + registryPort);
-        //retVal.add("-Dtest_listener_rmi_identifier=" + appRmiIdentifier);
-        //retVal.add("-Dinjected_path_conditions_checking_rate=50");
-        //retVal.add("-Ddismiss_path_conditions_no_improve_iterations=50");
+        retVal.add("-Dexternal_rmi_registry_port=" + registryPort);
+        retVal.add("-Dtest_listener_rmi_identifier=" + appRmiIdentifier);
+        retVal.add("-Dinjected_path_conditions_checking_rate=50");
+        retVal.add("-Ddismiss_path_conditions_no_improve_iterations=50");
         
         return retVal;
     }
@@ -873,4 +936,52 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
             throw new ClassFileAccessException(e, testCaseClassName);
         }
     }
+    
+    private void launchEvosuite(final List<String> evosuiteCommand, Path evosuiteLogFilePath) {
+		Thread t = new Thread() {
+			@Override
+			public void run() {
+				try {
+					final ProcessBuilder pb = new ProcessBuilder(evosuiteCommand).redirectErrorStream(true).redirectOutput(evosuiteLogFilePath.toFile());
+					final Process processEvosuite = pb.start();
+					System.out.println("Launched EvoSuite process, command line: " + evosuiteCommand.stream().reduce("", (s1, s2) -> { return s1 + " " + s2; }));
+					try {
+						processEvosuite.waitFor();
+					} catch (InterruptedException e) {
+						//the performer was shut down: kill the EvoSuite job
+						System.err.println("Unexpected InterruptedException while running EvoSuite: " + e);
+						processEvosuite.destroy();
+					}
+				} catch (IOException e) {
+					System.err.println("Unexpected I/O error while running EvoSuite: " + e);
+					throw new RuntimeException(e);
+				}
+				System.out.println("EvoSuite process finished");
+				System.exit(0);
+			}
+		};
+		t.start();
+	}
+
+    @Override
+	public void evosuiteServerReady(String evosuiteServerRmiIdentifier) throws RemoteException {
+		System.out.println("Evosuite server is ready, name is " + evosuiteServerRmiIdentifier);
+		try {
+			evosuiteMasterNode = (EvosuiteRemote) registry.lookup(evosuiteServerRmiIdentifier);
+		} catch (NotBoundException e) {
+			System.err.println("Error when connecting to evosuite server via rmi with identifier " + evosuiteServerRmiIdentifier + ": " + e);
+			e.printStackTrace();
+		}
+		System.out.println("Connected to EvoSuite process with RMI identifier: " + evosuiteServerRmiIdentifier);
+	}
+
+	@Override
+	public void generatedTest(FitnessFunction<?> goal, String testFileName) throws RemoteException {
+		System.out.println("Evosuite server communicated new test: " + testFileName + " -- It is for goal: " + goal);
+	}
+
+	@Override
+	public void dismissedFitnessGoal(FitnessFunction<?> goal, int iteration, double fitnessValue, int[] updateIterations) throws RemoteException {
+		System.out.println("Evosuite server communicated dismissed goal: " + goal + ", iteration is " + iteration + ", fitness is " + fitnessValue + ", with updates at iterations " + Arrays.toString(updateIterations));
+	}
 }
