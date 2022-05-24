@@ -90,6 +90,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
     private final String classpathCompilationWrapper;
     public static final String appRmiIdentifier = "RmiEvoSuite";
     private int testCount;
+    private int testCountInitial;
     private volatile boolean stopForSeeding;
     private int registryPort = -1;
 	private Registry registry;
@@ -126,6 +127,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
         this.classpathCompilationWrapper = classesPathString + File.pathSeparator + this.o.getSushiLibPath().toString();
         this.testCount = (o.getInitialTestCase() == null ? 0 : 1);
         this.stopForSeeding = false;
+		this.testCountInitial = 0;
         
         // Create registry for RMI communication
         createAndConnectRegistry();
@@ -167,7 +169,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
     @Override
     protected Runnable makeJob(List<JBSEResult> items) {
         while (this.stopForSeeding) ; //ugly spinlocking
-        final int testCountInitial = this.testCount;
+        this.testCountInitial = this.testCount;
         final boolean isSeed = items.stream().map(JBSEResult::isSeed).reduce(true, (a, b) -> a && b); 
         if (isSeed) {
             this.stopForSeeding = true;
@@ -533,24 +535,24 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
 
 //            //launches EvoSuite
             final Path evosuiteLogFilePath = this.o.getTmpDirectoryPath().resolve("evosuite-log-" + testCount + ".txt");
-//            final Process evosuiteProcess;
-//            try {
-//                evosuiteProcess = launchProcess(evosuiteCommand);
-//                processes.add(evosuiteProcess);
-//                LOGGER.info("Launched EvoSuite process, command line: %s", evosuiteCommand.stream().reduce("", (s1, s2) -> { return s1 + " " + s2; }));
-//            } catch (IOException e) {
-//                LOGGER.error("Unexpected I/O error while running EvoSuite process");
-//                LOGGER.error("Message: %s", e.toString());
-//                LOGGER.error("Stack trace:");
-//                for (StackTraceElement elem : e.getStackTrace()) {
-//                    LOGGER.error("%s", elem.toString());
-//                }
-//                continue;
-//            }
+            final Process evosuiteProcess;
+            try {
+                evosuiteProcess = launchProcess(evosuiteCommand);
+                processes.add(evosuiteProcess);
+                LOGGER.info("Launched EvoSuite process, command line: %s", evosuiteCommand.stream().reduce("", (s1, s2) -> { return s1 + " " + s2; }));
+            } catch (IOException e) {
+                LOGGER.error("Unexpected I/O error while running EvoSuite process");
+                LOGGER.error("Message: %s", e.toString());
+                LOGGER.error("Stack trace:");
+                for (StackTraceElement elem : e.getStackTrace()) {
+                    LOGGER.error("%s", elem.toString());
+                }
+                continue;
+            }
             
          // Launch EvoSuite
         	if (evosuiteProcess == null) {
-        		launchEvosuite(evosuiteCommand, evosuiteLogFilePath);
+//        		launchEvosuite(evosuiteCommand, evosuiteLogFilePath);
         	} else {
         		// TODO: update EvoSuite instance
         	}
@@ -978,6 +980,43 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
 	@Override
 	public void generatedTest(FitnessFunction<?> goal, String testFileName) throws RemoteException {
 		System.out.println("Evosuite server communicated new test: " + testFileName + " -- It is for goal: " + goal);
+		
+		try {
+			// TODO: correct items
+            checkTestCompileAndScheduleJBSE(this.testCount, this.items.get(this.testCount - this.testCountInitial);
+        } catch (NoTestFileException e) {
+            LOGGER.error("Failed to generate the test case %s for post-frontier path condition %s:%s: the generated test class file does not seem to exist (perhaps EvoSuite must be blamed)", e.file.toAbsolutePath().toString(), e.entryPoint, e.pathCondition);
+            //continue
+        } catch (NoTestFileScaffoldingException e) {
+            LOGGER.error("Failed to generate the test case %s for post-frontier path condition %s:%s: the generated scaffolding class file does not seem to exist (perhaps EvoSuite must be blamed)", e.file.toAbsolutePath().toString(), e.entryPoint, e.pathCondition);
+            //continue
+        } catch (NoTestMethodException e) {
+            LOGGER.warn("Failed to generate the test case %s for post-frontier path condition %s:%s: the generated files does not contain a test method (perhaps EvoSuite must be blamed)", e.file.toAbsolutePath().toString(), e.entryPoint, e.pathCondition);
+            //continue
+        } catch (CompilationFailedTestException e) {
+            LOGGER.error("Internal error: EvoSuite test case %s compilation failed", e.file.toAbsolutePath().toString());
+            //continue
+        } catch (CompilationFailedTestScaffoldingException e) {
+            LOGGER.error("Internal error: EvoSuite test case scaffolding %s compilation failed", e.file.toAbsolutePath().toString());
+            //continue
+        } catch (ClassFileAccessException e) {
+            LOGGER.error("Unexpected error while verifying that class %s exists and has a test method", e.className);
+            LOGGER.error("Message: %s", e.e.toString());
+            LOGGER.error("Stack trace:");
+            for (StackTraceElement elem : e.e.getStackTrace()) {
+                LOGGER.error("%s", elem.toString());
+            }
+            //continue
+        } catch (IOFileCreationException e) {
+            LOGGER.error("Unexpected I/O error while creating test case compilation log file %s", e.file.toAbsolutePath().toString());
+            LOGGER.error("Message: %s", e.e.toString());
+            LOGGER.error("Stack trace:");
+            for (StackTraceElement elem : e.e.getStackTrace()) {
+                LOGGER.error("%s", elem.toString());
+            }
+            //continue
+        }
+	
 	}
 
 	@Override

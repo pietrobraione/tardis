@@ -81,8 +81,9 @@ public final class Main {
      * 
      * @return An {@code int} exit code, {@code 0} meaning successful exit, {@code 1} meaning 
      *         exit due to an error, {@code 2} meaning exit due to an internal error.
+     * @throws Exception 
      */
-    public int start() {
+    public int start() throws Exception {
         configureLogger();
         LOGGER = LogManager.getFormatterLogger(Main.class);
         
@@ -402,7 +403,7 @@ public final class Main {
 
     //Here starts the static part of the class, for managing the command line
 
-    public static void main(String[] args) {		
+    public static void main(String[] args) throws Exception {		
         //parses options from the command line and exits if the command line
         //is ill-formed
         final Options o = new Options();
