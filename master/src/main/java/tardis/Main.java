@@ -47,6 +47,7 @@ import tardis.implementation.data.JBSEResultInputOutputBuffer;
 import tardis.implementation.data.TreePath;
 import tardis.implementation.evosuite.EvosuiteResult;
 import tardis.implementation.evosuite.PerformerEvosuite;
+import tardis.implementation.evosuite.PerformerEvosuiteRMI;
 import tardis.implementation.evosuite.TestCase;
 import tardis.implementation.jbse.JBSEResult;
 import tardis.implementation.jbse.PerformerJBSE;
@@ -107,20 +108,38 @@ public final class Main {
             final QueueInputOutputBuffer<EvosuiteResult> testCaseBuffer = new QueueInputOutputBuffer<>();
 
             //...the performers and the termination manager
-            final PerformerEvosuite performerEvosuite = new PerformerEvosuite(this.o, pathConditionBuffer, testCaseBuffer);
             final PerformerJBSE performerJBSE = new PerformerJBSE(this.o, testCaseBuffer, pathConditionBuffer, treePath);
-            final TerminationManager terminationManager = new TerminationManager(this.o, performerJBSE, performerEvosuite);
-
-            //injects a seed into a performer
-            injectSeed(performerEvosuite, performerJBSE);
-            
-            //starts everything
-            performerJBSE.start();
-            performerEvosuite.start();
-            terminationManager.start();
-
-            //waits for the end
-            terminationManager.waitTermination();
+            if (this.o.getSingleEvosuiteInstance()) {
+            	this.o.setNumOfThreadsEvosuite(1);
+            	this.o.setNumOfThreadsJBSE(1);
+            	final PerformerEvosuiteRMI performerEvosuiteRMI = new PerformerEvosuiteRMI(this.o, pathConditionBuffer, testCaseBuffer);
+            	final TerminationManager terminationManager = new TerminationManager(this.o, performerJBSE, performerEvosuiteRMI);
+            	
+            	//injects a seed into a performer
+                injectSeed(performerEvosuiteRMI, performerJBSE);
+                
+                //starts everything
+                performerJBSE.start();
+                performerEvosuiteRMI.start();
+                terminationManager.start();
+                
+              //waits for the end
+                terminationManager.waitTermination();
+            } else {
+            	final PerformerEvosuite performerEvosuite = new PerformerEvosuite(this.o, pathConditionBuffer, testCaseBuffer);
+            	final TerminationManager terminationManager = new TerminationManager(this.o, performerJBSE, performerEvosuite);
+            	
+            	//injects a seed into a performer
+                injectSeed(performerEvosuite, performerJBSE);
+                
+                //starts everything
+                performerJBSE.start();
+                performerEvosuite.start();
+                terminationManager.start();
+                
+              //waits for the end
+                terminationManager.waitTermination();
+            }
             
             //logs a final message and returns
             LOGGER.info("%s ends", getName());
@@ -188,8 +207,8 @@ public final class Main {
             return 2;
         }
     }
-    
-    /**
+
+	/**
      * Configures the logger
      */
     private void configureLogger() {
@@ -307,6 +326,20 @@ public final class Main {
             performerEvosuite.seed(seed);
         }
     }
+    
+    private void injectSeed(PerformerEvosuiteRMI performerEvosuiteRMI, PerformerJBSE performerJBSE) 
+    	    throws NoJavaCompilerException, JavaCompilerException, ClassNotFoundException, MalformedURLException, SecurityException, NoInitialTestFileException {
+    	        if (this.o.getTargetMethod() != null && this.o.getInitialTestCase() != null) {
+    	            //the target is a method and there is an
+    	            //initial test case: JBSE should start
+    	            final ArrayList<EvosuiteResult> seed = generateSeedForPerformerJBSE();
+    	            performerJBSE.seed(seed);
+    	        } else {
+    	            //all the other cases: EvoSuite should start
+    	            final ArrayList<JBSEResult> seed = generateSeedForPerformerEvosuite();
+    	            performerEvosuiteRMI.seed(seed);
+    	        }
+    	    }
     
     /**
      * Generates a seed for the Evosuite performer.

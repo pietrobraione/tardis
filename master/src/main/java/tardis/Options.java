@@ -237,7 +237,11 @@ public final class Options implements Cloneable {
             usage = "The minimum size of the training set necessary for retraining.")
     private int indexInfeasibilityThreshold = 200;
 
-    public boolean getHelp() {
+    @Option(name = "-single_evosuite_instance",
+            usage = "Whether to have one or multiple instances of Evosuite running")
+    private boolean singleEvosuiteInstance = false;
+
+	public boolean getHelp() {
         return this.help;
     }
 
@@ -835,6 +839,14 @@ public final class Options implements Cloneable {
         }
         this.indexInfeasibilityThreshold = indexInfeasibilityThreshold;
     }
+    
+    public boolean getSingleEvosuiteInstance() {
+		return this.singleEvosuiteInstance;
+	}
+
+	public void setSingleEvosuiteInstance(boolean singleEvosuiteInstance) {
+		this.singleEvosuiteInstance = singleEvosuiteInstance;
+	}
 
     @Override
     public Options clone() {
