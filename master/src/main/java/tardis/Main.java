@@ -40,6 +40,7 @@ import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.ParserProperties;
 
+import tardis.framework.Performer;
 import tardis.framework.QueueInputOutputBuffer;
 import tardis.framework.TerminationManager;
 import tardis.implementation.common.NoJavaCompilerException;
@@ -109,37 +110,35 @@ public final class Main {
 
             //...the performers and the termination manager
             final PerformerJBSE performerJBSE = new PerformerJBSE(this.o, testCaseBuffer, pathConditionBuffer, treePath);
+            Performer performerEvosuite;
+            
             if (this.o.getSingleEvosuiteInstance()) {
             	this.o.setNumOfThreadsEvosuite(1);
             	this.o.setNumOfThreadsJBSE(1);
-            	final PerformerEvosuiteRMI performerEvosuiteRMI = new PerformerEvosuiteRMI(this.o, pathConditionBuffer, testCaseBuffer);
-            	final TerminationManager terminationManager = new TerminationManager(this.o, performerJBSE, performerEvosuiteRMI);
+            	performerEvosuite = new PerformerEvosuiteRMI(this.o, pathConditionBuffer, testCaseBuffer);
             	
             	//injects a seed into a performer
-                injectSeed(performerEvosuiteRMI, performerJBSE);
+                injectSeed((PerformerEvosuiteRMI) performerEvosuite, performerJBSE);
                 
-                //starts everything
-                performerJBSE.start();
-                performerEvosuiteRMI.start();
-                terminationManager.start();
-                
-              //waits for the end
-                terminationManager.waitTermination();
+                // TODO: adjust in order to kill evosuite instance after performer
+//                performerEvosuiteRMI.stopEvosuite();
             } else {
-            	final PerformerEvosuite performerEvosuite = new PerformerEvosuite(this.o, pathConditionBuffer, testCaseBuffer);
+            	performerEvosuite = new PerformerEvosuite(this.o, pathConditionBuffer, testCaseBuffer);
             	final TerminationManager terminationManager = new TerminationManager(this.o, performerJBSE, performerEvosuite);
             	
             	//injects a seed into a performer
-                injectSeed(performerEvosuite, performerJBSE);
-                
-                //starts everything
-                performerJBSE.start();
-                performerEvosuite.start();
-                terminationManager.start();
-                
-              //waits for the end
-                terminationManager.waitTermination();
+                injectSeed((PerformerEvosuite) performerEvosuite, performerJBSE);
+              
             }
+            final TerminationManager terminationManager = new TerminationManager(this.o, performerJBSE, performerEvosuite);
+            
+          //starts everything
+            performerJBSE.start();
+            performerEvosuite.start();
+            terminationManager.start();
+            
+          //waits for the end
+            terminationManager.waitTermination();
             
             //logs a final message and returns
             LOGGER.info("%s ends", getName());

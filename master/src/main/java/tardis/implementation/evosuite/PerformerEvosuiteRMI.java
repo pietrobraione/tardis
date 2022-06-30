@@ -58,6 +58,7 @@ import jbse.mem.exc.FrozenStateException;
 import jbse.mem.exc.HeapMemoryExhaustedException;
 import jbse.val.HistoryPoint;
 import jbse.val.SymbolFactory;
+import shaded.org.evosuite.coverage.branch.BranchCoverageTestFitness;
 import shaded.org.evosuite.ga.FitnessFunction;
 import shaded.org.evosuite.rmi.UtilsRMI;
 import shaded.org.evosuite.rmi.service.EvosuiteRemote;
@@ -700,7 +701,7 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
     	final JBSEResult item = items.get(0);
         final String targetClass = item.getTargetMethodClassName().replace('/', '.');
         final ArrayList<String> retVal = buildEvoSuiteCommandCommon(targetClass);
-        retVal.add("-Dcriterion=PATHCONDITION");             
+        retVal.add("-Dcriterion=PATHCONDITION:BRANCH");             
         retVal.add("-Dsushi_statistics=true");
         retVal.add("-Dpath_condition_target=LAST_ONLY");
         retVal.add("-Dpath_condition_evaluators_dir=" + this.o.getTmpBinDirectoryPath().toString());
@@ -868,6 +869,10 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
 			}
 		}
 	}
+    
+    public void stopEvosuite() {
+    	evosuiteProcess.destroy();
+    }
 
     @Override
 	public void evosuiteServerReady(String evosuiteServerRmiIdentifier) throws RemoteException {
@@ -884,7 +889,11 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
 	@Override
 	public void generatedTest(FitnessFunction<?> goal, String testFileName) throws RemoteException {
 		System.out.println("Evosuite server communicated new test: " + testFileName + " -- It is for goal: " + goal);
+		if (goal instanceof BranchCoverageTestFitness) {
+			return;
+		}
 		String[] testFileNameSplit = testFileName.split("_");
+		
 		final int testCount = Integer.parseInt(testFileNameSplit[1]);
 		JBSEResult wrapper = itemsMap.get(testCount);
 		if (evosuiteCapacityCounter.decrementAndGet() < this.o.getNumMOSATargets()) {
