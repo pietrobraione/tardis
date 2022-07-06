@@ -865,6 +865,8 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
 	public void generatedTest(FitnessFunction<?> goal, String testFileName) throws RemoteException {
 		System.out.println("Evosuite server communicated new test: " + testFileName + " -- It is for goal: " + goal);
 		if (goal instanceof BranchCoverageTestFitness) {
+			// TODO: split, generate EvoSuite Results and send back test
+			
 			return;
 		}
 		String[] testFileNameSplit = testFileName.split("_");
@@ -916,7 +918,7 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
 	@Override
 	public void dismissedFitnessGoal(FitnessFunction<?> goal, int iteration, double fitnessValue, int[] updateIterations) throws RemoteException {
 		System.out.println("Evosuite server communicated dismissed goal: " + goal + ", iteration is " + iteration + ", fitness is " + fitnessValue + ", with updates at iterations " + Arrays.toString(updateIterations));
-		if (evosuiteCapacityCounter.decrementAndGet() < this.o.getNumMOSATargets()) {
+		if (evosuiteCapacityCounter.decrementAndGet() < this.o.getNumMOSATargets() && !(goal instanceof BranchCoverageTestFitness)) {
 			synchronized (this) {
 				this.notifyAll();
 			}
