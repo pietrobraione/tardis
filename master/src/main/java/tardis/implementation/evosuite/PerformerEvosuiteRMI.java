@@ -274,15 +274,10 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
 
     	
     	if (evosuiteProcess == null) {
-//        	if (compiled.size() < this.o.getNumMOSATargets()) {
-        		evosuiteCapacityCounter.addAndGet(items.size());
-                final List<String> evosuiteCommand = buildEvoSuiteCommand(testCount, items); 
-                final Path evosuiteLogFilePath = this.o.getTmpDirectoryPath().resolve("evosuite-log-" + testCount + ".txt");
-                launchEvosuite(evosuiteCommand, evosuiteLogFilePath);
-//        	} else {
-//        		// TODO: split compiled items in order to avoid evosuite overflow
-//        		
-//        	}
+    		evosuiteCapacityCounter.addAndGet(items.size());
+            final List<String> evosuiteCommand = buildEvoSuiteCommand(testCount, items); 
+            final Path evosuiteLogFilePath = this.o.getTmpDirectoryPath().resolve("evosuite-log-" + testCount + ".txt");
+            launchEvosuite(evosuiteCommand, evosuiteLogFilePath);
     	} else {
     		while (evosuiteCapacityCounter.getAndUpdate(new IntUnaryOperator(){
 				@Override
@@ -471,15 +466,10 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
         }
         
         if (evosuiteProcess == null) {
-//        	if (compiled.size() < this.o.getNumMOSATargets()) {
-        		evosuiteCapacityCounter.addAndGet(compiled.size());
-                final List<String> evosuiteCommand = buildEvoSuiteCommand(testCount, compiled); 
-                final Path evosuiteLogFilePath = this.o.getTmpDirectoryPath().resolve("evosuite-log-" + testCount + ".txt");
-                launchEvosuite(evosuiteCommand, evosuiteLogFilePath);
-//        	} else {
-//        		// TODO: split compiled items in order to avoid evosuite overflow
-//        		
-//        	}
+    		evosuiteCapacityCounter.addAndGet(compiled.size());
+            final List<String> evosuiteCommand = buildEvoSuiteCommand(testCount, compiled); 
+            final Path evosuiteLogFilePath = this.o.getTmpDirectoryPath().resolve("evosuite-log-" + testCount + ".txt");
+            launchEvosuite(evosuiteCommand, evosuiteLogFilePath);
     	} else {
     		while (evosuiteCapacityCounter.getAndUpdate(new IntUnaryOperator(){
 				@Override
@@ -719,21 +709,6 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
         }
         retVal.add(optionPC.toString());
         return retVal;
-    }
-
-    /**
-     * Creates and launches an external process. The stderr of the
-     * process will be redirected to the stdout.
-     * 
-     * @param commandLine a {@link List}{@code <}{@link String}{@code >}, the command line
-     *        to launch the process in the format expected by {@link ProcessBuilder}.
-     * @return the created {@link Process}.
-     * @throws IOException if thrown by {@link ProcessBuilder#start()}.
-     */
-    private Process launchProcess(List<String> commandLine) throws IOException {
-        final ProcessBuilder pb = new ProcessBuilder(commandLine).redirectErrorStream(true);
-        final Process pr = pb.start();
-        return pr;
     }
 
     /**
