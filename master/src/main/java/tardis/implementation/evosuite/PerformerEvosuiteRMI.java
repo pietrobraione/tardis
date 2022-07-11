@@ -91,8 +91,7 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
     private final String classpathCompilationTest;
     private final String classpathCompilationWrapper;
     public static final String appRmiIdentifier = "RmiEvoSuite";
-    private int testCount;
-    private int testCountInitial;
+    private AtomicInteger testCount = new AtomicInteger();
     private volatile boolean stopForSeeding;
     private int registryPort = -1;
 	private Registry registry;
@@ -128,9 +127,8 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
         }
         this.classpathCompilationTest = this.o.getTmpBinDirectoryPath().toString() + File.pathSeparator + classesPathString + File.pathSeparator + this.o.getJBSELibraryPath().toString() + File.pathSeparator + this.o.getSushiLibPath().toString() + File.pathSeparator + this.o.getEvosuitePath().toString();
         this.classpathCompilationWrapper = classesPathString + File.pathSeparator + this.o.getSushiLibPath().toString();
-        this.testCount = (o.getInitialTestCase() == null ? 0 : 1);
+        this.testCount.set(0);
         this.stopForSeeding = false;
-		this.testCountInitial = 0;
 		this.evosuiteCapacityCounter.set(0);
         
         // Create registry for RMI communication
@@ -144,20 +142,20 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
 		final int TRIES = 100;
 		for (int i = 0; i < TRIES; i++) {
 			try {
-				int candidatePort = port + i;
+				final int candidatePort = port + i;
 				UtilsRMI.ensureRegistryOnLoopbackAddress();
-				registry = LocateRegistry.createRegistry(candidatePort);
-				registryPort = candidatePort;
+				this.registry = LocateRegistry.createRegistry(candidatePort);
+				this.registryPort = candidatePort;
 			} catch (RemoteException e) {
 			}
 		}
-		if (registry == null) {
+		if (this.registry == null) {
 			throw new RuntimeException("unable to create registry");
 		}
 		System.out.println("Started registry on port " + registryPort);
 		
-		TestListenerRemote stub = (TestListenerRemote) UtilsRMI.exportObject(this);
-		registry.rebind(appRmiIdentifier, stub);
+		final TestListenerRemote stub = (TestListenerRemote) UtilsRMI.exportObject(this);
+		this.registry.rebind(appRmiIdentifier, stub);
 		System.out.println("Connected to registry " + registryPort);
 	}
     
@@ -173,17 +171,14 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
     @Override
     protected Runnable makeJob(List<JBSEResult> items) {
         while (this.stopForSeeding) ; //ugly spinlocking
-        this.testCountInitial = this.testCount;
         final boolean isSeed = items.stream().map(JBSEResult::isSeed).reduce(true, (a, b) -> a && b); 
         if (isSeed) {
             this.stopForSeeding = true;
-        } else {
-            this.testCount += items.size();
         }
         
         final Runnable job = (isSeed ? 
-                              () -> generateTestsAndScheduleJBSESeed(testCountInitial, items) :
-                              () -> generateTestsAndScheduleJBSE(testCountInitial, items));
+                              () -> generateTestsAndScheduleJBSESeed(items) :
+                              () -> generateTestsAndScheduleJBSE(items));
         return job;
     }
 
@@ -191,9 +186,6 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
      * Invokes EvoSuite to generate a set of {@link TestCase}s that cover a 
      * set of methods. Used only during the seeding phase.
      * 
-     * @param testCountInitial an {@code int}, the number used to identify 
-     *        the generated tests. The test generated will be numbered starting 
-     *        from {@code testCountInitial} henceforth.
      * @param items a {@link List}{@code <}{@link JBSEResult}{@code >}. It must be
      *        {@code item.}{@link JBSEResult#isSeed() isSeed}{@code () == true}
      *        for all {@code item} in {@code items}, and 
@@ -202,13 +194,13 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
      *        {@code items.}{@link List#get(int) get}{@code (0).}{@link JBSEResult#hasTargetMethod() hasTargetMethod}{@code () == false},
      *        then it must be {@code items.}{@link List#size() size}{@code () == 1}.
      */
-    private void generateTestsAndScheduleJBSESeed(int testCountInitial, List<JBSEResult> items) {
+    private void generateTestsAndScheduleJBSESeed(List<JBSEResult> items) {
         try {
             final boolean targetIsASetOfMethods = items.get(0).hasTargetMethod();
             if (targetIsASetOfMethods) {
-            	generateTestsAndScheduleJBSESeedTargetIsASetOfMethods(testCountInitial, items);
+            	generateTestsAndScheduleJBSESeedTargetIsASetOfMethods(items);
             } else {
-            	generateTestsAndScheduleJBSESeedTargetIsAClass(testCountInitial, items);
+            	generateTestsAndScheduleJBSESeedTargetIsAClass(items);
             }
         } finally {
             //unlocks
@@ -221,24 +213,20 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
      * set of methods. Used only during the seeding phase, handles the case
      * where the target methods are indicated singularly.
      * 
-     * @param testCountInitial an {@code int}, the number used to identify 
-     *        the generated tests. The test generated will be numbered starting 
-     *        from {@code testCountInitial} henceforth.
      * @param items a {@link List}{@code <}{@link JBSEResult}{@code >}. It must be
      *        {@code item.}{@link JBSEResult#isSeed() isSeed}{@code () == true}
      *        for all {@code item} in {@code items}, and 
      *        {@code item.}{@link JBSEResult#hasTargetMethod() hasTargetMethod}{@code () == true}
      *        for all {@code item} in {@code items}.
      */
-    private void generateTestsAndScheduleJBSESeedTargetIsASetOfMethods(int testCountInitial, List<JBSEResult> items) {
-    	//updates testCount
-    	this.testCount += items.size();
-
+    private void generateTestsAndScheduleJBSESeedTargetIsASetOfMethods(List<JBSEResult> items) {
     	//builds the EvoSuite wrappers
-    	int testCount = testCountInitial;
+    	final ArrayList<Pair<JBSEResult, Integer>> compiled = new ArrayList<>();
     	for (JBSEResult item : items) {
+    		final int testCount = this.testCount.getAndIncrement();
     		try {
-    			emitAndCompileEvoSuiteWrapperSeedTargetMethod(testCount++, item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName());
+    			emitAndCompileEvoSuiteWrapperSeedTargetMethod(testCount, item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName());
+    			compiled.add(new Pair<>(item, testCount));
     		} catch (CompilationFailedWrapperException e) {
     			LOGGER.error("Internal error: EvoSuite wrapper %s compilation failed", e.file.toAbsolutePath().toString());
     			return;
@@ -271,19 +259,22 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
     			return;
     		}
     	}
-
     	
-    	if (evosuiteProcess == null) {
-    		evosuiteCapacityCounter.addAndGet(items.size());
-            final List<String> evosuiteCommand = buildEvoSuiteCommand(testCount, items); 
-            final Path evosuiteLogFilePath = this.o.getTmpDirectoryPath().resolve("evosuite-log-" + testCount + ".txt");
+    	if (compiled.size() == 0) {
+    		return;
+    	}
+    	
+    	if (this.evosuiteProcess == null) {
+    		this.evosuiteCapacityCounter.addAndGet(items.size());
+            final List<String> evosuiteCommand = buildEvoSuiteCommand(compiled); 
+            final Path evosuiteLogFilePath = this.o.getTmpDirectoryPath().resolve("evosuite-log-" + Thread.currentThread().getId() + ".txt");
             launchEvosuite(evosuiteCommand, evosuiteLogFilePath);
     	} else {
-    		while (evosuiteCapacityCounter.getAndUpdate(new IntUnaryOperator(){
+    		while (this.evosuiteCapacityCounter.getAndUpdate(new IntUnaryOperator() {
 				@Override
 				public int applyAsInt(int operand) {
 					if (operand < o.getNumMOSATargets()) {
-						return operand+items.size();
+						return operand + items.size();
 					}
 					return 0;
 				}
@@ -296,7 +287,7 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
 					}
     			}
     		}
-    		sendPathConditionsToEvosuite(testCount, items);
+    		sendPathConditionsToEvosuite(compiled);
     	}
     	
     }
@@ -307,48 +298,28 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
      * where the target methods are indicated implicitly by specifying a 
      * target class.
      * 
-     * @param testCountInitial an {@code int}, the number used to identify 
-     *        the generated tests. The test generated will be numbered starting 
-     *        from {@code testCountInitial} henceforth.
      * @param items a {@link List}{@code <}{@link JBSEResult}{@code >}. It must be
      *        {@code item.}{@link JBSEResult#isSeed() isSeed}{@code () == true}
      *        for all {@code item} in {@code items}, {@code items.}{@link List#size() size}{@code () == 1} and 
      *        {@code items.}{@link List#get(int) get}{@code (0).}{@link JBSEResult#hasTargetMethod() hasTargetMethod}{@code () == false}.
      *        for all {@code item} in {@code items}.
      */
-    private void generateTestsAndScheduleJBSESeedTargetIsAClass(int testCountInitial, List<JBSEResult> items) {
+    private void generateTestsAndScheduleJBSESeedTargetIsAClass(List<JBSEResult> items) {
     	//builds the EvoSuite command line
-    	final List<String> evosuiteCommand = buildEvoSuiteCommandSeedTargetClass(items.get(0));
-    	final Path evosuiteLogFilePath = this.o.getTmpDirectoryPath().resolve("evosuite-log-seed.txt");
+    	final Pair<JBSEResult, Integer> pair = new Pair<>(items.get(0), this.testCount.getAndIncrement());
+    	final List<String> evosuiteCommand = buildEvoSuiteCommand(Collections.singletonList(pair));
+    	final Path evosuiteLogFilePath = this.o.getTmpDirectoryPath().resolve("evosuite-log-" + Thread.currentThread().getId() + ".txt");
     	
-    	if (evosuiteProcess == null) {
-        		evosuiteCapacityCounter.addAndGet(1);
-                launchEvosuite(evosuiteCommand, evosuiteLogFilePath);
-    	} else {
-    		while (evosuiteCapacityCounter.getAndUpdate(new IntUnaryOperator(){
-				@Override
-				public int applyAsInt(int operand) {
-					if (operand < o.getNumMOSATargets()) {
-						return operand++;
-					}
-					return 0;
-				}
-    		}) >= this.o.getNumMOSATargets()) {
-    			synchronized (this) {
-	    			try {
-						this.wait();
-					} catch (InterruptedException e) {
-						e.printStackTrace();
-					}
-    			}
-    		}
-    		sendPathConditionsToEvosuite(testCount, items.subList(0, 0));
+    	if (this.evosuiteProcess == null) {
+    		this.evosuiteCapacityCounter.incrementAndGet();
+    		launchEvosuite(evosuiteCommand, evosuiteLogFilePath);
     	}
 
+    	/*
     	//splits output
-    	final List<JBSEResult> splitItems;
+    	final List<Pair<JBSEResult, Integer>> splitItems;
     	try {
-    		final SeedSplitter seedSplitter = new SeedSplitter(this.o, items.get(0).getTargetClassName(), this.visibleTargetMethods, testCountInitial);
+    		final SeedSplitterRMI seedSplitter = new SeedSplitterRMI(this.o, items.get(0).getTargetClassName(), this.visibleTargetMethods, this.testCount);
     		splitItems = seedSplitter.split();
     	} catch (NoTestFileException e) {
     		LOGGER.error("Failed to split the seed test case %s: the generated test class file does not seem to exist (perhaps EvoSuite must be blamed)", e.file.toAbsolutePath().toString());
@@ -375,10 +346,9 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
     	}
 
     	//schedules JBSE
-    	int testCount = testCountInitial;
-    	for (JBSEResult item : splitItems) {
+    	for (Pair<JBSEResult, Integer> item : splitItems) {
     		try {
-    			checkTestCompileAndScheduleJBSE(testCount, item);
+    			checkTestCompileAndScheduleJBSE(item.second(), item.first());
     		} catch (NoTestFileException e) {
     			LOGGER.error("Failed to generate the test case %s for post-frontier path condition %s:%s: The generated test class file does not seem to exist (perhaps EvoSuite must be blamed)", e.file.toAbsolutePath().toString(), e.entryPoint, e.pathCondition);
     			//continue
@@ -410,13 +380,9 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
     				LOGGER.error("%s", elem.toString());
     			}
     			//continue
-    		} finally {
-    			++testCount;
     		}
-
-    		//updates the counter
-    		this.testCount = testCount;
     	}
+    	*/
     }
     
     /**
@@ -424,20 +390,18 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
      * set of path condition, and then explores the generated test cases 
      * starting from the depth of the respective path conditions.
      * 
-     * @param testCountInitial an {@code int}, the number used to identify 
-     *        the generated tests. The test generated from {@code items.get(i)}
-     *        will be numbered {@code testCountInitial + i}.
-     * @param items a {@link List}{@code <}{@link JBSEResult}{@code >}, results of symbolic execution.
+     * @param items a a {@link List}{@code <}{@link JBSEResult}{@code >},  
+     *        where each {@link JBSEResult} is the result of symbolic execution.
      */
-    private void generateTestsAndScheduleJBSE(int testCountInitial, List<JBSEResult> items) {
+    private void generateTestsAndScheduleJBSE(List<JBSEResult> items) {
     	//generates and compiles the wrappers
-        final ArrayList<JBSEResult> compiled = new ArrayList<>();
-        int i = testCount;
+    	final ArrayList<Pair<JBSEResult, Integer>> compiled = new ArrayList<>();
         for (JBSEResult item : items) {
+            final int testCount = this.testCount.getAndIncrement();
             try {
-                emitAndCompileEvoSuiteWrapper(i, item.getInitialState(), item.getPostFrontierState(), item.getStringLiterals(), item.getStringOthers(), item.getForbiddenExpansions());
-                compiled.add(item);
-                itemsMap.put(i, item);
+                emitAndCompileEvoSuiteWrapper(testCount, item.getInitialState(), item.getPostFrontierState(), item.getStringLiterals(), item.getStringOthers(), item.getForbiddenExpansions());
+                compiled.add(new Pair<>(item, testCount));
+                this.itemsMap.put(testCount, item);
             } catch (CompilationFailedWrapperException e) {
                 LOGGER.error("Internal error: EvoSuite wrapper %s compilation failed", e.file.toAbsolutePath().toString());
                 //falls through
@@ -458,24 +422,23 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
                 }
                 //falls through
             }
-            ++i;
         }
         
         if (compiled.size() == 0) {
         	return;
         }
         
-        if (evosuiteProcess == null) {
-    		evosuiteCapacityCounter.addAndGet(compiled.size());
-            final List<String> evosuiteCommand = buildEvoSuiteCommand(testCount, compiled); 
-            final Path evosuiteLogFilePath = this.o.getTmpDirectoryPath().resolve("evosuite-log-" + testCount + ".txt");
+        if (this.evosuiteProcess == null) {
+        	this.evosuiteCapacityCounter.addAndGet(compiled.size());
+            final List<String> evosuiteCommand = buildEvoSuiteCommand(compiled); 
+            final Path evosuiteLogFilePath = this.o.getTmpDirectoryPath().resolve("evosuite-log-" + Thread.currentThread().getId() + ".txt");
             launchEvosuite(evosuiteCommand, evosuiteLogFilePath);
     	} else {
-    		while (evosuiteCapacityCounter.getAndUpdate(new IntUnaryOperator(){
+    		while (this.evosuiteCapacityCounter.getAndUpdate(new IntUnaryOperator() {
 				@Override
 				public int applyAsInt(int operand) {
 					if (operand < o.getNumMOSATargets()) {
-						return operand+compiled.size();
+						return operand + compiled.size();
 					}
 					return 0;
 				}
@@ -488,7 +451,7 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
 					}
     			}
     		}
-    		sendPathConditionsToEvosuite(testCount, compiled);
+    		sendPathConditionsToEvosuite(compiled);
     	}
     }
         
@@ -656,40 +619,19 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
     }
     
     /**
-     * Builds the command line for invoking EvoSuite for the generation of the
-     * seed tests with a class as target.
-     * 
-     * @param item a {@link JBSEResult} such that {@code item.}{@link JBSEResult#isSeed() isSeed}{@code () == true && }{@link JBSEResult#hasTargetMethod() hasTargetMethod}{@code () == false}.
-     *        All the items in {@code items} must refer to the same target method, i.e., must have same
-     *        {@link JBSEResult#getTargetMethodClassName() class name}, {@link JBSEResult#getTargetMethodDescriptor() method descriptor}, and 
-     *        {@link JBSEResult#getTargetMethodName() method name}.
-     * @return a command line in the format of an {@link ArrayList}{@code <}{@link String}{@code >},
-     *         suitable to be passed to a {@link ProcessBuilder}.
-     */
-    private ArrayList<String> buildEvoSuiteCommandSeedTargetClass(JBSEResult item) {
-        final boolean isTargetAMethod = (item.getTargetClassName() == null);
-        final String targetClass = (isTargetAMethod ? item.getTargetMethodClassName() : item.getTargetClassName()).replace('/', '.');
-        final ArrayList<String> retVal = buildEvoSuiteCommandCommon(targetClass);
-        retVal.add("-Dcriterion=BRANCH");
-        retVal.add("-Djunit_suffix=" + "_Seed_Test");
-        return retVal;
-    }
-
-    /**
      * Builds the command line for invoking EvoSuite.
      * 
-     * @param testCountInitial an {@code int}, the number used to identify 
-     *        the generated tests. The test generated from {@code items.get(i)}
-     *        will be numbered {@code testCountInitial + i}.
-     * @param items a {@link List}{@code <}{@link JBSEResult}{@code >}, results of symbolic execution.
-     *        All the items in {@code items} must refer to the same target class, i.e., must have same
+     * @param items a nonempty {@link List}{@code <}{@link Pair}{@code <}{@link JBSEResult}{@code , }{@link Integer}{@code >>}.
+     *        where each {@link JBSEResult} is the result of symbolic execution and its paired {@link Integer} is the
+     *        identifier of the corresponding test case (if it will be generated).
+     *        All the {@link JBSEResult} in {@code items} must refer to the same target class, i.e., must have same
      *        {@link JBSEResult#getTargetMethodClassName() class name}.
      * @return a command line in the format of an {@link ArrayList}{@code <}{@link String}{@code >},
      *         suitable to be passed to a {@link ProcessBuilder}.
      */
-    private ArrayList<String> buildEvoSuiteCommand(int testCountInitial, List<JBSEResult> items) {
-    	final JBSEResult item = items.get(0);
-        final String targetClass = item.getTargetMethodClassName().replace('/', '.');
+    private ArrayList<String> buildEvoSuiteCommand(List<Pair<JBSEResult, Integer>> items) {
+    	final JBSEResult aJBSEResult = items.get(0).first();
+        final String targetClass = aJBSEResult.getTargetMethodClassName().replace('/', '.');
         final ArrayList<String> retVal = buildEvoSuiteCommandCommon(targetClass);
         retVal.add("-Dcriterion=PATHCONDITION:BRANCH");             
         retVal.add("-Dsushi_statistics=true");
@@ -697,15 +639,16 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
         retVal.add("-Dpath_condition_evaluators_dir=" + this.o.getTmpBinDirectoryPath().toString());
         retVal.add("-Demit_tests_incrementally=true");
         final StringBuilder optionPC = new StringBuilder("-Dpath_condition=");
-        for (int i = testCountInitial; i < testCountInitial + items.size(); ++i) {
-            if (i > testCountInitial) {
+        boolean firstDone = false;
+        for (Pair<JBSEResult, Integer> item : items) {
+            if (firstDone) {
                 optionPC.append(":");
             }
-            final int itemNumber = i - testCountInitial;
-            final String targetMethodDescriptor = items.get(itemNumber).getTargetMethodDescriptor();
-            final String targetMethodName = items.get(itemNumber).getTargetMethodName();
+            firstDone = true;
+            final String targetMethodDescriptor = item.first().getTargetMethodDescriptor();
+            final String targetMethodName = item.first().getTargetMethodName();
             final String targetPackage = targetClass.substring(0, targetClass.lastIndexOf('.'));
-            optionPC.append(targetClass + "," + targetMethodName + targetMethodDescriptor + "," + targetPackage + ".EvoSuiteWrapper_" + i);
+            optionPC.append(targetClass + "," + targetMethodName + targetMethodDescriptor + "," + targetPackage + ".EvoSuiteWrapper_" + item.second());
         }
         retVal.add(optionPC.toString());
         return retVal;
@@ -823,18 +766,17 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
         }
 	}
     
-    private void sendPathConditionsToEvosuite(int testCountInitial, List<JBSEResult> items) {
-		if (evosuiteMasterNode != null) {
+    private void sendPathConditionsToEvosuite(List<Pair<JBSEResult, Integer>> items) {
+		if (this.evosuiteMasterNode != null) {
 			try {
-				final JBSEResult item = items.get(0);
-		        final String targetClass = item.getTargetMethodClassName().replace('/', '.');
-				for (int i = testCountInitial; i < testCountInitial + items.size(); ++i) {
-					final int itemNumber = i - testCountInitial;
-					final String targetPackage = targetClass.substring(0, targetClass.lastIndexOf('.'));
-		            final String targetMethodNameAndDescriptor = new StringBuilder(items.get(itemNumber).getTargetMethodName()).append(items.get(itemNumber).getTargetMethodDescriptor()).toString();
-		            final String wrapperName = new StringBuilder(targetPackage).append(".EvoSuiteWrapper_").append(i).toString();
+				final JBSEResult aJBSEResult = items.get(0).first();
+		        final String targetClass = aJBSEResult.getTargetMethodClassName().replace('/', '.');
+				final String targetPackage = targetClass.substring(0, targetClass.lastIndexOf('.'));
+				for (Pair<JBSEResult, Integer> item : items) {
+		            final String targetMethodNameAndDescriptor = new StringBuilder(item.first().getTargetMethodName()).append(item.first().getTargetMethodDescriptor()).toString();
+		            final String wrapperName = new StringBuilder(targetPackage).append(".EvoSuiteWrapper_").append(item.second()).toString();
 		            
-		            evosuiteMasterNode.evosuite_injectFitnessFunction(targetClass, targetMethodNameAndDescriptor, wrapperName);
+		            this.evosuiteMasterNode.evosuite_injectFitnessFunction(targetClass, targetMethodNameAndDescriptor, wrapperName);
 		            LOGGER.info("Sent new path conditions to Evosuite: %s in %s", targetMethodNameAndDescriptor, wrapperName);
 		        }
 				
@@ -853,7 +795,7 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
 	public void evosuiteServerReady(String evosuiteServerRmiIdentifier) throws RemoteException {
 		System.out.println("Evosuite server is ready, name is " + evosuiteServerRmiIdentifier);
 		try {
-			evosuiteMasterNode = (EvosuiteRemote) registry.lookup(evosuiteServerRmiIdentifier);
+			this.evosuiteMasterNode = (EvosuiteRemote) registry.lookup(evosuiteServerRmiIdentifier);
 		} catch (NotBoundException e) {
 			System.err.println("Error when connecting to evosuite server via rmi with identifier " + evosuiteServerRmiIdentifier + ": " + e);
 			e.printStackTrace();
