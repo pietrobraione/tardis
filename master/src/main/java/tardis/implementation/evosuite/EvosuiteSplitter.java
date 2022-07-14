@@ -1,7 +1,8 @@
 package tardis.implementation.evosuite;
 
 import static jbse.common.Type.splitParametersDescriptors;
-import static tardis.implementation.common.Util.getInternalClassloader;
+import static tardis.implementation.common.Util.ensureInternalClassLoader;
+import static tardis.implementation.common.Util.getInternalClassLoader;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -39,7 +40,15 @@ import com.github.javaparser.ast.visitor.Visitable;
 import tardis.Options;
 import tardis.implementation.jbse.JBSEResult;
 
-final class SeedSplitterRMI {
+/**
+ * Splits an EvoSuite test class with one (or more) test 
+ * methods and no specified target in one (or more) test
+ * classes with a specific target. 
+ * 
+ * @author Pietro Braione
+ *
+ */
+final class EvosuiteSplitter {
 	private final Options o;
 	private final String targetClassName;
 	private final String targetClassName_Unqualified;
@@ -57,6 +66,8 @@ final class SeedSplitterRMI {
 	 * Constructor.
 	 * 
      * @param o an {@link Options} object. It must not be {@code null}.
+     * @param testFileNameNoExtension a {@link String}, the name of the source file 
+     *        containing the test class (without the .java extension).
      * @param targetClassName a {@link String}, the name of the target class.
      * @param visibleTargetMethod a {@link List}{@code <}{@link List}{@code <}{@link String}{@code >>}.
      *        Every element of the list must be a method signature, i.e., a list
@@ -66,11 +77,12 @@ final class SeedSplitterRMI {
      * @param testCount an {@code AtomicInteger} used to identify 
      *        the generated tests.
 	 */
-	SeedSplitterRMI(Options o, String targetClassName, List<List<String>> visibleTargetMethods, AtomicInteger testCount) {
+	EvosuiteSplitter(Options o, String testFileNameNoExtension, String targetClassName, List<List<String>> visibleTargetMethods, AtomicInteger testCount) {
 		this.o = o;
 		this.targetClassName = targetClassName;
 		this.targetClassName_Unqualified = unqualify(this.targetClassName);
-		this.testClassName = this.targetClassName + "_Seed_Test";
+		final String[] testFileNameSplit =  testFileNameNoExtension.split("_");
+		this.testClassName = this.targetClassName + "_Branch_" + testFileNameSplit[testFileNameSplit.length - 2] + "_Test";
         this.testClassName_Unqualified = unqualify(this.testClassName);
 		this.scaffClassName = (this.o.getEvosuiteNoDependency() ? null : this.testClassName + "_scaffolding");
 		this.testFile = this.o.getTmpTestsDirectoryPath().resolve(this.testClassName + ".java");
@@ -107,9 +119,9 @@ final class SeedSplitterRMI {
         testMethodsInCompilationUnit(cuTestClass);
         
         //generates all the split classes and the return value
+    	ensureInternalClassLoader(this.o.getClassesPath()); //necessary to scavenge types
         final ArrayList<Pair<JBSEResult, Integer>> retVal = new ArrayList<>();
         for (MethodDeclaration mdTest : testMethodDeclarations) {
-        	final int testCount = this.testCount.getAndIncrement();
             //builds a map of variable declarations (variable names to
             //class names)
             final HashMap<String, Class<?>> varDecls = variableDeclarationsMap(cuTestClass, mdTest);
@@ -135,6 +147,7 @@ final class SeedSplitterRMI {
                 }
 
                 //defines the names of the new classes
+            	final int testCount = this.testCount.getAndIncrement();
                 final String testClassNameNew = (this.targetClassName + "_" + testCount + "_Test");
                 final String scaffClassNameNew = (this.o.getEvosuiteNoDependency() ? null : testClassNameNew + "_scaffolding");
 
@@ -192,7 +205,8 @@ final class SeedSplitterRMI {
         return retVal;
     }
     
-    private static HashMap<String, Class<?>> variableDeclarationsMap(CompilationUnit cuTestClass, MethodDeclaration mdTest) {
+    private static HashMap<String, Class<?>> variableDeclarationsMap(CompilationUnit cuTestClass, MethodDeclaration mdTest) 
+    throws SecurityException {
         final HashMap<String, Class<?>> retVal = new HashMap<>();
         mdTest.findAll(VariableDeclarator.class).forEach(vd -> {
             retVal.put(vd.getNameAsString(), javaTypeToClass(cuTestClass, vd.getTypeAsString()));
@@ -427,7 +441,7 @@ final class SeedSplitterRMI {
             }
             return Array.newInstance(memberType, 0).getClass();
         } else { //class name
-            final ClassLoader ic = getInternalClassloader();
+            final ClassLoader ic = getInternalClassLoader();
             final String typeNoGenerics = eraseGenericParameters(type);
             final ArrayList<String> possiblePackageQualifiers = possiblePackageQualifiers(cu, typeNoGenerics);
             for (String possiblePackageQualifier : possiblePackageQualifiers) {
@@ -525,7 +539,7 @@ final class SeedSplitterRMI {
     }
     
     private static Class<?> classFileTypeToClass(String type) {
-        final ClassLoader ic = getInternalClassloader();
+        final ClassLoader ic = getInternalClassLoader();
         final String typeName = internalToBinaryTypeName(type);
         Class<?> retVal = null;
         try {

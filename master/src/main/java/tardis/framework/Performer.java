@@ -115,6 +115,7 @@ public abstract class Performer<I,O> {
     /**
      * Constructor.
      * 
+     * @param name a meaningful name for the performer that will be used for debugging.
      * @param in The {@link InputBuffer} from which this {@link Performer} will read the input items. 
      * @param out The {@link OutputBuffer} where this {@link Performer} will put the output items.
      * @param numOfThreads The number of concurrent threads that this {@link Performer} encapsulates.
@@ -130,7 +131,7 @@ public abstract class Performer<I,O> {
      * @throws NullPointerException if {@code in == null || out == null || timeoutUnit == null}.
      * @throws IllegalArgumentException if {@code numOfThreads <= 0 || numInputs <= 0 || timeoutDuration < 0}.
      */
-    public Performer(InputBuffer<I> in, OutputBuffer<O> out, int numOfThreads, int numInputs, float throttleFactor, long timeoutDuration, TimeUnit timeoutTimeUnit) {
+    public Performer(String name, InputBuffer<I> in, OutputBuffer<O> out, int numOfThreads, int numInputs, float throttleFactor, long timeoutDuration, TimeUnit timeoutTimeUnit) {
         if (in == null || out == null || timeoutTimeUnit == null) {
             throw new NullPointerException("Invalid null parameter in performer constructor.");
         }
@@ -139,7 +140,7 @@ public abstract class Performer<I,O> {
         }
         this.in = in;
         this.out = out;
-        this.threadPool = new PausableFixedThreadPoolExecutor(numOfThreads);
+        this.threadPool = new PausableFixedThreadPoolExecutor(name, numOfThreads);
         this.numInputs = numInputs;
         this.throttleFactor = throttleFactor;
         this.timeoutDuration = timeoutDuration;
@@ -158,7 +159,7 @@ public abstract class Performer<I,O> {
                 }
             }
             this.threadPool.shutdownNow();
-        });
+        }, name + "-main");
         this.lockPause = new ReentrantLock();
         this.conditionNotPaused = this.lockPause.newCondition();
         this.conditionPaused = this.lockPause.newCondition();
@@ -218,9 +219,21 @@ public abstract class Performer<I,O> {
         this.paused = false;
         this.stopped = true;
         this.mainThread.interrupt();
-        this.threadPool.shutdownNow(); //pleonastic
+        try {
+			this.mainThread.join();
+		} catch (InterruptedException e) {
+			//continue
+		}
+        onStop();
     }
-
+    
+    /**
+     * Hook for cleanup to do on stop.
+     */
+    protected void onStop() {
+    	//nothing to do by default
+    }
+    
     /**
      * Pauses the performer so it can reliably be queried whether 
      * it {@link #isIdle()}.

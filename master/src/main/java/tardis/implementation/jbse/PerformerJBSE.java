@@ -13,7 +13,6 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
@@ -26,7 +25,6 @@ import org.apache.logging.log4j.Logger;
 
 import jbse.algo.exc.CannotManageStateException;
 import jbse.apps.run.UninterpretedNoContextException;
-import jbse.bc.ClassFile;
 import jbse.bc.ClassHierarchy;
 import jbse.bc.exc.InvalidClassFileFactoryClassException;
 import jbse.common.exc.ClasspathException;
@@ -74,7 +72,7 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
     private final ConcurrentHashMap<MethodPathConditon, Set<String>> freshObjectsExpansions = new ConcurrentHashMap<>();
 
     public PerformerJBSE(Options o, InputBuffer<EvosuiteResult> in, JBSEResultInputOutputBuffer out, TreePath treePath) {
-        super(in, out, o.getNumOfThreadsJBSE(), 1, o.getThrottleFactorJBSE(), o.getGlobalTimeBudgetDuration(), o.getGlobalTimeBudgetUnit());
+        super("PerformerJBSE", in, out, o.getNumOfThreadsJBSE(), 1, o.getThrottleFactorJBSE(), o.getTimeoutJBSETaskCreationDuration(), o.getTimeoutJBSETaskCreationUnit());
         this.o = o.clone();
         this.out = out;
         this.treePath = treePath;

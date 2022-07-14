@@ -83,9 +83,8 @@ public final class Main {
      * 
      * @return An {@code int} exit code, {@code 0} meaning successful exit, {@code 1} meaning 
      *         exit due to an error, {@code 2} meaning exit due to an internal error.
-     * @throws Exception 
      */
-    public int start() throws Exception {
+    public int start() {
         configureLogger();
         LOGGER = LogManager.getFormatterLogger(Main.class);
         
@@ -110,36 +109,29 @@ public final class Main {
 
             //...the performers and the termination manager
             final PerformerJBSE performerJBSE = new PerformerJBSE(this.o, testCaseBuffer, pathConditionBuffer, treePath);
-            Performer performerEvosuite;
+            Performer<JBSEResult, EvosuiteResult> performerEvosuite;
             
-            if (this.o.getSingleEvosuiteInstance()) {
-            	this.o.setNumOfThreadsEvosuite(1);
-            	this.o.setNumOfThreadsJBSE(1);
+            if (this.o.getEvosuiteMultiSearch()) {
             	performerEvosuite = new PerformerEvosuiteRMI(this.o, pathConditionBuffer, testCaseBuffer);
             	
             	//injects a seed into a performer
                 injectSeed((PerformerEvosuiteRMI) performerEvosuite, performerJBSE);
-                
-                // TODO: adjust in order to kill evosuite instance after performer
-//                performerEvosuiteRMI.stopEvosuite();
             } else {
             	performerEvosuite = new PerformerEvosuite(this.o, pathConditionBuffer, testCaseBuffer);
-            	final TerminationManager terminationManager = new TerminationManager(this.o, performerJBSE, performerEvosuite);
             	
             	//injects a seed into a performer
                 injectSeed((PerformerEvosuite) performerEvosuite, performerJBSE);
-              
             }
             final TerminationManager terminationManager = new TerminationManager(this.o, performerJBSE, performerEvosuite);
             
-          //starts everything
+            //starts everything
             performerJBSE.start();
             performerEvosuite.start();
             terminationManager.start();
-            
-          //waits for the end
+
+            //waits for the end
             terminationManager.waitTermination();
-            
+
             //logs a final message and returns
             LOGGER.info("%s ends", getName());
             return 0;
@@ -353,14 +345,16 @@ public final class Main {
     throws ClassNotFoundException, MalformedURLException, SecurityException {
         final ArrayList<JBSEResult> retVal = new ArrayList<>();
         if (this.o.getTargetMethod() != null) {
+        	//target is a single method
             retVal.add(new JBSEResult(this.o.getTargetMethod()));
         } else if (this.o.getInitialTestCaseRandom() == Randomness.METHOD) {
+        	//target is a class, we want "true" path conditions for each method
         	final List<List<String>> targets = getTargets(this.o);
         	for (List<String> target : targets) {
         		retVal.add(new JBSEResult(target));
         	}
         } else {
-            retVal.add(new JBSEResult(this.o.getTargetClass()));
+        	//target is a class, EvoSuite must be in charge of generating initial tests
         }
         return retVal;
     }

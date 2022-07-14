@@ -183,6 +183,14 @@ public final class Options implements Cloneable {
             usage = "Unit of the global time budget: NANOSECONDS, MICROSECONDS, MILLISECONDS, SECONDS, MINUTES, HOURS, DAYS")
     private TimeUnit globalTimeBudgetUnit = TimeUnit.MINUTES;
 
+    @Option(name = "-timeout_jbse_task_creation_duration",
+            usage = "Duration of the timeout after which a JBSE job is created")
+    private long timeoutJBSETaskCreationDuration = 5;
+
+    @Option(name = "-timeout_jbse_task_creation_unit",
+            usage = "Unit of the timeout after which a JBSE job is created: NANOSECONDS, MICROSECONDS, MILLISECONDS, SECONDS, MINUTES, HOURS, DAYS")
+    private TimeUnit timeoutJBSETaskCreationUnit = TimeUnit.SECONDS;
+
     @Option(name = "-timeout_mosa_task_creation_duration",
             usage = "Duration of the timeout after which a MOSA job is created")
     private long timeoutMOSATaskCreationDuration = 5;
@@ -234,12 +242,12 @@ public final class Options implements Cloneable {
     private boolean useIndexInfeasibility = true;
     
     @Option(name = "-infeasibility_index_threshold",
-            usage = "The minimum size of the training set necessary for retraining.")
+            usage = "The minimum size of the training set necessary for retraining")
     private int indexInfeasibilityThreshold = 200;
 
-    @Option(name = "-single_evosuite_instance",
-            usage = "Whether to have one or multiple instances of Evosuite running")
-    private boolean singleEvosuiteInstance = false;
+    @Option(name = "-evosuite_multi_search",
+            usage = "Whether EvoSuite shall do multiple path-condition-guided and branch-guided search")
+    private boolean evosuiteMultiSearch = false;
 
 	public boolean getHelp() {
         return this.help;
@@ -676,6 +684,28 @@ public final class Options implements Cloneable {
         this.globalTimeBudgetUnit = globalTimeBudgetUnit;
     }
 
+    public long getTimeoutJBSETaskCreationDuration() {
+        return this.timeoutJBSETaskCreationDuration;
+    }
+
+    public void setTimeoutJBSETaskCreationDuration(long timeoutJBSETaskCreationDuration) {
+        if (timeoutJBSETaskCreationDuration < 0) {
+            throw new IllegalArgumentException("Attempted to set the JBSE timeout for task creation duration to a negative value.");
+        }
+        this.timeoutJBSETaskCreationDuration = timeoutJBSETaskCreationDuration;
+    }
+
+    public TimeUnit getTimeoutJBSETaskCreationUnit() {
+        return this.timeoutJBSETaskCreationUnit;
+    }
+
+    public void setTimeoutJBSETaskCreationUnit(TimeUnit timeoutJBSETaskCreationUnit) {
+        if (timeoutJBSETaskCreationUnit == null) {
+            throw new IllegalArgumentException("Attempted to set the JBSE timeout for task creation time unit to null.");
+        }
+        this.timeoutJBSETaskCreationUnit = timeoutJBSETaskCreationUnit;
+    }
+
     public long getTimeoutMOSATaskCreationDuration() {
         return this.timeoutMOSATaskCreationDuration;
     }
@@ -840,12 +870,12 @@ public final class Options implements Cloneable {
         this.indexInfeasibilityThreshold = indexInfeasibilityThreshold;
     }
     
-    public boolean getSingleEvosuiteInstance() {
-		return this.singleEvosuiteInstance;
+    public boolean getEvosuiteMultiSearch() {
+		return this.evosuiteMultiSearch;
 	}
 
-	public void setSingleEvosuiteInstance(boolean singleEvosuiteInstance) {
-		this.singleEvosuiteInstance = singleEvosuiteInstance;
+	public void setEvosuiteMultiSearch(boolean evosuiteMultiSearch) {
+		this.evosuiteMultiSearch = evosuiteMultiSearch;
 	}
 
     @Override

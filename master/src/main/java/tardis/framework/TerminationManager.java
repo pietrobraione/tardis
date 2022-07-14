@@ -72,7 +72,7 @@ public final class TerminationManager {
                 //a timeout, just for safety
                 this.timedOut = true;
             }
-        });
+        }, "TerminationManager-detectorTimeout");
         this.detectorTermination = new Thread(() -> {
             while (true) {
                 try {
@@ -105,7 +105,7 @@ public final class TerminationManager {
 
             //quits
             stopAll();
-        });
+        }, "TerminationManager-detectorTermination");
     }
 
     /**
