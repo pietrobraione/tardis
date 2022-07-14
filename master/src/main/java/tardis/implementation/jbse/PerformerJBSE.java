@@ -81,22 +81,7 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
     @Override
     protected final Runnable makeJob(List<EvosuiteResult> items) {
         final EvosuiteResult item = items.get(0);
-        final Runnable job = () -> {
-            try {
-                explore(item, item.getStartDepth());
-            } catch (DecisionException | CannotBuildEngineException | InitializationException |
-            InvalidClassFileFactoryClassException | NonexistingObservedVariablesException |
-            ClasspathException | CannotBacktrackException | CannotManageStateException |
-            ThreadStackEmptyException | ContradictionException | EngineStuckException |
-            FailureException e ) {
-                LOGGER.error("Unexpected error while exploring test case %s", item.getTestCase().getClassName());
-                LOGGER.error("Message: %s", e.toString());
-                LOGGER.error("Stack trace:");
-                for (StackTraceElement elem : e.getStackTrace()) {
-                    LOGGER.error("%s", elem.toString());
-                }
-            }
-        };
+        final Runnable job = () -> explore(item, item.getStartDepth());
         return job;
     }
 
@@ -106,25 +91,8 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
      * 
      * @param item a {@link EvosuiteResult}.
      * @param depthStart the depth to which generation of tests must be started.
-     * @throws DecisionException
-     * @throws CannotBuildEngineException
-     * @throws InitializationException
-     * @throws InvalidClassFileFactoryClassException
-     * @throws NonexistingObservedVariablesException
-     * @throws ClasspathException
-     * @throws CannotBacktrackException
-     * @throws CannotManageStateException
-     * @throws ThreadStackEmptyException
-     * @throws ContradictionException
-     * @throws EngineStuckException
-     * @throws FailureException
      */
-    private void explore(EvosuiteResult item, int depthStart) 
-    throws DecisionException, CannotBuildEngineException, InitializationException, 
-    InvalidClassFileFactoryClassException, NonexistingObservedVariablesException, 
-    ClasspathException, CannotBacktrackException, CannotManageStateException, 
-    ThreadStackEmptyException, ContradictionException, EngineStuckException, 
-    FailureException {
+    private void explore(EvosuiteResult item, int depthStart) {
         if (this.o.getMaxDepth() <= 0) {
             return;
         }
@@ -205,7 +173,11 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
         } catch (NoTargetHitException e) {
             //prints some feedback
             LOGGER.warn("Run test case %s, does not reach the target method %s", item.getTestCase().getClassName(), item.getTargetMethodSignature());
-        } catch (FrozenStateException e) {
+        } catch (DecisionException | CannotBuildEngineException | InitializationException |
+                InvalidClassFileFactoryClassException | NonexistingObservedVariablesException |
+                ClasspathException | CannotBacktrackException | CannotManageStateException |
+                ThreadStackEmptyException | ContradictionException | EngineStuckException |
+                FailureException | FrozenStateException e) {
             LOGGER.error("Unexpected frozen state exception while trying to generate path condition for additional fresh object");
             LOGGER.error("Message: %s", e.toString());
             LOGGER.error("Stack trace:");
