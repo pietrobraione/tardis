@@ -28,6 +28,7 @@ import javax.tools.ToolProvider;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.core.LoggerContext;
 import org.apache.logging.log4j.core.appender.ConsoleAppender;
 import org.apache.logging.log4j.core.config.Configurator;
 import org.apache.logging.log4j.core.config.builder.api.AppenderComponentBuilder;
@@ -63,6 +64,11 @@ public final class Main {
      * The logger.
      */
     private static Logger LOGGER;
+    
+    /**
+     * The logger context.
+     */
+    private static LoggerContext LOGGER_CONTEXT;
     
     /**
      * The configuration {@link Options}.
@@ -196,6 +202,8 @@ public final class Main {
                 LOGGER.error("%s", elem.toString());
             }
             return 2;
+        } finally {
+        	shutdownLogger();
         }
     }
 
@@ -219,7 +227,11 @@ public final class Main {
         rootLoggerBuilder.add(builder.newAppenderRef("Stdout"));
         builder.add(rootLoggerBuilder);
         
-        Configurator.initialize(builder.build());
+        LOGGER_CONTEXT = Configurator.initialize(builder.build());
+    }
+    
+    private void shutdownLogger() {
+    	Configurator.shutdown(LOGGER_CONTEXT);
     }
     
     /**
@@ -293,8 +305,8 @@ public final class Main {
     /**
      * Injects a seed into a performer.
      * 
-     * @param performerEvosuite a {@link PerformerEvosuite}.
-     * @param performerJBSE a {@link PerformerJBSE}.
+     * @param performerEvosuite a {@link Performer}{@code <}{@link JBSEResult}{@code , ?>}.
+     * @param performerJBSE a {@link Performer}{@code <}{@link EvosuiteResult}{@code , ?>}. 
      * @throws NoJavaCompilerException if no Java compiler is installed.
      * @throws JavaCompilerException if some error happens while the Java 
      *         compiler is run.
@@ -304,7 +316,7 @@ public final class Main {
      * @throws NoInitialTestFileException  if the initial test specified by
      *         the user does not exist in the filesystem.
      */
-    private void injectSeed(PerformerEvosuite performerEvosuite, PerformerJBSE performerJBSE) 
+    private void injectSeed(Performer<JBSEResult, ?> performerEvosuite, Performer<EvosuiteResult, ?> performerJBSE) 
     throws NoJavaCompilerException, JavaCompilerException, ClassNotFoundException, MalformedURLException, SecurityException, NoInitialTestFileException {
         if (this.o.getTargetMethod() != null && this.o.getInitialTestCase() != null) {
             //the target is a method and there is an
@@ -317,20 +329,6 @@ public final class Main {
             performerEvosuite.seed(seed);
         }
     }
-    
-    private void injectSeed(PerformerEvosuiteRMI performerEvosuiteRMI, PerformerJBSE performerJBSE) 
-    	    throws NoJavaCompilerException, JavaCompilerException, ClassNotFoundException, MalformedURLException, SecurityException, NoInitialTestFileException {
-    	        if (this.o.getTargetMethod() != null && this.o.getInitialTestCase() != null) {
-    	            //the target is a method and there is an
-    	            //initial test case: JBSE should start
-    	            final ArrayList<EvosuiteResult> seed = generateSeedForPerformerJBSE();
-    	            performerJBSE.seed(seed);
-    	        } else {
-    	            //all the other cases: EvoSuite should start
-    	            final ArrayList<JBSEResult> seed = generateSeedForPerformerEvosuite();
-    	            performerEvosuiteRMI.seed(seed);
-    	        }
-    	    }
     
     /**
      * Generates a seed for the Evosuite performer.

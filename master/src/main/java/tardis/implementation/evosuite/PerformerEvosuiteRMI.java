@@ -1,6 +1,7 @@
 package tardis.implementation.evosuite;
 
 import static jbse.bc.ClassLoaders.CLASSLOADER_APP;
+import static shaded.org.evosuite.rmi.UtilsRMI.exportObject;
 import static tardis.implementation.common.Util.getTargets;
 import static tardis.implementation.common.Util.stream;
 import static tardis.implementation.common.Util.stringifyPostFrontierPathCondition;
@@ -16,10 +17,12 @@ import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.rmi.NoSuchObjectException;
 import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
+import java.rmi.server.UnicastRemoteObject;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -62,7 +65,6 @@ import jbse.val.HistoryPoint;
 import jbse.val.SymbolFactory;
 import shaded.org.evosuite.coverage.branch.BranchCoverageTestFitness;
 import shaded.org.evosuite.ga.FitnessFunction;
-import shaded.org.evosuite.rmi.UtilsRMI;
 import shaded.org.evosuite.rmi.service.EvosuiteRemote;
 import shaded.org.evosuite.rmi.service.TestListenerRemote;
 import sushi.formatters.StateFormatterSushiPathCondition;
@@ -83,6 +85,8 @@ import tardis.implementation.jbse.JBSEResult;
 public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteResult> implements TestListenerRemote {
     private static final Logger LOGGER = LogManager.getFormatterLogger(PerformerEvosuite.class);
     private static final String TARDIS_RMI_IDENTIFIER = "TARDIS_RMI_IDENTIFIER";
+    private static final int RMI_REGISTRY_PORT_BASE = 2000;
+    private static final int RMI_REGISTRY_PORT_RANGE = 20000;
     
     private final JavaCompiler compiler;
     private final Options o;
@@ -130,10 +134,10 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
         this.classpathCompilationTest = this.o.getTmpBinDirectoryPath().toString() + File.pathSeparator + classesPathString + File.pathSeparator + this.o.getJBSELibraryPath().toString() + File.pathSeparator + this.o.getSushiLibPath().toString() + File.pathSeparator + this.o.getEvosuitePath().toString();
         this.classpathCompilationWrapper = classesPathString + File.pathSeparator + this.o.getSushiLibPath().toString();
         
-        //creates registry for RMI communication and connects to it
-        createAndConnectRegistry();
+        //creates RMI registry, exports this object and binds it to the registry
+        startRMI();
         
-        //creates EvoSuite
+        //creates the EvoSuite instances
         createEvosuite();
     }
     
@@ -146,16 +150,13 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
         }                   
     }
 
-	private void createAndConnectRegistry() throws RemoteException {
-		int port = 2000;
-		port += ThreadLocalRandom.current().nextInt(20000);
-
-		final int TRIES = 100;
+	private void startRMI() throws RemoteException {
+		final int port = RMI_REGISTRY_PORT_BASE + ThreadLocalRandom.current().nextInt(RMI_REGISTRY_PORT_RANGE);
+		final int attempts = 100;
 		RemoteException exc = null;
-		for (int i = 0; i < TRIES; i++) {
+		for (int i = 0; i < attempts; ++i) {
 			try {
 				final int candidatePort = port + i;
-				UtilsRMI.ensureRegistryOnLoopbackAddress();
 				this.registry = LocateRegistry.createRegistry(candidatePort);
 				this.registryPort = candidatePort;
 			} catch (RemoteException e) {
@@ -168,9 +169,9 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
 		}
 		LOGGER.info("Started RMI registry on port %d", this.registryPort);
 		
-		final TestListenerRemote stub = (TestListenerRemote) UtilsRMI.exportObject(this);
+		final TestListenerRemote stub = (TestListenerRemote) exportObject(this);
 		this.registry.rebind(TARDIS_RMI_IDENTIFIER, stub);
-		LOGGER.info("Connected to RMI registry on port %d", this.registryPort);
+		LOGGER.info("PerformerEvosuiteRMI exported and bound to RMI registry");
 	}
 	
 	private void createEvosuite() throws ClassNotFoundException, MalformedURLException, SecurityException, InterruptedException {
@@ -317,6 +318,16 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
 			} catch (InterruptedException e) {
 				//nevermind and continue
 			}
+		}
+		try {
+			this.registry.unbind(TARDIS_RMI_IDENTIFIER);
+		} catch (RemoteException | NotBoundException e) {
+			//just ignore
+		}
+		try {
+			UnicastRemoteObject.unexportObject(this, false);
+		} catch (NoSuchObjectException e) {
+			//just ignore
 		}
     }
 
