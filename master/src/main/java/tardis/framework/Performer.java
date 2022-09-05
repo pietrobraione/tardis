@@ -7,10 +7,11 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
- * A performer encapsulates a set of concurrent threads. Each thread repeatedly reads 
- * input items from a common {@link InputBuffer}, elaborates each of them, possibly 
- * producing (one or more) output items. The output items are put then in a common 
- * {@link OutputBuffer}.
+ * A performer encapsulates a set of concurrent workers. Each worker  
+ * executes a job, built from a batch of input items from a common {@link InputBuffer}, 
+ * and possibly produces (one or more) output items putting them in a common 
+ * {@link OutputBuffer}. A dispatcher thread periodically reads from the {@link InputBuffer},
+ * builds the job, and invokes a worker.
  * 
  * @author Pietro Braione
  *
@@ -31,10 +32,9 @@ public abstract class Performer<I,O> {
     private final OutputBuffer<O> out;
     
     /**
-     * The pausable thread pool of all the threads
-     * that this {@link Performer} encapsulates.
+     * The number of workers.
      */
-    private final PausableFixedThreadPoolExecutor threadPool;
+    private final int numWorkers;
     
     /**
      * The maximum number of input items that are passed as a batch
@@ -47,15 +47,15 @@ public abstract class Performer<I,O> {
      * When 0, a batch is taken from {@link #in} and
      * passed to {@link #makeJob(List) makeJob} whenever
      * there are sufficient items. When 1, it is also 
-     * required that at least one worker in {@link #threadPool}
-     * is available. Intermediate values yield different 
+     * required that at least {@link #numInputs} workers
+     * are available. Intermediate values yield different 
      * degrees of throttling. 
      */
     private final float throttleFactor;
     
     /**
-     * The maximum duration of the time this {@link Performer} will wait for 
-     * the arrival of an input item. 
+     * The maximum duration of the time this {@link Performer} 
+     * will wait for the arrival of an input item. 
      */
     private final long timeoutDuration;
     
@@ -107,18 +107,12 @@ public abstract class Performer<I,O> {
     private ArrayList<I> seed;
     
     /**
-     * The batch of input items that is progressively built
-     * by {@link InputBuffer#poll(long, TimeUnit) poll}ing {@link #in}. 
-     */
-    private ArrayList<I> items;
-
-    /**
      * Constructor.
      * 
      * @param name a meaningful name for the performer that will be used for debugging.
      * @param in The {@link InputBuffer} from which this {@link Performer} will read the input items. 
      * @param out The {@link OutputBuffer} where this {@link Performer} will put the output items.
-     * @param numOfThreads The number of concurrent threads that this {@link Performer} encapsulates.
+     * @param numWorkers The number of workers that this {@link Performer} encapsulates.
      * @param numInputs An {@code int}, the maximum number of input items that are passed as a batch
      *        to {@link #makeJob(List) makeJob}.
      * @param throttleFactor The throttle factor; it must be between 0 and 1. When 0, a batch is 
@@ -131,16 +125,16 @@ public abstract class Performer<I,O> {
      * @throws NullPointerException if {@code in == null || out == null || timeoutUnit == null}.
      * @throws IllegalArgumentException if {@code numOfThreads <= 0 || numInputs <= 0 || timeoutDuration < 0}.
      */
-    public Performer(String name, InputBuffer<I> in, OutputBuffer<O> out, int numOfThreads, int numInputs, float throttleFactor, long timeoutDuration, TimeUnit timeoutTimeUnit) {
+    public Performer(String name, InputBuffer<I> in, OutputBuffer<O> out, int numWorkers, int numInputs, float throttleFactor, long timeoutDuration, TimeUnit timeoutTimeUnit) {
         if (in == null || out == null || timeoutTimeUnit == null) {
             throw new NullPointerException("Invalid null parameter in performer constructor.");
         }
-        if (numOfThreads <= 0 || numInputs <= 0 || timeoutDuration < 0) {
+        if (numWorkers <= 0 || numInputs <= 0 || timeoutDuration < 0) {
             throw new IllegalArgumentException("Invalid negative or zero parameter in performer constructor.");
         }
         this.in = in;
         this.out = out;
-        this.threadPool = new PausableFixedThreadPoolExecutor(name, numOfThreads);
+        this.numWorkers = numWorkers;
         this.numInputs = numInputs;
         this.throttleFactor = throttleFactor;
         this.timeoutDuration = timeoutDuration;
@@ -158,7 +152,7 @@ public abstract class Performer<I,O> {
                     } //else, interrupted by pause(): loops and enters in waitIfPaused()
                 }
             }
-            this.threadPool.shutdownNow();
+            onShutdown();
         }, name + "-main");
         this.lockPause = new ReentrantLock();
         this.conditionNotPaused = this.lockPause.newCondition();
@@ -166,7 +160,6 @@ public abstract class Performer<I,O> {
         this.paused = false;
         this.stopped = false;
         this.seed = null;
-        this.items = null;
     }
 
     /**
@@ -228,11 +221,55 @@ public abstract class Performer<I,O> {
     }
     
     /**
+     * Hook for cleanup to do on pause.
+     */
+    protected void onPause() {
+    	//nothing to do by default
+    }
+    
+    /**
+     * Hook for cleanup to do on resume.
+     */
+    protected void onResume() {
+    	//nothing to do by default
+    }
+    
+    /**
      * Hook for cleanup to do on stop.
      */
     protected void onStop() {
     	//nothing to do by default
     }
+    
+    /**
+     * Hook for cleanup to do on shutdown.
+     */
+    protected void onShutdown() {
+    	//nothing to do by default
+    }
+    
+    /**
+     * Check whether the workers are idle.
+     * 
+     * @return {@code true} iff all the workers are idle.
+     */
+    protected abstract boolean areWorkersIdle();
+    
+    /**
+     * Returns the number of available (idle) workers.
+     * 
+     * @return an {@code int}.
+     */
+    protected abstract int availableWorkers();
+    
+    /**
+     * Submits a job to a worker. The method <emph>must</emph>
+     * be nonblocking.
+     * 
+     * @param job a {@link Runnable}, the job to be submitted
+     *        to the worker.
+     */
+    protected abstract void execute(Runnable job);
     
     /**
      * Pauses the performer so it can reliably be queried whether 
@@ -264,15 +301,14 @@ public abstract class Performer<I,O> {
             lock.unlock();
         }
         
-        //pauses the thread pool
-        this.threadPool.pause();
+        onPause();
     }
 
     /**
      * Resumes this performer from a {@link #pause()}.
      */
     final void resume() {
-        this.threadPool.resume();
+        onResume();
         this.paused = false;
         final ReentrantLock lock = this.lockPause;
         lock.lock();
@@ -296,23 +332,7 @@ public abstract class Performer<I,O> {
         if (this.stopped) {
             return true;
         }
-        if (this.threadPool.isIdle() && this.in.isEmpty()) {
-            if (this.items == null) {
-                return true;
-            }
-            //since this method can be invoked without synchronization, 
-            //between the previous check and the next statement this.items
-            //can suddenly become null
-            try {
-                if (this.items.isEmpty()) {
-                    return true;
-                }
-            } catch (NullPointerException e) {
-                //this.items is null
-                return true;
-            }
-        }
-        return false;
+        return (areWorkersIdle() && this.in.isEmpty());
     }
 
     /**
@@ -324,7 +344,7 @@ public abstract class Performer<I,O> {
             return;
         }
         final Runnable job = makeJob(this.seed);
-        this.threadPool.execute(job);
+        execute(job);
     }
 
     /**
@@ -359,27 +379,18 @@ public abstract class Performer<I,O> {
      *         interrupted while waiting for an input.
      */
     private void waitInputAndSubmitJob() throws InterruptedException {
-        if (this.items == null) {
-            this.items = new ArrayList<>();
-        }
-        
         //throttles
-        if (this.items.size() == 0 && this.threadPool.getActiveCount() == this.threadPool.getCorePoolSize() && 
-            this.throttleFactor > 0 && this.threadPool.getTaskCount() >= 1 / this.throttleFactor) {
+        if (availableWorkers() < this.numWorkers * this.throttleFactor) {
             return;
         }
             
         //polls
-        final I item = this.in.poll(this.timeoutDuration, this.timeoutTimeUnit);
-        if (item != null) {
-            this.items.add(item);
-        }
+        final List<I> items = this.in.pollN(this.numInputs, this.timeoutDuration, this.timeoutTimeUnit);
         
         //submits job
-        if ((item == null && this.items.size() > 0) || this.items.size() == this.numInputs) {
-            final Runnable job = makeJob(this.items);
-            this.threadPool.execute(job);
-            this.items = null;
+        if (items != null && items.size() > 0) {
+            final Runnable job = makeJob(items);
+            execute(job);
         }
     }
 }

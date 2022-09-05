@@ -27,11 +27,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
@@ -71,6 +69,7 @@ import sushi.formatters.StateFormatterSushiPathCondition;
 import tardis.Options;
 import tardis.framework.OutputBuffer;
 import tardis.framework.Performer;
+import tardis.framework.PerformerPausableFixedThreadPoolExecutor;
 import tardis.implementation.common.NoJavaCompilerException;
 import tardis.implementation.data.JBSEResultInputOutputBuffer;
 import tardis.implementation.jbse.JBSEResult;
@@ -82,7 +81,7 @@ import tardis.implementation.jbse.JBSEResult;
  * 
  * @author Pietro Braione
  */
-public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteResult> implements TestListenerRemote {
+public final class PerformerEvosuiteRMI extends PerformerPausableFixedThreadPoolExecutor<JBSEResult, EvosuiteResult> implements TestListenerRemote {
     private static final Logger LOGGER = LogManager.getFormatterLogger(PerformerEvosuite.class);
     private static final String TARDIS_RMI_IDENTIFIER = "TARDIS_RMI_IDENTIFIER";
     private static final int RMI_REGISTRY_PORT_BASE = 2000;
@@ -100,7 +99,7 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
 	private final Map<Integer, JBSEResult> itemsMap = Collections.synchronizedMap(new HashMap<>());
 	private final ArrayList<Process> evosuiteProcesses = new ArrayList<>();
 	private final Map<String, EvosuiteRemote> evosuiteMasterNode = Collections.synchronizedMap(new HashMap<>());
-	private final Map<String, Semaphore> evosuiteCapacityCounter = Collections.synchronizedMap(new HashMap<>());
+	private final Map<String, AtomicInteger> evosuiteCapacityCounter = Collections.synchronizedMap(new HashMap<>());
 	private Registry registry = null;
     private int registryPort = -1;
     private boolean terminated = false;
@@ -108,7 +107,7 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
     public PerformerEvosuiteRMI(Options o, JBSEResultInputOutputBuffer in, OutputBuffer<EvosuiteResult> out) 
     throws NoJavaCompilerException, ClassNotFoundException, MalformedURLException, SecurityException, 
     RemoteException, InterruptedException {
-        super("PerformerEvosuiteRMI", in, out, o.getNumOfThreadsEvosuite(), o.getNumMOSATargets(), o.getThrottleFactorEvosuite(), o.getTimeoutMOSATaskCreationDuration(), o.getTimeoutMOSATaskCreationUnit());
+        super("PerformerEvosuiteRMI", in, out, o.getNumOfThreadsEvosuite(), o.getNumTargetsEvosuiteJob(), o.getThrottleFactorEvosuite(), o.getTimeoutEvosuiteJobCreationDuration() / o.getNumTargetsEvosuiteJob(), o.getTimeoutEvosuiteJobCreationUnit());
         this.compiler = ToolProvider.getSystemJavaCompiler();
         if (this.compiler == null) {
             throw new NoJavaCompilerException();
@@ -134,7 +133,7 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
         this.classpathCompilationTest = this.o.getTmpBinDirectoryPath().toString() + File.pathSeparator + classesPathString + File.pathSeparator + this.o.getJBSELibraryPath().toString() + File.pathSeparator + this.o.getSushiLibPath().toString() + File.pathSeparator + this.o.getEvosuitePath().toString();
         this.classpathCompilationWrapper = classesPathString + File.pathSeparator + this.o.getSushiLibPath().toString();
         
-        //creates RMI registry, exports this object and binds it to the registry
+        //creates the RMI registry, exports this object and binds it to the registry
         startRMI();
         
         //creates the EvoSuite instances
@@ -337,7 +336,7 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
 		try {
 			final EvosuiteRemote remote = (EvosuiteRemote) this.registry.lookup(evosuiteServerRmiIdentifier);
 			this.evosuiteMasterNode.put(evosuiteServerRmiIdentifier, remote);
-			this.evosuiteCapacityCounter.put(evosuiteServerRmiIdentifier, new Semaphore(this.o.getNumMOSATargets()));
+			this.evosuiteCapacityCounter.put(evosuiteServerRmiIdentifier, new AtomicInteger(this.o.getNumEvosuiteJobsOverloaded()));
 			
 			//at least one EvoSuite server is ready: notify the performer so it can start
 			notifyAll();
@@ -355,7 +354,7 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
 	@Override
 	public synchronized void generatedTest(String evosuiteServerRmiIdentifier, FitnessFunction<?> goal, String testFileName) throws RemoteException {
 		LOGGER.info("Evosuite server communicated new test %s for goal %s", testFileName, goal);
-		this.evosuiteCapacityCounter.get(evosuiteServerRmiIdentifier).release();
+		this.evosuiteCapacityCounter.get(evosuiteServerRmiIdentifier).incrementAndGet();
 		
     	final List<Pair<JBSEResult, Integer>> items;
 		if (goal instanceof BranchCoverageTestFitness) {
@@ -438,7 +437,7 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
 	@Override
 	public synchronized void dismissedFitnessGoal(String evosuiteServerRmiIdentifier, FitnessFunction<?> goal, int iteration, double fitnessValue, int[] updateIterations) throws RemoteException {
 		LOGGER.info("Evosuite server communicated dismissed goal %s, iteration is %d, fitness is %f, with updates at iterations %s", goal, iteration, fitnessValue, Arrays.toString(updateIterations));
-		this.evosuiteCapacityCounter.get(evosuiteServerRmiIdentifier).release();
+		this.evosuiteCapacityCounter.get(evosuiteServerRmiIdentifier).incrementAndGet();
 	}
 	
 
@@ -591,7 +590,7 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
         }
         
         //sends goals to EvoSuite
-        sendGoalsToEvosuite(compiled);
+        sendGoalsToSomeEvosuite(compiled);
     }
 
     /**
@@ -709,43 +708,48 @@ public final class PerformerEvosuiteRMI extends Performer<JBSEResult, EvosuiteRe
     }
     
     /**
-     * Runs EvoSuite on a set of JBSEResults for which the wrappers are
-     * available. 
+     * Selects an instance of EvoSuite and runs it on a set of {@link JBSEResult}s for which 
+     * the wrappers are available. 
      * 
      * @param items a {@link List}{@code <}{@link Pair}{@code <}{@link JBSEResult}{@code , }{@link Integer}{@code >>}.
      *        where each {@link JBSEResult} is the result of symbolic execution and its paired {@link Integer} is the
      *        identifier of the corresponding test case (if it will be generated).
      */
-    private synchronized void sendGoalsToEvosuite(List<Pair<JBSEResult, Integer>> items) {
+    private synchronized void sendGoalsToSomeEvosuite(List<Pair<JBSEResult, Integer>> items) {
     	if (items.size() == 0) {
     		return;
     	}
     	
-    	//try all EvoSuite, block on one at random
-    	final Iterator<Map.Entry<String, Semaphore>> it = this.evosuiteCapacityCounter.entrySet().iterator();
-    	Map.Entry<String, Semaphore> e = null;
-    	for (int i = 0; i < (this.evosuiteCapacityCounter.size() <= 1 ? 0 : ThreadLocalRandom.current().nextInt(this.evosuiteCapacityCounter.size() - 1)) + 1; ++i) {
-    		e = it.next();
-    		if (e.getValue().tryAcquire()) {
-    	    	doSendToEvosuite(e.getKey(), items);
+    	//looks for the first EvoSuite with capacity greater than zero,
+    	//if it fails, then it detects the least overloaded EvoSuite
+    	Map.Entry<String, AtomicInteger> eBest = null;
+    	for (Map.Entry<String, AtomicInteger> e : this.evosuiteCapacityCounter.entrySet()) {
+    		final int eCount;
+    		if ((eCount = e.getValue().getAndUpdate(c -> (c > 0) ? (c - 1) : c)) > 0) {
+    	    	sendGoalsToEvosuite(e.getKey(), items);
     	    	return;
+    		} else if (eBest == null || eCount > eBest.getValue().get()){
+    			eBest = e;
     		}
     	}
-    	try {
-			e.getValue().acquire();
-		} catch (InterruptedException e1) {
-    		LOGGER.error("PerformerEvosuite worker thread interrupted while waiting for submitting jobs to Evosuite");
-    		LOGGER.error("Message: %s", e1.toString());
-    		LOGGER.error("Stack trace:");
-    		for (StackTraceElement elem : e1.getStackTrace()) {
-    			LOGGER.error("%s", elem.toString());
-    		}
-    		return;
-		}
-    	doSendToEvosuite(e.getKey(), items);
+    	
+    	//all failed: sends to the less overloaded EvoSuite
+		eBest.getValue().getAndDecrement();
+    	sendGoalsToEvosuite(eBest.getKey(), items);
     }
     
-    private void doSendToEvosuite(String evosuiteServerRmiIdentifier, List<Pair<JBSEResult, Integer>> items) {
+    
+    /**
+     * Runs an instance of EvoSuite on a set of {@link JBSEResult}s for which 
+     * the wrappers are available. 
+     * 
+     * @param evosuiteServerRmiIdentifier a {@link String}, the RMI identifier
+     *        of the EvoSuite RMI server instance.
+     * @param items a {@link List}{@code <}{@link Pair}{@code <}{@link JBSEResult}{@code , }{@link Integer}{@code >>}.
+     *        where each {@link JBSEResult} is the result of symbolic execution and its paired {@link Integer} is the
+     *        identifier of the corresponding test case (if it will be generated).
+     */
+    private void sendGoalsToEvosuite(String evosuiteServerRmiIdentifier, List<Pair<JBSEResult, Integer>> items) {
     	try {
     		final EvosuiteRemote evosuiteRemote = this.evosuiteMasterNode.get(evosuiteServerRmiIdentifier);
     		for (Pair<JBSEResult, Integer> item : items) {

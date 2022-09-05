@@ -183,25 +183,29 @@ public final class Options implements Cloneable {
             usage = "Unit of the global time budget: NANOSECONDS, MICROSECONDS, MILLISECONDS, SECONDS, MINUTES, HOURS, DAYS")
     private TimeUnit globalTimeBudgetUnit = TimeUnit.MINUTES;
 
-    @Option(name = "-timeout_jbse_task_creation_duration",
+    @Option(name = "-timeout_jbse_job_creation_duration",
             usage = "Duration of the timeout after which a JBSE job is created")
-    private long timeoutJBSETaskCreationDuration = 5;
+    private long timeoutJBSEJobCreationDuration = 5;
 
-    @Option(name = "-timeout_jbse_task_creation_unit",
+    @Option(name = "-timeout_jbse_job_creation_unit",
             usage = "Unit of the timeout after which a JBSE job is created: NANOSECONDS, MICROSECONDS, MILLISECONDS, SECONDS, MINUTES, HOURS, DAYS")
-    private TimeUnit timeoutJBSETaskCreationUnit = TimeUnit.SECONDS;
+    private TimeUnit timeoutJBSEJobCreationUnit = TimeUnit.SECONDS;
 
-    @Option(name = "-timeout_mosa_task_creation_duration",
-            usage = "Duration of the timeout after which a MOSA job is created")
-    private long timeoutMOSATaskCreationDuration = 5;
+    @Option(name = "-timeout_evosuite_job_creation_duration",
+            usage = "Duration of the timeout after which an EvoSuite job is created")
+    private long timeoutEvosuiteJobCreationDuration = 5;
 
-    @Option(name = "-timeout_mosa_task_creation_unit",
-            usage = "Unit of the timeout after which a MOSA job is created: NANOSECONDS, MICROSECONDS, MILLISECONDS, SECONDS, MINUTES, HOURS, DAYS")
-    private TimeUnit timeoutMOSATaskCreationUnit = TimeUnit.SECONDS;
+    @Option(name = "-timeout_evosuite_job_creation_unit",
+            usage = "Unit of the timeout after which an EvoSuite job is created: NANOSECONDS, MICROSECONDS, MILLISECONDS, SECONDS, MINUTES, HOURS, DAYS")
+    private TimeUnit timeoutEvosuiteJobCreationUnit = TimeUnit.SECONDS;
 
-    @Option(name = "-num_mosa_targets",
-            usage = "Maximum number of target passed to a MOSA job")
-    private int numMOSATargets = 5;
+    @Option(name = "-num_targets_evosuite_job",
+            usage = "Maximum number of targets passed to an EvoSuite job")
+    private int numTargetsEvosuiteJob = 5;
+
+    @Option(name = "-num_evosuite_jobs_overloaded",
+            usage = "Maximum number of EvoSuite jobs after which an EvoSuite instance is considered overloaded; It is used only when -num_threads_evosuite is set to a value greater than one")
+    private int numEvosuiteJobsOverloaded = 3;
 
     @Option(name = "-heap_scope",
             usage = "JBSE heap scope in the form <className1>=<maxNumInstances1>; multiple heap scopes can be specified",
@@ -222,7 +226,7 @@ public final class Options implements Cloneable {
     private int maxSimpleArrayLength = 100_000;
     
     @Option(name = "-use_improvability_index",
-            usage = "Whether to use the improvability index for path conditions selection in the JBSEResultInputOutputBuffer")
+            usage = "Whether to use the improvability index for path conditions selection by EvoSuite")
     private boolean useIndexImprovability = true;
     
     @Option(name = "-improvability_index_branch_pattern",
@@ -230,7 +234,7 @@ public final class Options implements Cloneable {
     private String indexImprovabilityBranchPattern = null;
 
     @Option(name = "-use_novelty_index",
-            usage = "Whether to use the novelty index for path conditions selection in the JBSEResultInputOutputBuffer")
+            usage = "Whether to use the novelty index for path conditions selection by EvoSuite")
     private boolean useIndexNovelty = true;
     
     @Option(name = "-novelty_index_branch_pattern",
@@ -238,7 +242,7 @@ public final class Options implements Cloneable {
     private String indexNoveltyBranchPattern = null;
 
     @Option(name = "-use_infeasibility_index",
-            usage = "Whether to use the infeasibility index for path conditions selection in the JBSEResultInputOutputBuffer")
+            usage = "Whether to use the infeasibility index for path conditions selection by EvoSuite")
     private boolean useIndexInfeasibility = true;
     
     @Option(name = "-infeasibility_index_threshold",
@@ -246,7 +250,7 @@ public final class Options implements Cloneable {
     private int indexInfeasibilityThreshold = 200;
 
     @Option(name = "-evosuite_multi_search",
-            usage = "Whether EvoSuite shall do multiple path-condition-guided and branch-guided search")
+            usage = "Whether EvoSuite shall do simultaneous path-condition-guided (TARDIS) and branch-guided (ordinary) search")
     private boolean evosuiteMultiSearch = false;
 
 	public boolean getHelp() {
@@ -684,59 +688,70 @@ public final class Options implements Cloneable {
         this.globalTimeBudgetUnit = globalTimeBudgetUnit;
     }
 
-    public long getTimeoutJBSETaskCreationDuration() {
-        return this.timeoutJBSETaskCreationDuration;
+    public long getTimeoutJBSEJobCreationDuration() {
+        return this.timeoutJBSEJobCreationDuration;
     }
 
-    public void setTimeoutJBSETaskCreationDuration(long timeoutJBSETaskCreationDuration) {
-        if (timeoutJBSETaskCreationDuration < 0) {
-            throw new IllegalArgumentException("Attempted to set the JBSE timeout for task creation duration to a negative value.");
+    public void setTimeoutJBSEJobCreationDuration(long timeoutJBSEJobCreationDuration) {
+        if (timeoutJBSEJobCreationDuration < 0) {
+            throw new IllegalArgumentException("Attempted to set the JBSE timeout for job creation duration to a negative value.");
         }
-        this.timeoutJBSETaskCreationDuration = timeoutJBSETaskCreationDuration;
+        this.timeoutJBSEJobCreationDuration = timeoutJBSEJobCreationDuration;
     }
 
-    public TimeUnit getTimeoutJBSETaskCreationUnit() {
-        return this.timeoutJBSETaskCreationUnit;
+    public TimeUnit getTimeoutJBSEJobCreationUnit() {
+        return this.timeoutJBSEJobCreationUnit;
     }
 
-    public void setTimeoutJBSETaskCreationUnit(TimeUnit timeoutJBSETaskCreationUnit) {
-        if (timeoutJBSETaskCreationUnit == null) {
-            throw new IllegalArgumentException("Attempted to set the JBSE timeout for task creation time unit to null.");
+    public void setTimeoutJBSEJobCreationUnit(TimeUnit timeoutJBSEJobCreationUnit) {
+        if (timeoutJBSEJobCreationUnit == null) {
+            throw new IllegalArgumentException("Attempted to set the JBSE timeout for job creation time unit to null.");
         }
-        this.timeoutJBSETaskCreationUnit = timeoutJBSETaskCreationUnit;
+        this.timeoutJBSEJobCreationUnit = timeoutJBSEJobCreationUnit;
     }
 
-    public long getTimeoutMOSATaskCreationDuration() {
-        return this.timeoutMOSATaskCreationDuration;
+    public long getTimeoutEvosuiteJobCreationDuration() {
+        return this.timeoutEvosuiteJobCreationDuration;
     }
 
-    public void setTimeoutMOSATaskCreationDuration(long timeoutMOSATaskCreationDuration) {
-        if (timeoutMOSATaskCreationDuration < 0) {
-            throw new IllegalArgumentException("Attempted to set the MOSA timeout for task creation duration to a negative value.");
+    public void setTimeoutEvosuiteJobCreationDuration(long timeoutEvosuiteJobCreationDuration) {
+        if (timeoutEvosuiteJobCreationDuration < 0) {
+            throw new IllegalArgumentException("Attempted to set the Evosuite timeout for job creation duration to a negative value.");
         }
-        this.timeoutMOSATaskCreationDuration = timeoutMOSATaskCreationDuration;
+        this.timeoutEvosuiteJobCreationDuration = timeoutEvosuiteJobCreationDuration;
     }
 
-    public TimeUnit getTimeoutMOSATaskCreationUnit() {
-        return this.timeoutMOSATaskCreationUnit;
+    public TimeUnit getTimeoutEvosuiteJobCreationUnit() {
+        return this.timeoutEvosuiteJobCreationUnit;
     }
 
-    public void setTimeoutMOSATaskCreationUnit(TimeUnit timeoutMOSATaskCreationUnit) {
-        if (timeoutMOSATaskCreationUnit == null) {
-            throw new IllegalArgumentException("Attempted to set the MOSA timeout for task creation time unit to null.");
+    public void setTimeoutEvosuiteJobCreationUnit(TimeUnit timeoutEvosuiteJobCreationUnit) {
+        if (timeoutEvosuiteJobCreationUnit == null) {
+            throw new IllegalArgumentException("Attempted to set the Evosuite timeout for job creation time unit to null.");
         }
-        this.timeoutMOSATaskCreationUnit = timeoutMOSATaskCreationUnit;
+        this.timeoutEvosuiteJobCreationUnit = timeoutEvosuiteJobCreationUnit;
     }
 
-    public int getNumMOSATargets() {
-        return this.numMOSATargets;
+    public int getNumTargetsEvosuiteJob() {
+        return this.numTargetsEvosuiteJob;
     }
 
-    public void setNumMOSATargets(int numMOSATargets) {
-        if (numMOSATargets < 1) {
-            throw new IllegalArgumentException("Attempted to set the number of MOSA targets to a value less than 1.");
+    public void setNumTargetsEvosuiteJob(int numTargetsEvosuiteJob) {
+        if (numTargetsEvosuiteJob < 1) {
+            throw new IllegalArgumentException("Attempted to set the maximum number of targets in an EvoSuite job to a value less than 1.");
         }
-        this.numMOSATargets = numMOSATargets;
+        this.numTargetsEvosuiteJob = numTargetsEvosuiteJob;
+    }
+
+    public int getNumEvosuiteJobsOverloaded() {
+        return this.numEvosuiteJobsOverloaded;
+    }
+
+    public void setNumEvosuiteJobsOverloaded(int numEvosuiteJobsOverloaded) {
+        if (numEvosuiteJobsOverloaded < 2) {
+            throw new IllegalArgumentException("Attempted to set the number of jobs after which an EvoSuite instance is considered overloaded to a value less than 2.");
+        }
+        this.numEvosuiteJobsOverloaded = numEvosuiteJobsOverloaded;
     }
 
     public Map<String, Integer> getHeapScope() {

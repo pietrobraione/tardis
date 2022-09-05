@@ -2,6 +2,7 @@ package tardis.implementation.data;
 
 import static tardis.implementation.common.Util.filterOnPattern;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -216,7 +217,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
     }
 
     @Override
-    public JBSEResult poll(long timeoutDuration, TimeUnit timeoutTimeUnit) throws InterruptedException {
+    public List<JBSEResult> pollN(int n, long timeoutDuration, TimeUnit timeoutTimeUnit) throws InterruptedException {
         //chooses the index considering the different probabilities
         final Random random = new Random();
         int randomValue = random.nextInt(100); //sum of PROBABILITY_VALUES
@@ -228,29 +229,43 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
         
         //assert (0 < j && j <= INDEX_VALUES.length)
 
-        synchronized (this) {
-            //extracts the item
-            for (int i = j - 1; i < this.queueRanking.length; ++i) {
-                final LinkedBlockingQueue<JBSEResult> queue = this.queues.get(this.queueRanking[i]);
-                //selects the next queue if the extracted queue is empty
-                if (queue.isEmpty()) {
-                    continue;
-                }
-                return queue.poll(timeoutDuration, timeoutTimeUnit);
-            }
-            //last chance to extract
-            for (int i = j - 2; i >= 0; --i) {
-                final LinkedBlockingQueue<JBSEResult> queue = this.queues.get(this.queueRanking[i]);
-                //selects the next queue if the extracted queue is empty
-                if (queue.isEmpty()) {
-                    continue;
-                }
-                return queue.poll(timeoutDuration, timeoutTimeUnit);
-            }
+        final ArrayList<JBSEResult> retVal = new ArrayList<>();
+        for (int k = 1; k <= n; ++k) {
+        	JBSEResult item = null;
+        	synchronized (this) {
+        		//extracts the item, first chance
+        		for (int i = j - 1; i < this.queueRanking.length; ++i) {
+        			final LinkedBlockingQueue<JBSEResult> queue = this.queues.get(this.queueRanking[i]);
+        			//selects the next queue if the extracted queue is empty
+        			if (queue.isEmpty()) {
+        				continue;
+        			} else {
+        				item = queue.poll(0, timeoutTimeUnit); //nothing to wait
+        				break;
+        			}
+        		}
+        		//extracts the item, second chance
+        		if (item == null) {
+            		timeoutTimeUnit.sleep(timeoutDuration);
+        			for (int i = j - 2; i >= 0; --i) {
+        				final LinkedBlockingQueue<JBSEResult> queue = this.queues.get(this.queueRanking[i]);
+        				//selects the next queue if the extracted queue is empty
+        				if (queue.isEmpty()) {
+        					continue;
+        				} else {
+        					item = queue.poll(0, timeoutTimeUnit); //nothing to wait
+        					break;
+        				}
+        			}
+        		}
+        	}
+        	if (item == null) {
+        		break;
+        	} else {
+        		retVal.add(item);
+        	}
         }
-        
-        TimeUnit.SECONDS.sleep(1);
-        return null;
+        return retVal;
     }
 
     @Override

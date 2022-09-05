@@ -56,6 +56,7 @@ import sushi.formatters.StateFormatterSushiPathCondition;
 import tardis.Options;
 import tardis.framework.OutputBuffer;
 import tardis.framework.Performer;
+import tardis.framework.PerformerPausableFixedThreadPoolExecutor;
 import tardis.implementation.common.NoJavaCompilerException;
 import tardis.implementation.data.JBSEResultInputOutputBuffer;
 import tardis.implementation.jbse.JBSEResult;
@@ -67,7 +68,7 @@ import tardis.implementation.jbse.JBSEResult;
  * 
  * @author Pietro Braione
  */
-public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResult> {
+public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExecutor<JBSEResult, EvosuiteResult> {
     private static final Logger LOGGER = LogManager.getFormatterLogger(PerformerEvosuite.class);
     
     private final List<List<String>> visibleTargetMethods;
@@ -84,7 +85,7 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
     
     public PerformerEvosuite(Options o, JBSEResultInputOutputBuffer in, OutputBuffer<EvosuiteResult> out) 
     throws NoJavaCompilerException, ClassNotFoundException, MalformedURLException, SecurityException {
-        super("PerformerEvosuite", in, out, o.getNumOfThreadsEvosuite(), o.getNumMOSATargets(), o.getThrottleFactorEvosuite(), o.getTimeoutMOSATaskCreationDuration(), o.getTimeoutMOSATaskCreationUnit());
+        super("PerformerEvosuite", in, out, o.getNumOfThreadsEvosuite(), o.getNumTargetsEvosuiteJob(), o.getThrottleFactorEvosuite(), o.getTimeoutEvosuiteJobCreationDuration() / o.getNumTargetsEvosuiteJob(), o.getTimeoutEvosuiteJobCreationUnit());
         this.visibleTargetMethods = getTargets(o);
         this.compiler = ToolProvider.getSystemJavaCompiler();
         if (this.compiler == null) {
@@ -416,13 +417,13 @@ public final class PerformerEvosuite extends Performer<JBSEResult, EvosuiteResul
     private void generateTestsAndScheduleJBSE(int testCountInitial, List<JBSEResult> items) {
         //splits items in sublists having same target method
         final List<List<JBSEResult>> splitItems = new ArrayList<>();
-        for (int i = 0; i < items.size() / this.o.getNumMOSATargets(); ++i) {
+        for (int i = 0; i < items.size() / this.o.getNumTargetsEvosuiteJob(); ++i) {
         	final int start = i * items.size();
         	final int end = (i + 1) * items.size();
         	splitItems.add(items.subList(start, end));
         }
-        if (items.size() % this.o.getNumMOSATargets() != 0) {
-        	splitItems.add(items.subList((items.size() / this.o.getNumMOSATargets()) * items.size(), items.size()));
+        if (items.size() % this.o.getNumTargetsEvosuiteJob() != 0) {
+        	splitItems.add(items.subList((items.size() / this.o.getNumTargetsEvosuiteJob()) * items.size(), items.size()));
         }
 
         //launches an EvoSuite process for each sublist

@@ -96,7 +96,7 @@ public final class Main {
         
         try {
             //logs some message
-            LOGGER.info("This is %s, version %s, \u00a9 2017-2021 %s", getName(), getVersion(), getVendor());
+            LOGGER.info("This is %s, version %s, \u00a9 2017-2022 %s", getName(), getVersion(), getVendor());
             LOGGER.info("Target is %s", (this.o.getTargetMethod() == null ? ("class " + this.o.getTargetClass()) : ("method " + this.o.getTargetMethod().get(0) + ":" + this.o.getTargetMethod().get(1) + ":" + this.o.getTargetMethod().get(2))));
             
             //checks prerequisites
@@ -116,20 +116,18 @@ public final class Main {
             //...the performers and the termination manager
             final PerformerJBSE performerJBSE = new PerformerJBSE(this.o, testCaseBuffer, pathConditionBuffer, treePath);
             Performer<JBSEResult, EvosuiteResult> performerEvosuite;
-            
             if (this.o.getEvosuiteMultiSearch()) {
-            	performerEvosuite = new PerformerEvosuiteRMI(this.o, pathConditionBuffer, testCaseBuffer);
-            	
-            	//injects a seed into a performer
-                injectSeed((PerformerEvosuiteRMI) performerEvosuite, performerJBSE);
+            	performerEvosuite = new PerformerEvosuiteRMI(this.o, pathConditionBuffer, testCaseBuffer);            	
             } else {
             	performerEvosuite = new PerformerEvosuite(this.o, pathConditionBuffer, testCaseBuffer);
-            	
-            	//injects a seed into a performer
-                injectSeed((PerformerEvosuite) performerEvosuite, performerJBSE);
             }
+            
+            //...the termination manager
             final TerminationManager terminationManager = new TerminationManager(this.o, performerJBSE, performerEvosuite);
             
+        	//injects a seed into a performer
+            injectSeed(performerEvosuite, performerJBSE);
+
             //starts everything
             performerJBSE.start();
             performerEvosuite.start();

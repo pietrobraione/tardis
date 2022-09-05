@@ -49,6 +49,7 @@ import tardis.Coverage;
 import tardis.Options;
 import tardis.framework.InputBuffer;
 import tardis.framework.Performer;
+import tardis.framework.PerformerPausableFixedThreadPoolExecutor;
 import tardis.implementation.data.JBSEResultInputOutputBuffer;
 import tardis.implementation.data.TreePath;
 import tardis.implementation.evosuite.EvosuiteResult;
@@ -61,8 +62,10 @@ import tardis.implementation.evosuite.TestCase;
  * 
  * @author Pietro Braione
  */
-public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
+public final class PerformerJBSE extends PerformerPausableFixedThreadPoolExecutor<EvosuiteResult, JBSEResult> {
     private static final Logger LOGGER = LogManager.getFormatterLogger(PerformerJBSE.class);
+    
+    private static final int NUM_INPUTS_PER_JOB = 1;
     
     private final Options o;
     private final JBSEResultInputOutputBuffer out;
@@ -72,7 +75,7 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
     private final ConcurrentHashMap<MethodPathConditon, Set<String>> freshObjectsExpansions = new ConcurrentHashMap<>();
 
     public PerformerJBSE(Options o, InputBuffer<EvosuiteResult> in, JBSEResultInputOutputBuffer out, TreePath treePath) {
-        super("PerformerJBSE", in, out, o.getNumOfThreadsJBSE(), 1, o.getThrottleFactorJBSE(), o.getTimeoutJBSETaskCreationDuration(), o.getTimeoutJBSETaskCreationUnit());
+        super("PerformerJBSE", in, out, o.getNumOfThreadsJBSE(), NUM_INPUTS_PER_JOB, o.getThrottleFactorJBSE(), o.getTimeoutJBSEJobCreationDuration() / NUM_INPUTS_PER_JOB, o.getTimeoutJBSEJobCreationUnit());
         this.o = o.clone();
         this.out = out;
         this.treePath = treePath;
