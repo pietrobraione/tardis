@@ -69,7 +69,7 @@ import sushi.formatters.StateFormatterSushiPathCondition;
 import tardis.Options;
 import tardis.framework.OutputBuffer;
 import tardis.framework.Performer;
-import tardis.framework.PerformerPausableFixedThreadPoolExecutor;
+import tardis.framework.PerformerMultiServer;
 import tardis.implementation.common.NoJavaCompilerException;
 import tardis.implementation.data.JBSEResultInputOutputBuffer;
 import tardis.implementation.jbse.JBSEResult;
@@ -80,8 +80,9 @@ import tardis.implementation.jbse.JBSEResult;
  * emitted as {@link EvosuiteResult}s.
  * 
  * @author Pietro Braione
+ * @author Lorenzo Benatti
  */
-public final class PerformerEvosuiteRMI extends PerformerPausableFixedThreadPoolExecutor<JBSEResult, EvosuiteResult> implements TestListenerRemote {
+public final class PerformerEvosuiteRMI extends PerformerMultiServer<JBSEResult, EvosuiteResult> implements TestListenerRemote {
     private static final Logger LOGGER = LogManager.getFormatterLogger(PerformerEvosuite.class);
     private static final String TARDIS_RMI_IDENTIFIER = "TARDIS_RMI_IDENTIFIER";
     private static final int RMI_REGISTRY_PORT_BASE = 2000;
@@ -98,16 +99,17 @@ public final class PerformerEvosuiteRMI extends PerformerPausableFixedThreadPool
     private final AtomicInteger testCount = new AtomicInteger(0);
 	private final Map<Integer, JBSEResult> itemsMap = Collections.synchronizedMap(new HashMap<>());
 	private final ArrayList<Process> evosuiteProcesses = new ArrayList<>();
-	private final Map<String, EvosuiteRemote> evosuiteMasterNode = Collections.synchronizedMap(new HashMap<>());
-	private final Map<String, AtomicInteger> evosuiteCapacityCounter = Collections.synchronizedMap(new HashMap<>());
+	private final Map<String, EvosuiteRemote> evosuiteNodes = Collections.synchronizedMap(new HashMap<>());
+	private final Map<String, Integer> evosuiteCapacityCounter = Collections.synchronizedMap(new HashMap<>());
 	private Registry registry = null;
     private int registryPort = -1;
     private boolean terminated = false;
+    private volatile boolean stopUntilFirstEvosuite = true;
     
     public PerformerEvosuiteRMI(Options o, JBSEResultInputOutputBuffer in, OutputBuffer<EvosuiteResult> out) 
     throws NoJavaCompilerException, ClassNotFoundException, MalformedURLException, SecurityException, 
     RemoteException, InterruptedException {
-        super("PerformerEvosuiteRMI", in, out, o.getNumOfThreadsEvosuite(), o.getNumTargetsEvosuiteJob(), o.getThrottleFactorEvosuite(), o.getTimeoutEvosuiteJobCreationDuration() / o.getNumTargetsEvosuiteJob(), o.getTimeoutEvosuiteJobCreationUnit());
+        super("PerformerEvosuiteRMI", in, out, o.getNumOfThreadsEvosuite(), o.getNumEvosuiteJobsOverloaded(), o.getNumTargetsEvosuiteJob(), o.getThrottleFactorEvosuite(), o.getTimeoutEvosuiteJobCreationDuration() / o.getNumTargetsEvosuiteJob(), o.getTimeoutEvosuiteJobCreationUnit());
         this.compiler = ToolProvider.getSystemJavaCompiler();
         if (this.compiler == null) {
             throw new NoJavaCompilerException();
@@ -181,9 +183,8 @@ public final class PerformerEvosuiteRMI extends PerformerPausableFixedThreadPool
         }
         
         //waits for at least one EvoSuite instance to connect back
-        synchronized (this) {
-        	wait();
-        }
+        //(ugly spinlock)
+        while (this.stopUntilFirstEvosuite) ;
 	}
     
     /**
@@ -306,6 +307,9 @@ public final class PerformerEvosuiteRMI extends PerformerPausableFixedThreadPool
     @Override
     protected Runnable makeJob(List<JBSEResult> items) {
         final Runnable job = this.terminated ? (() -> { }) : (() -> generateWrappersAndSendGoalsToEvosuite(items));
+    	if (this.terminated) {
+    		LOGGER.info("All Evosuite instances terminated, Evosuite job ignored");
+    	}
         return job;
     }
     
@@ -329,17 +333,26 @@ public final class PerformerEvosuiteRMI extends PerformerPausableFixedThreadPool
 			//just ignore
 		}
     }
+    
+    @Override
+    protected synchronized int availableWorkers() {
+    	int retVal = 0;
+    	for (Map.Entry<String, Integer> e : this.evosuiteCapacityCounter.entrySet()) {
+    		retVal += e.getValue();
+    	}
+    	return retVal;
+    }
 
     @Override
 	public synchronized void evosuiteServerReady(String evosuiteServerRmiIdentifier) throws RemoteException {
 		LOGGER.info("Evosuite server is ready, RMI identifier is %s", evosuiteServerRmiIdentifier);
 		try {
 			final EvosuiteRemote remote = (EvosuiteRemote) this.registry.lookup(evosuiteServerRmiIdentifier);
-			this.evosuiteMasterNode.put(evosuiteServerRmiIdentifier, remote);
-			this.evosuiteCapacityCounter.put(evosuiteServerRmiIdentifier, new AtomicInteger(this.o.getNumEvosuiteJobsOverloaded()));
+			this.evosuiteNodes.put(evosuiteServerRmiIdentifier, remote);
+			this.evosuiteCapacityCounter.put(evosuiteServerRmiIdentifier, Integer.valueOf(this.o.getNumEvosuiteJobsOverloaded()));
 			
-			//at least one EvoSuite server is ready: notify the performer so it can start
-			notifyAll();
+			//at least one EvoSuite server is ready: unlock spinlock
+			this.stopUntilFirstEvosuite = false;
 		} catch (NotBoundException e) {
 			LOGGER.error("Failed connection to Evosuite server with RMI identifier %s", evosuiteServerRmiIdentifier);
             LOGGER.error("Message: %s", e.toString());
@@ -354,7 +367,8 @@ public final class PerformerEvosuiteRMI extends PerformerPausableFixedThreadPool
 	@Override
 	public synchronized void generatedTest(String evosuiteServerRmiIdentifier, FitnessFunction<?> goal, String testFileName) throws RemoteException {
 		LOGGER.info("Evosuite server communicated new test %s for goal %s", testFileName, goal);
-		this.evosuiteCapacityCounter.get(evosuiteServerRmiIdentifier).incrementAndGet();
+		final int old = this.evosuiteCapacityCounter.get(evosuiteServerRmiIdentifier);  
+		this.evosuiteCapacityCounter.put(evosuiteServerRmiIdentifier, Integer.valueOf(old + 1));
 		
     	final List<Pair<JBSEResult, Integer>> items;
 		if (goal instanceof BranchCoverageTestFitness) {
@@ -436,15 +450,19 @@ public final class PerformerEvosuiteRMI extends PerformerPausableFixedThreadPool
 
 	@Override
 	public synchronized void dismissedFitnessGoal(String evosuiteServerRmiIdentifier, FitnessFunction<?> goal, int iteration, double fitnessValue, int[] updateIterations) throws RemoteException {
-		LOGGER.info("Evosuite server communicated dismissed goal %s, iteration is %d, fitness is %f, with updates at iterations %s", goal, iteration, fitnessValue, Arrays.toString(updateIterations));
-		this.evosuiteCapacityCounter.get(evosuiteServerRmiIdentifier).incrementAndGet();
+		LOGGER.info("Evosuite server %s communicated dismissed goal %s, iteration is %d, fitness is %f, with updates at iterations %s", evosuiteServerRmiIdentifier, goal, iteration, fitnessValue, Arrays.toString(updateIterations));
+		final int old = this.evosuiteCapacityCounter.get(evosuiteServerRmiIdentifier);  
+		this.evosuiteCapacityCounter.put(evosuiteServerRmiIdentifier, Integer.valueOf(old + 1));
 	}
 	
 
 	@Override
 	public synchronized void evosuiteServerShutdown(String evosuiteServerRmiIdentifier) throws RemoteException {
-		this.evosuiteMasterNode.remove(evosuiteServerRmiIdentifier);
-		if (this.evosuiteMasterNode.isEmpty()) {
+		LOGGER.info("Evosuite server %s communicated shutdown", evosuiteServerRmiIdentifier);
+		this.evosuiteNodes.remove(evosuiteServerRmiIdentifier);
+		this.evosuiteCapacityCounter.put(evosuiteServerRmiIdentifier, Integer.valueOf(this.o.getNumEvosuiteJobsOverloaded()));
+		if (this.evosuiteNodes.isEmpty()) {
+			LOGGER.info("All Evosuite servers down");
 			this.terminated = true;
 		}
 	}
@@ -567,22 +585,11 @@ public final class PerformerEvosuiteRMI extends PerformerPausableFixedThreadPool
                     LOGGER.error("%s", elem.toString());
                 }
                 //falls through
-    		} catch (IOException e) { 
-    			LOGGER.error("Unexpected I/O error while creating EvoSuite seed wrapper");
-    			LOGGER.error("Message: %s", e.toString());
-    			LOGGER.error("Stack trace:");
-    			for (StackTraceElement elem : e.getStackTrace()) {
-    				LOGGER.error("%s", elem.toString());
-    			}
-                //falls through
-            } catch (InvalidClassFileFactoryClassException | InvalidInputException | ClassFileNotFoundException | ClassFileIllFormedException | 
-            ClassFileNotAccessibleException | IncompatibleClassFileException | PleaseLoadClassException | BadClassFileVersionException | 
-            WrongClassNameException | CannotAssumeSymbolicObjectException | MethodNotFoundException | MethodCodeNotFoundException | 
-            HeapMemoryExhaustedException | RenameUnsupportedException e) {
+            } catch (UnexpectedJBSELibFailureException e) {
                 LOGGER.error("Internal error while creating EvoSuite wrapper");
-                LOGGER.error("Message: %s", e.toString());
+                LOGGER.error("Message: %s", e.e.toString());
                 LOGGER.error("Stack trace:");
-                for (StackTraceElement elem : e.getStackTrace()) {
+                for (StackTraceElement elem : e.e.getStackTrace()) {
                     LOGGER.error("%s", elem.toString());
                 }
                 //falls through
@@ -604,30 +611,15 @@ public final class PerformerEvosuiteRMI extends PerformerPausableFixedThreadPool
      *        of the target method.
      * @param targetMethodName a {@link String}, the name of 
      *        the target method.
-     * @throws IOException
-     * @throws InvalidClassFileFactoryClassException
-     * @throws InvalidInputException
-     * @throws ClassFileNotFoundException
-     * @throws ClassFileIllFormedException
-     * @throws ClassFileNotAccessibleException
-     * @throws IncompatibleClassFileException
-     * @throws PleaseLoadClassException
-     * @throws BadClassFileVersionException
-     * @throws RenameUnsupportedException
-     * @throws WrongClassNameException
-     * @throws CannotAssumeSymbolicObjectException
-     * @throws MethodNotFoundException
-     * @throws MethodCodeNotFoundException
-     * @throws HeapMemoryExhaustedException
-     * @throws IOFileCreationException
-     * @throws CompilationFailedWrapperException
+     * @throws IOFileCreationException if some I/O error occurs while creating the wrapper, the directory 
+     *         that must contain it, or the compilation log file.
+     * @throws CompilationFailedWrapperException if the compilation of the wrapper class fails.
+     * @throws UnexpectedJBSELibFailureException if some exception was raised while using the
+     *         JBSE library to create the wrapper.
      */
     private void emitAndCompileEvoSuiteWrapperSeed(int testCount, String targetMethodClassName, String targetMethodDescriptor, String targetMethodName) 
-    throws IOException, InvalidClassFileFactoryClassException, InvalidInputException, ClassFileNotFoundException, 
-    ClassFileIllFormedException, ClassFileNotAccessibleException, IncompatibleClassFileException, 
-    PleaseLoadClassException, BadClassFileVersionException, RenameUnsupportedException, WrongClassNameException, 
-    CannotAssumeSymbolicObjectException, MethodNotFoundException, MethodCodeNotFoundException, HeapMemoryExhaustedException, 
-    IOFileCreationException, CompilationFailedWrapperException {
+    throws IOFileCreationException, CompilationFailedWrapperException, UnexpectedJBSELibFailureException {
+    	try {
     	//makes a wrapper for the "true" path condition corresponding to the 
     	//entry point of the method
         final Classpath cp = new Classpath(this.o.getJBSELibraryPath(),
@@ -635,13 +627,20 @@ public final class PerformerEvosuiteRMI extends PerformerPausableFixedThreadPool
                                            new ArrayList<>(Arrays.stream(System.getProperty("java.ext.dirs", "").split(File.pathSeparator))
                                            .map(s -> Paths.get(s)).collect(Collectors.toList())), 
                                            this.o.getClassesPath());
-        final State initialState = new State(true, HistoryPoint.startingPreInitial(true), 1_000, 100_000, cp, ClassFileFactoryJavassist.class, new HashMap<>(), new HashMap<>(), new SymbolFactory());
+        final State initialState = new State(true, HistoryPoint.startingPreInitial(true), 1_000, 100_000, cp, ClassFileFactoryJavassist.class, 
+                                             new HashMap<>(), new HashMap<>(), new SymbolFactory());
         final ClassFile cf = initialState.getClassHierarchy().loadCreateClass(CLASSLOADER_APP, targetMethodClassName, true);
         initialState.pushFrameSymbolic(cf, new Signature(targetMethodClassName, targetMethodDescriptor, targetMethodName));
         final State finalState = initialState.clone();
         final Map<Long, String> stringLiterals = Collections.emptyMap();
         final Set<Long> stringOthers = Collections.emptySet();
         emitAndCompileEvoSuiteWrapper(testCount, initialState, finalState, stringLiterals, stringOthers, null);
+    	} catch (IOException | InvalidClassFileFactoryClassException | InvalidInputException | ClassFileNotFoundException |
+    	        ClassFileIllFormedException | ClassFileNotAccessibleException | IncompatibleClassFileException |
+    	        PleaseLoadClassException | BadClassFileVersionException | RenameUnsupportedException | WrongClassNameException |
+    	        CannotAssumeSymbolicObjectException | MethodNotFoundException | MethodCodeNotFoundException | HeapMemoryExhaustedException e) {
+    		throw new UnexpectedJBSELibFailureException(e);
+    	}
     }
     
     /**
@@ -657,13 +656,14 @@ public final class PerformerEvosuiteRMI extends PerformerPausableFixedThreadPool
      *        corresponding value of the literal.
      * @param stringOthers a {@link List}{@code <}{@link Long}{@code >}, 
      *        listing the heap positions of the nonconstant {@link String}s.
-     * @throws FrozenStateException if {@code initialState} is frozen.
      * @throws IOFileCreationException if some I/O error occurs while creating the wrapper, the directory 
      *         that must contain it, or the compilation log file.
      * @throws CompilationFailedWrapperException if the compilation of the wrapper class fails.
+     * @throws UnexpectedJBSELibFailureException if some exception was raised while using the
+     *         JBSE library to create the wrapper.
      */
     private void emitAndCompileEvoSuiteWrapper(int testCount, State initialState, State finalState, Map<Long, String> stringLiterals, Set<Long> stringOthers, Set<String> forbiddenExpansions) 
-    throws FrozenStateException, IOFileCreationException, CompilationFailedWrapperException {
+    throws IOFileCreationException, CompilationFailedWrapperException, UnexpectedJBSELibFailureException {
         final StateFormatterSushiPathCondition fmt = new StateFormatterSushiPathCondition(testCount, () -> initialState, true);
         fmt.setStringsConstant(stringLiterals);
         fmt.setStringsNonconstant(stringOthers);
@@ -691,6 +691,8 @@ public final class PerformerEvosuiteRMI extends PerformerPausableFixedThreadPool
             } catch (IOException e) {
                 throw new IOFileCreationException(e, wrapperFilePath);
             }
+        } catch (FrozenStateException e) {
+        	throw new UnexpectedJBSELibFailureException(e);
         } finally {
             fmt.cleanup();
         }
@@ -719,22 +721,31 @@ public final class PerformerEvosuiteRMI extends PerformerPausableFixedThreadPool
     	if (items.size() == 0) {
     		return;
     	}
-    	
+    	    	
     	//looks for the first EvoSuite with capacity greater than zero,
     	//if it fails, then it detects the least overloaded EvoSuite
-    	Map.Entry<String, AtomicInteger> eBest = null;
-    	for (Map.Entry<String, AtomicInteger> e : this.evosuiteCapacityCounter.entrySet()) {
-    		final int eCount;
-    		if ((eCount = e.getValue().getAndUpdate(c -> (c > 0) ? (c - 1) : c)) > 0) {
-    	    	sendGoalsToEvosuite(e.getKey(), items);
-    	    	return;
-    		} else if (eBest == null || eCount > eBest.getValue().get()){
-    			eBest = e;
+    	Map.Entry<String, Integer> eBest = null;
+    	int eBestAvailability = 0;
+    	for (Map.Entry<String, Integer> e : this.evosuiteCapacityCounter.entrySet()) {
+    		if (this.evosuiteNodes.containsKey(e.getKey())) {
+    			final int eAvailability = e.getValue();
+    			if (eAvailability > 0) {
+    				eBest = e;
+    				eBestAvailability = eAvailability;
+    				break;
+    			} else if (eBest == null || eAvailability > eBest.getValue()) {
+    				eBest = e;
+    				eBestAvailability = eAvailability;
+    			}
     		}
     	}
     	
     	//all failed: sends to the less overloaded EvoSuite
-		eBest.getValue().getAndDecrement();
+    	if (eBest == null) {
+    		LOGGER.error("Failed sending new goal to Evosuite: Failed search of Evosuite instance with best availability");
+    		return;
+    	}    	
+		eBest.setValue(Integer.valueOf(eBestAvailability - 1));
     	sendGoalsToEvosuite(eBest.getKey(), items);
     }
     
@@ -751,7 +762,7 @@ public final class PerformerEvosuiteRMI extends PerformerPausableFixedThreadPool
      */
     private void sendGoalsToEvosuite(String evosuiteServerRmiIdentifier, List<Pair<JBSEResult, Integer>> items) {
     	try {
-    		final EvosuiteRemote evosuiteRemote = this.evosuiteMasterNode.get(evosuiteServerRmiIdentifier);
+    		final EvosuiteRemote evosuiteRemote = this.evosuiteNodes.get(evosuiteServerRmiIdentifier);
     		for (Pair<JBSEResult, Integer> item : items) {
         		final JBSEResult aJBSEResult = item.first();
         		final String targetClass = aJBSEResult.getTargetMethodClassName().replace('/', '.');

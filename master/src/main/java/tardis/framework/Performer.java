@@ -325,7 +325,7 @@ public abstract class Performer<I,O> {
      * performed is {@link #pause() pause}d.
      * 
      * @return {@code true} iff the performer is idle, i.e., 
-     * iff all the threads are waiting and the input queue is
+     * iff all the workers are idle and the input queue is
      * empty.
      */
     final boolean isIdle() {
