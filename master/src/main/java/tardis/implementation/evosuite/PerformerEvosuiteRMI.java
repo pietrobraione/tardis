@@ -31,6 +31,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import javax.tools.JavaCompiler;
@@ -105,6 +106,8 @@ public final class PerformerEvosuiteRMI extends PerformerMultiServer<JBSEResult,
     private int registryPort = -1;
     private boolean terminated = false;
     private volatile boolean stopUntilFirstEvosuite = true;
+    private long performerPauseStart = 0;
+    private long performerPauseElapsed = 0;
     
     public PerformerEvosuiteRMI(Options o, JBSEResultInputOutputBuffer in, OutputBuffer<EvosuiteResult> out) 
     throws NoJavaCompilerException, ClassNotFoundException, MalformedURLException, SecurityException, 
@@ -524,6 +527,27 @@ public final class PerformerEvosuiteRMI extends PerformerMultiServer<JBSEResult,
             LOGGER.info("Generated test case %s, depth: %d, post-frontier path condition: %s:%s", testCaseClassName, depth, item.getTargetMethodSignature(), stringifyPostFrontierPathCondition(item));
             final TestCase newTestCase = new TestCase(testCaseClassName, "()V", "test0", this.o.getTmpTestsDirectoryPath(), (testCaseScaff != null));
             getOutputBuffer().add(new EvosuiteResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), item.getPathConditionGenerated(), newTestCase, depth + 1));
+        
+            if (item.getPathConditionGenerated() == null && !item.isSeed()) {
+            	if (this.performerPauseStart == 0) {
+            		this.performerPauseStart = System.nanoTime();
+            		LOGGER.info("Pausing Performer");
+            		this.pause();
+            	}
+            }
+            
+            if (item.getPathConditionGenerated() != null && !item.isSeed()) {
+            	if (this.performerPauseStart != 0) {
+            		this.performerPauseElapsed = TimeUnit.SECONDS.convert(this.performerPauseStart - System.nanoTime(), TimeUnit.NANOSECONDS);
+	            	if (this.performerPauseElapsed > o.getMaximumElapsedWithoutPathConditions()) {
+	            		LOGGER.info("%s seconds have passed without generating test with path conditions, resuming Peformer", this.performerPauseElapsed);
+	            		this.resume();
+	            		this.performerPauseStart = 0;
+	            	}
+            	}
+            }
+            
+            
         } catch (NoSuchMethodException e) { 
             throw new NoTestMethodException(testCase, item.getTargetMethodSignature(), stringifyPostFrontierPathCondition(item));
         } catch (SecurityException | NoClassDefFoundError | ClassNotFoundException e) {

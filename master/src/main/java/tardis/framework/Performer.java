@@ -275,7 +275,7 @@ public abstract class Performer<I,O> {
      * Pauses the performer so it can reliably be queried whether 
      * it {@link #isIdle()}.
      */
-    final void pause() {
+    public final void pause() {
         this.paused = true;
         
         //if this performer is stopped, there is
@@ -307,7 +307,7 @@ public abstract class Performer<I,O> {
     /**
      * Resumes this performer from a {@link #pause()}.
      */
-    final void resume() {
+    public final void resume() {
         onResume();
         this.paused = false;
         final ReentrantLock lock = this.lockPause;

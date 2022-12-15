@@ -252,6 +252,10 @@ public final class Options implements Cloneable {
     @Option(name = "-evosuite_multi_search",
             usage = "Whether EvoSuite shall do simultaneous path-condition-guided (TARDIS) and branch-guided (ordinary) search")
     private boolean evosuiteMultiSearch = false;
+    
+    @Option(name = "-maximum_elapsed_without_pathcondition_generated_tests",
+            usage = "The maximum time elapsed (in seconds) without generating test with injected path conditions")
+    private int maximumElapsedWithoutPathConditions = 10;
 
 	public boolean getHelp() {
         return this.help;
@@ -891,6 +895,14 @@ public final class Options implements Cloneable {
 
 	public void setEvosuiteMultiSearch(boolean evosuiteMultiSearch) {
 		this.evosuiteMultiSearch = evosuiteMultiSearch;
+	}
+	
+	public int getMaximumElapsedWithoutPathConditions() {
+		return this.maximumElapsedWithoutPathConditions;
+	}
+	
+	public void setMaximumElapsedWithoutPathConditions(int maximumElapsedWithoutPathConditions) {
+		this.maximumElapsedWithoutPathConditions = maximumElapsedWithoutPathConditions;
 	}
 
     @Override
