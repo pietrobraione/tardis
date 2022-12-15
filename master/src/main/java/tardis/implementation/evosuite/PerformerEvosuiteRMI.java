@@ -540,7 +540,7 @@ public final class PerformerEvosuiteRMI extends PerformerMultiServer<JBSEResult,
             	if (this.performerPauseStart != 0) {
             		this.performerPauseElapsed = TimeUnit.SECONDS.convert(this.performerPauseStart - System.nanoTime(), TimeUnit.NANOSECONDS);
 	            	if (this.performerPauseElapsed > o.getMaximumElapsedWithoutPathConditions()) {
-	            		LOGGER.info("%s seconds have passed without generating test with path conditions, resuming Peformer", this.performerPauseElapsed);
+	            		LOGGER.info("Resuming Peformer after %d seconds", this.performerPauseElapsed);
 	            		this.resume();
 	            		this.performerPauseStart = 0;
 	            	}
