@@ -199,13 +199,13 @@ public final class Options implements Cloneable {
             usage = "Unit of the timeout after which an EvoSuite job is created: NANOSECONDS, MICROSECONDS, MILLISECONDS, SECONDS, MINUTES, HOURS, DAYS")
     private TimeUnit timeoutEvosuiteJobCreationUnit = TimeUnit.SECONDS;
 
-    @Option(name = "-num_targets_evosuite_job",
-            usage = "Maximum number of targets passed to an EvoSuite job")
-    private int numTargetsEvosuiteJob = 5;
+    @Option(name = "-num_targets_evosuite_per_job",
+            usage = "Maximum number of targets in an EvoSuite job")
+    private int numTargetsEvosuitePerJob = 5;
 
-    @Option(name = "-num_evosuite_jobs_overloaded",
-            usage = "Maximum number of EvoSuite jobs after which an EvoSuite instance is considered overloaded; It is used only when -num_threads_evosuite is set to a value greater than one")
-    private int numEvosuiteJobsOverloaded = 3;
+    @Option(name = "-num_targets_evosuite_overloaded",
+            usage = "Maximum numer of targets that an EvoSuite instance may accept beyond -num_targets_evosuite_job")
+    private int numTargetsEvosuiteOverloaded = 3;
 
     @Option(name = "-heap_scope",
             usage = "JBSE heap scope in the form <className1>=<maxNumInstances1>; multiple heap scopes can be specified",
@@ -736,26 +736,26 @@ public final class Options implements Cloneable {
         this.timeoutEvosuiteJobCreationUnit = timeoutEvosuiteJobCreationUnit;
     }
 
-    public int getNumTargetsEvosuiteJob() {
-        return this.numTargetsEvosuiteJob;
+    public int getNumTargetsEvosuitePerJob() {
+        return this.numTargetsEvosuitePerJob;
     }
 
-    public void setNumTargetsEvosuiteJob(int numTargetsEvosuiteJob) {
-        if (numTargetsEvosuiteJob < 1) {
+    public void setNumTargetsEvosuitePerJob(int numTargetsEvosuitePerJob) {
+        if (numTargetsEvosuitePerJob < 1) {
             throw new IllegalArgumentException("Attempted to set the maximum number of targets in an EvoSuite job to a value less than 1.");
         }
-        this.numTargetsEvosuiteJob = numTargetsEvosuiteJob;
+        this.numTargetsEvosuitePerJob = numTargetsEvosuitePerJob;
     }
 
-    public int getNumEvosuiteJobsOverloaded() {
-        return this.numEvosuiteJobsOverloaded;
+    public int getNumTargetsEvosuiteOverloaded() {
+        return this.numTargetsEvosuiteOverloaded;
     }
 
-    public void setNumEvosuiteJobsOverloaded(int numEvosuiteJobsOverloaded) {
-        if (numEvosuiteJobsOverloaded < 2) {
-            throw new IllegalArgumentException("Attempted to set the number of jobs after which an EvoSuite instance is considered overloaded to a value less than 2.");
+    public void setNumTargetsEvosuiteOverloaded(int numTargetsEvosuiteOverloaded) {
+        if (numTargetsEvosuiteOverloaded < 1) {
+            throw new IllegalArgumentException("Attempted to set the number of EvoSuite overload targets to a value less than 1.");
         }
-        this.numEvosuiteJobsOverloaded = numEvosuiteJobsOverloaded;
+        this.numTargetsEvosuiteOverloaded = numTargetsEvosuiteOverloaded;
     }
 
     public Map<String, Integer> getHeapScope() {
