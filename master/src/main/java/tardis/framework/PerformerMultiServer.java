@@ -29,9 +29,9 @@ public abstract class PerformerMultiServer<I,O> extends Performer<I,O> {
      * @param in The {@link InputBuffer} from which this {@link PerformerMultiServer} will read the input items. 
      * @param out The {@link OutputBuffer} where this {@link PerformerMultiServer} will put the output items.
      * @param numServers The number of servers that this {@link PerformerMultiServer} encapsulates.
-     * @param serverCapacity The capacity of each server expressed as the maximum number of simultaneous jobs
+     * @param serverCapacity The capacity of each server expressed as the maximum number of targets
      *        a server is able to handle.
-     * @param numInputs An {@code int}, the maximum number of input items that are passed as a batch
+     * @param numTargetsPerJobMax An {@code int}, the maximum number of targets that are passed as a batch
      *        to {@link #makeJob(List) makeJob}.
      * @param throttleFactor The throttle factor; it must be between 0 and 1. When 0, a batch is 
      *        taken from {@code in} and passed to {@link #makeJob(List) makeJob} whenever
@@ -43,8 +43,8 @@ public abstract class PerformerMultiServer<I,O> extends Performer<I,O> {
      * @throws NullPointerException if {@code in == null || out == null || timeoutUnit == null}.
      * @throws IllegalArgumentException if {@code numOfServers <= 0 || serverCapacity <= 0 || numInputs <= 0 || timeoutDuration < 0}.
      */
-    public PerformerMultiServer(String name, InputBuffer<I> in, OutputBuffer<O> out, int numServers, int serverCapacity, int numInputs, float throttleFactor, long timeoutDuration, TimeUnit timeoutTimeUnit) {
-    	super(name, in, out, numServers * serverCapacity, numInputs, throttleFactor, timeoutDuration, timeoutTimeUnit);
+    public PerformerMultiServer(String name, InputBuffer<I> in, OutputBuffer<O> out, int numServers, int serverCapacity, int numTargetsPerJobMax, float throttleFactor, long timeoutDuration, TimeUnit timeoutTimeUnit) {
+    	super(name, in, out, numTargetsPerJobMax, throttleFactor, timeoutDuration, timeoutTimeUnit);
         if (numServers <= 0 || serverCapacity <= 0) {
             throw new IllegalArgumentException("Invalid negative or zero parameter in PerformerMultiServer constructor.");
         }

@@ -32,22 +32,17 @@ public abstract class Performer<I,O> {
     private final OutputBuffer<O> out;
     
     /**
-     * The number of workers.
-     */
-    private final int numWorkers;
-    
-    /**
      * The maximum number of input items that are passed as a batch
      * to {@link #makeJob(List) makeJob}.
      */
-    private final int numInputs;
+    private final int numTargetsPerJobMax;
     
     /**
      * The throttle factor; it must be between 0 and 1.
      * When 0, a batch is taken from {@link #in} and
      * passed to {@link #makeJob(List) makeJob} whenever
      * there are sufficient items. When 1, it is also 
-     * required that at least {@link #numInputs} workers
+     * required that at least {@link #numTargetsPerJobMax} workers
      * are available. Intermediate values yield different 
      * degrees of throttling. 
      */
@@ -112,8 +107,7 @@ public abstract class Performer<I,O> {
      * @param name a meaningful name for the performer that will be used for debugging.
      * @param in The {@link InputBuffer} from which this {@link Performer} will read the input items. 
      * @param out The {@link OutputBuffer} where this {@link Performer} will put the output items.
-     * @param numWorkers The number of workers that this {@link Performer} encapsulates.
-     * @param numInputs An {@code int}, the maximum number of input items that are passed as a batch
+     * @param numTargetsPerJobMax An {@code int}, the maximum number of targets that are passed as a batch
      *        to {@link #makeJob(List) makeJob}.
      * @param throttleFactor The throttle factor; it must be between 0 and 1. When 0, a batch is 
      *        taken from {@code in} and passed to {@link #makeJob(List) makeJob} whenever
@@ -125,17 +119,16 @@ public abstract class Performer<I,O> {
      * @throws NullPointerException if {@code in == null || out == null || timeoutUnit == null}.
      * @throws IllegalArgumentException if {@code numOfThreads <= 0 || numInputs <= 0 || timeoutDuration < 0}.
      */
-    public Performer(String name, InputBuffer<I> in, OutputBuffer<O> out, int numWorkers, int numInputs, float throttleFactor, long timeoutDuration, TimeUnit timeoutTimeUnit) {
+    public Performer(String name, InputBuffer<I> in, OutputBuffer<O> out, int numTargetsPerJobMax, float throttleFactor, long timeoutDuration, TimeUnit timeoutTimeUnit) {
         if (in == null || out == null || timeoutTimeUnit == null) {
             throw new NullPointerException("Invalid null parameter in performer constructor.");
         }
-        if (numWorkers <= 0 || numInputs <= 0 || timeoutDuration < 0) {
+        if (numTargetsPerJobMax <= 0 || timeoutDuration < 0) {
             throw new IllegalArgumentException("Invalid negative or zero parameter in performer constructor.");
         }
         this.in = in;
         this.out = out;
-        this.numWorkers = numWorkers;
-        this.numInputs = numInputs;
+        this.numTargetsPerJobMax = numTargetsPerJobMax;
         this.throttleFactor = throttleFactor;
         this.timeoutDuration = timeoutDuration;
         this.timeoutTimeUnit = timeoutTimeUnit;
@@ -380,15 +373,16 @@ public abstract class Performer<I,O> {
      */
     private void waitInputAndSubmitJob() throws InterruptedException {
         //throttles
-        if (availableWorkers() < this.numWorkers * this.throttleFactor) {
+        if (availableWorkers() < this.numTargetsPerJobMax * this.throttleFactor) {
             return;
         }
-            
+
         //polls
-        final List<I> items = this.in.pollN(this.numInputs, this.timeoutDuration, this.timeoutTimeUnit);
+        final List<I> items = this.in.pollN(this.numTargetsPerJobMax, this.timeoutDuration, this.timeoutTimeUnit);
         
         //submits job
         if (items != null && items.size() > 0) {
+    		
             final Runnable job = makeJob(items);
             execute(job);
         }
