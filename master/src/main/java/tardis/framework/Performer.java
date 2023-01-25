@@ -197,11 +197,82 @@ public abstract class Performer<I,O> {
     public final void start() {
         this.mainThread.start();
     }
+    
+    /**
+     * Pauses the performer. A paused performer does not
+     * consume the items in its input queue. Only a paused
+     * performer can reliably be queried on whether 
+     * it {@link #isIdle()}.
+     */
+    public final void pause() {
+    	//if this performer is already paused, there is
+    	//nothing to do
+    	if (this.paused) {
+    		return;
+    	}
+        this.paused = true;
+        
+        //if this performer is stopped, there is
+        //nothing else to do
+        if (this.stopped) {
+            return;
+        }
+        
+        //if mainThread is waiting, interrupts it so it will go 
+        //in pause state and signal conditionPaused; guarded by 
+        //lockPause so the next await() will not lose the signal 
+        //from mainThread
+        final ReentrantLock lock = this.lockPause;
+        lock.lock();
+        try {
+            this.mainThread.interrupt(); 
+            this.conditionPaused.await(); //waits until mainThread pauses 
+        } catch (InterruptedException e) {
+            //this should never happen
+            stop();
+            throw new AssertionError(e);
+        } finally {
+            lock.unlock();
+        }
+        
+        onPause();
+    }
+
+    /**
+     * Resumes this performer from a {@link #pause()}.
+     */
+    public final void resume() {
+        onResume();
+        this.paused = false;
+        final ReentrantLock lock = this.lockPause;
+        lock.lock();
+        try {
+            this.conditionNotPaused.signalAll();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * Checks whether this performer is idle. 
+     * This method gives a reliable answer only when the
+     * performed is {@link #pause() pause}d.
+     * 
+     * @return {@code true} iff the performer is idle, i.e., 
+     * iff all the workers are idle and the input queue is
+     * empty.
+     */
+    public final boolean isIdle() {
+        if (this.stopped) {
+            return true;
+        }
+        return (areWorkersIdle() && this.in.isEmpty());
+    }
 
     /**
      * Stops the performer. Shall be invoked after {@link #start()}.
      */
-    final void stop() {
+    public final void stop() {
         this.paused = false;
         this.stopped = true;
         this.mainThread.interrupt();
@@ -263,70 +334,6 @@ public abstract class Performer<I,O> {
      *        to the worker.
      */
     protected abstract void execute(Runnable job);
-    
-    /**
-     * Pauses the performer so it can reliably be queried whether 
-     * it {@link #isIdle()}.
-     */
-    public final void pause() {
-        this.paused = true;
-        
-        //if this performer is stopped, there is
-        //nothing else to do
-        if (this.stopped) {
-            return;
-        }
-        
-        //if mainThread is waiting, interrupts it so it will go 
-        //in pause state and signal conditionPaused; guarded by 
-        //lockPause so the next await() will not lose the signal 
-        //from mainThread
-        final ReentrantLock lock = this.lockPause;
-        lock.lock();
-        try {
-            this.mainThread.interrupt(); 
-            this.conditionPaused.await(); //waits until mainThread pauses 
-        } catch (InterruptedException e) {
-            //this should never happen
-            stop();
-            throw new AssertionError(e);
-        } finally {
-            lock.unlock();
-        }
-        
-        onPause();
-    }
-
-    /**
-     * Resumes this performer from a {@link #pause()}.
-     */
-    public final void resume() {
-        onResume();
-        this.paused = false;
-        final ReentrantLock lock = this.lockPause;
-        lock.lock();
-        try {
-            this.conditionNotPaused.signalAll();
-        } finally {
-            lock.unlock();
-        }
-    }
-
-    /**
-     * Checks whether this performer is idle. 
-     * This method gives a reliable answer only when the
-     * performed is {@link #pause() pause}d.
-     * 
-     * @return {@code true} iff the performer is idle, i.e., 
-     * iff all the workers are idle and the input queue is
-     * empty.
-     */
-    final boolean isIdle() {
-        if (this.stopped) {
-            return true;
-        }
-        return (areWorkersIdle() && this.in.isEmpty());
-    }
 
     /**
      * To be invoked by the main thread. Submits the seed to 
@@ -382,7 +389,6 @@ public abstract class Performer<I,O> {
         
         //submits job
         if (items != null && items.size() > 0) {
-    		
             final Runnable job = makeJob(items);
             execute(job);
         }
