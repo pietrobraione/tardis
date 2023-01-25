@@ -13,7 +13,7 @@ import java.util.concurrent.TimeUnit;
  *
  * @param <E> the type of the items stored in the buffer.
  */
-public final class QueueInputOutputBuffer<E> implements InputBuffer<E>, OutputBuffer<E> {
+public class QueueInputOutputBuffer<E> implements InputBuffer<E>, OutputBuffer<E> {
     private final LinkedBlockingQueue<E> queue = new LinkedBlockingQueue<>();
 
     @Override

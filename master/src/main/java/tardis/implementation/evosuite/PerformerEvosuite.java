@@ -85,7 +85,7 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
     
     public PerformerEvosuite(Options o, JBSEResultInputOutputBuffer in, OutputBuffer<EvosuiteResult> out) 
     throws NoJavaCompilerException, ClassNotFoundException, MalformedURLException, SecurityException {
-        super("PerformerEvosuite", in, out, o.getNumOfThreadsEvosuite(), o.getNumTargetsEvosuiteJob(), o.getThrottleFactorEvosuite(), o.getTimeoutEvosuiteJobCreationDuration() / o.getNumTargetsEvosuiteJob(), o.getTimeoutEvosuiteJobCreationUnit());
+        super("PerformerEvosuite", in, out, o.getNumOfThreadsEvosuite(), o.getNumTargetsEvosuitePerJob(), o.getThrottleFactorEvosuite(), o.getTimeoutEvosuiteJobCreationDuration() / o.getNumTargetsEvosuitePerJob(), o.getTimeoutEvosuiteJobCreationUnit());
         this.visibleTargetMethods = getTargets(o);
         this.compiler = ToolProvider.getSystemJavaCompiler();
         if (this.compiler == null) {
@@ -417,13 +417,13 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
     private void generateTestsAndScheduleJBSE(int testCountInitial, List<JBSEResult> items) {
         //splits items in sublists having same target method
         final List<List<JBSEResult>> splitItems = new ArrayList<>();
-        for (int i = 0; i < items.size() / this.o.getNumTargetsEvosuiteJob(); ++i) {
+        for (int i = 0; i < items.size() / this.o.getNumTargetsEvosuitePerJob(); ++i) {
         	final int start = i * items.size();
         	final int end = (i + 1) * items.size();
         	splitItems.add(items.subList(start, end));
         }
-        if (items.size() % this.o.getNumTargetsEvosuiteJob() != 0) {
-        	splitItems.add(items.subList((items.size() / this.o.getNumTargetsEvosuiteJob()) * items.size(), items.size()));
+        if (items.size() % this.o.getNumTargetsEvosuitePerJob() != 0) {
+        	splitItems.add(items.subList((items.size() / this.o.getNumTargetsEvosuitePerJob()) * items.size(), items.size()));
         }
 
         //launches an EvoSuite process for each sublist

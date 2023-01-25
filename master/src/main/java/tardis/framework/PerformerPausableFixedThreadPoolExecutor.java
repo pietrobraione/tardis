@@ -38,7 +38,7 @@ public abstract class PerformerPausableFixedThreadPoolExecutor<I,O> extends Perf
      * @throws IllegalArgumentException if {@code numOfThreads <= 0 || numInputs <= 0 || timeoutDuration < 0}.
      */
     public PerformerPausableFixedThreadPoolExecutor(String name, InputBuffer<I> in, OutputBuffer<O> out, int numOfThreads, int numInputs, float throttleFactor, long timeoutDuration, TimeUnit timeoutTimeUnit) {
-    	super(name, in, out, numOfThreads, numInputs, throttleFactor, timeoutDuration, timeoutTimeUnit);
+    	super(name, in, out, numInputs, throttleFactor, timeoutDuration, timeoutTimeUnit);
         this.threadPool = new PausableFixedThreadPoolExecutor(name, numOfThreads);
     }
     

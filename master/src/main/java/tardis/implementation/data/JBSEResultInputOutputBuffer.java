@@ -17,6 +17,9 @@ import java.util.function.BiConsumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import jbse.mem.Clause;
 import tardis.Options;
 import tardis.framework.InputBuffer;
@@ -33,6 +36,7 @@ import tardis.implementation.jbse.JBSEResult;
  * @param <E> the type of the items stored in the buffer.
  */
 public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult>, OutputBuffer<JBSEResult> {
+    private static final Logger LOGGER = LogManager.getFormatterLogger(JBSEResultInputOutputBuffer.class);
     /** The maximum value for the index of improvability. */
     private static final int INDEX_IMPROVABILITY_MAX = 10;
     
@@ -212,6 +216,9 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
         	updateIndexInfeasibility(entryPoint, pathCondition);
         }
         final int queueNumber = calculateQueueNumber(entryPoint, pathCondition);
+        if (queueRanking[queueNumber] < queueRanking.length - 1) {
+			LOGGER.info("Priority path condition with last clause: " + pathCondition.get(pathCondition.size() - 1) + " -- priority=" + queueNumber + " (wrt min priority=" + queueRanking[queueRanking.length - 1] + ")");
+        }
         final LinkedBlockingQueue<JBSEResult> queue = this.queues.get(queueNumber);
         return queue.add(item);
     }
@@ -344,6 +351,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
                 if (queueNumberNew != queueNumber) {
                     this.queues.get(queueNumber).remove(bufferedJBSEResult);
                     this.queues.get(queueNumberNew).add(bufferedJBSEResult);
+                    LOGGER.info("Priority update for path condition with last clause: " + pathCondition.get(pathCondition.size() - 1) + " -- priority=" + queueNumber + " --> " + queueNumberNew + " (wrt min priority=" + queueRanking[queueRanking.length - 1] + ")");
                 }
             });
             this.coverageSetImprovability.clear();

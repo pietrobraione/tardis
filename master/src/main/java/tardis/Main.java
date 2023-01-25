@@ -42,9 +42,9 @@ import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.ParserProperties;
 
 import tardis.framework.Performer;
-import tardis.framework.QueueInputOutputBuffer;
 import tardis.framework.TerminationManager;
 import tardis.implementation.common.NoJavaCompilerException;
+import tardis.implementation.data.EvosuiteResultInputOutputBuffer;
 import tardis.implementation.data.JBSEResultInputOutputBuffer;
 import tardis.implementation.data.TreePath;
 import tardis.implementation.evosuite.EvosuiteResult;
@@ -111,7 +111,7 @@ public final class Main {
 
             //...the communication buffers...
             final JBSEResultInputOutputBuffer pathConditionBuffer = new JBSEResultInputOutputBuffer(this.o, treePath);
-            final QueueInputOutputBuffer<EvosuiteResult> testCaseBuffer = new QueueInputOutputBuffer<>();
+            final EvosuiteResultInputOutputBuffer testCaseBuffer = new EvosuiteResultInputOutputBuffer();
 
             //...the performers and the termination manager
             final PerformerJBSE performerJBSE = new PerformerJBSE(this.o, testCaseBuffer, pathConditionBuffer, treePath);
