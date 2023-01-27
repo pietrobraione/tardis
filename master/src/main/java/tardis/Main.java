@@ -321,8 +321,9 @@ public final class Main {
             //initial test case: JBSE should start
             final ArrayList<EvosuiteResult> seed = generateSeedForPerformerJBSE();
             performerJBSE.seed(seed);
-        } else {
-            //all the other cases: EvoSuite should start
+        } else if (!this.o.getEvosuiteMultiSearch()) {
+            //all the other cases: EvoSuite should start (in the multisearch case
+        	//no seed is necessary)
             final ArrayList<JBSEResult> seed = generateSeedForPerformerEvosuite();
             performerEvosuite.seed(seed);
         }
