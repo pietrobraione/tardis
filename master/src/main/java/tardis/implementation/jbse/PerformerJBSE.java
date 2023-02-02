@@ -53,6 +53,7 @@ import tardis.framework.PerformerPausableFixedThreadPoolExecutor;
 import tardis.implementation.data.JBSEResultInputOutputBuffer;
 import tardis.implementation.data.TreePath;
 import tardis.implementation.evosuite.EvosuiteResult;
+import tardis.implementation.evosuite.PerformerEvosuiteListener;
 import tardis.implementation.evosuite.TestCase;
 
 /**
@@ -62,7 +63,8 @@ import tardis.implementation.evosuite.TestCase;
  * 
  * @author Pietro Braione
  */
-public final class PerformerJBSE extends PerformerPausableFixedThreadPoolExecutor<EvosuiteResult, JBSEResult> {
+public final class PerformerJBSE extends PerformerPausableFixedThreadPoolExecutor<EvosuiteResult, JBSEResult> 
+implements PerformerEvosuiteListener {
     private static final Logger LOGGER = LogManager.getFormatterLogger(PerformerJBSE.class);
     
     private static final int NUM_INPUTS_PER_JOB = 1;
@@ -73,6 +75,7 @@ public final class PerformerJBSE extends PerformerPausableFixedThreadPoolExecuto
     private final ConcurrentHashMap<String, State> initialStateCache = new ConcurrentHashMap<>();
     private final AtomicLong pathCoverage = new AtomicLong(0);
     private final ConcurrentHashMap<MethodPathConditon, Set<String>> freshObjectsExpansions = new ConcurrentHashMap<>();
+    private boolean testGeneratorTerminated = false;
 
     public PerformerJBSE(Options o, InputBuffer<EvosuiteResult> in, JBSEResultInputOutputBuffer out, TreePath treePath) {
         super("PerformerJBSE", in, out, o.getNumOfThreadsJBSE(), NUM_INPUTS_PER_JOB, o.getThrottleFactorJBSE(), o.getTimeoutJBSEJobCreationDuration() / NUM_INPUTS_PER_JOB, o.getTimeoutJBSEJobCreationUnit());
@@ -82,10 +85,9 @@ public final class PerformerJBSE extends PerformerPausableFixedThreadPoolExecuto
     }
 
     @Override
-    protected final Runnable makeJob(List<EvosuiteResult> items) {
+    protected void executeJob(List<EvosuiteResult> items, Object... args) {
         final EvosuiteResult item = items.get(0);
-        final Runnable job = () -> explore(item, item.getStartDepth());
-        return job;
+        explore(item, item.getStartDepth());
     }
 
     /**
@@ -154,6 +156,13 @@ public final class PerformerJBSE extends PerformerPausableFixedThreadPoolExecuto
             final State stateInitial = rp.getStateInitial();
             possiblySetInitialStateCached(item, stateInitial);
             
+            //emits the test if it covers something new
+            emitTestIfCoversSomethingNew(item, newCoveredBranches);
+            
+            if (testGeneratorTerminated) {
+            	return;
+            }
+            
             //learns the new data for future update of indices
             learnDataForIndices(newCoveredBranches, coveredBranches, entryPoint, pathConditionFinal);
             
@@ -161,9 +170,6 @@ public final class PerformerJBSE extends PerformerPausableFixedThreadPoolExecuto
             //TODO possibly do it more lazily!
             updateIndicesAndReclassify();
 
-            //emits the test if it covers something new
-            emitTestIfCoversSomethingNew(item, newCoveredBranches);
-            
             //reruns the test case at all the depths in the range, generates all the modified 
             //path conditions and puts all the output jobs in the output queue
             final int depthFinal = Math.min(depthStart + this.o.getMaxTestCaseDepth(), stateFinal.getDepth());
@@ -450,5 +456,10 @@ public final class PerformerJBSE extends PerformerPausableFixedThreadPoolExecuto
         }
         return noOutputJobGenerated;
     }
+
+	@Override
+	public void allEvosuiteTerminated() {
+		testGeneratorTerminated = true;
+	}
 }
 

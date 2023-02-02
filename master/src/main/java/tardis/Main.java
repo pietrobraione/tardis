@@ -117,7 +117,8 @@ public final class Main {
             final PerformerJBSE performerJBSE = new PerformerJBSE(this.o, testCaseBuffer, pathConditionBuffer, treePath);
             Performer<JBSEResult, EvosuiteResult> performerEvosuite;
             if (this.o.getEvosuiteMultiSearch()) {
-            	performerEvosuite = new PerformerEvosuiteRMI(this.o, pathConditionBuffer, testCaseBuffer);            	
+            	performerEvosuite = new PerformerEvosuiteRMI(this.o, pathConditionBuffer, testCaseBuffer);       
+            	((PerformerEvosuiteRMI) performerEvosuite).registerListener(performerJBSE);
             } else {
             	performerEvosuite = new PerformerEvosuite(this.o, pathConditionBuffer, testCaseBuffer);
             }

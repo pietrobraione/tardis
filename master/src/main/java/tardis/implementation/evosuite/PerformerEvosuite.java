@@ -125,19 +125,22 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
     }
 
     @Override
-    protected Runnable makeJob(List<JBSEResult> items) {
-        while (this.stopForSeeding) ; //ugly spinlocking
+    protected void executeJob(List<JBSEResult> items, Object... args) {
         final int testCountInitial = this.testCount;
         final boolean isSeed = items.stream().map(JBSEResult::isSeed).reduce(true, (a, b) -> a && b); 
         if (isSeed) {
             this.stopForSeeding = true;
+        	generateTestsAndScheduleJBSESeed(testCountInitial, items);
         } else {
             this.testCount += items.size();
+            generateTestsAndScheduleJBSE(testCountInitial, items);
         }
-        final Runnable job = (isSeed ? 
-                              () -> generateTestsAndScheduleJBSESeed(testCountInitial, items) :
-                              () -> generateTestsAndScheduleJBSE(testCountInitial, items));
-        return job;
+    }
+
+    @Override
+    protected Runnable makeJob(List<JBSEResult> items) {
+        while (this.stopForSeeding) ; //ugly spinlocking
+        return super.makeJob(items);
     }
 
     /**

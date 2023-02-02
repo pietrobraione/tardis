@@ -3,6 +3,7 @@ package tardis.framework;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -101,6 +102,8 @@ public abstract class Performer<I,O> {
      */
     private ArrayList<I> seed;
     
+    private final AtomicInteger preallocatedWorkers = new AtomicInteger(0);
+
     /**
      * Constructor.
      * 
@@ -167,7 +170,22 @@ public abstract class Performer<I,O> {
      * @return a {@link Runnable} that elaborates {@code items}, possibly putting
      *         some output items in the output buffer.
      */
-    protected abstract Runnable makeJob(List<I> items);
+    protected Runnable makeJob(List<I> items) {
+		//reserves items.size workers
+		this.preallocatedWorkers.addAndGet(items.size());
+
+        final Runnable job = () -> {
+        	//release the reserved workers, since they are now executing
+        	Object[] args = allocateJob(items);
+        	this.preallocatedWorkers.addAndGet(-1 * items.size());
+        	executeJob(items, args);
+        };
+        return job;
+    }
+    
+   protected abstract Object[] allocateJob(List<I> items);
+   
+   protected abstract void executeJob(List<I> items, Object... args);
 
     /**
      * Gets the {@link OutputBuffer} of this {@link Performer}. Meant
@@ -326,6 +344,14 @@ public abstract class Performer<I,O> {
      */
     protected abstract int availableWorkers();
     
+    protected int getPreallocatedWorkers() {
+    	return this.preallocatedWorkers.get();
+    }
+    
+    protected void releaseAllPreallocatedWorkers() {
+    	this.preallocatedWorkers.set(0);
+    }
+        
     /**
      * Submits a job to a worker. The method <emph>must</emph>
      * be nonblocking.

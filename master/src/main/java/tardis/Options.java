@@ -112,12 +112,12 @@ public final class Options implements Cloneable {
     @Option(name = "-throttle_factor_jbse",
             usage = "The throttle factor for the JBSE thread pool",
             handler = PercentageOptionHandler.class)
-    private float throttleFactorJBSE = 0.0f;
+    private float throttleFactorJBSE = 1.0f;
 
     @Option(name = "-throttle_factor_evosuite",
             usage = "The throttle factor for the EvoSuite thread pool",
             handler = PercentageOptionHandler.class)
-    private float throttleFactorEvosuite = 0.0f;
+    private float throttleFactorEvosuite = 1.0f;
 
     @Option(name = "-classes",
             usage = "The classpath of the project to analyze",
@@ -206,6 +206,10 @@ public final class Options implements Cloneable {
     @Option(name = "-num_targets_evosuite_overloaded",
             usage = "Maximum numer of targets that an EvoSuite instance may accept beyond -num_targets_evosuite_job")
     private int numTargetsEvosuiteOverloaded = 3;
+
+    @Option(name = "-max_evosuite_iterations_per_path_condition",
+            usage = "Maximum numer of iterations for which EvoSuite keeps a path condition objective if it cannot observe any fitness improvement; then EvoSuite dismisses that objective")
+    private int maxEvosuiteItersPerPathCondition = 100;
 
     @Option(name = "-heap_scope",
             usage = "JBSE heap scope in the form <className1>=<maxNumInstances1>; multiple heap scopes can be specified",
@@ -905,7 +909,15 @@ public final class Options implements Cloneable {
 		this.maximumElapsedWithoutPathConditions = maximumElapsedWithoutPathConditions;
 	}
 
-    @Override
+	public int getMaxEvosuiteItersPerPathCondition() {
+		return this.maxEvosuiteItersPerPathCondition;
+	}
+	
+	public void setMaxEvosuiteItersPerPathCondition(int maxEvosuiteItersPerPathCondition) {
+		this.maxEvosuiteItersPerPathCondition = maxEvosuiteItersPerPathCondition;
+	}
+
+	@Override
     public Options clone() {
         try {
             final Options theClone = (Options) super.clone();

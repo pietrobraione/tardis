@@ -64,11 +64,16 @@ public abstract class PerformerPausableFixedThreadPoolExecutor<I,O> extends Perf
     
     @Override
     protected final int availableWorkers() {
-    	return this.threadPool.getCorePoolSize() - this.threadPool.getActiveCount();
+    	return this.threadPool.getCorePoolSize() - this.threadPool.getActiveCount() - this.getPreallocatedWorkers();
     }
     
     @Override
     protected final void execute(Runnable job) {
     	this.threadPool.execute(job);
+    }
+    
+    @Override
+    protected Object[] allocateJob(List<I> items) {
+    	return null; //nothing to do, and no args to return
     }
 }

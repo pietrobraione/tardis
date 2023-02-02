@@ -2,19 +2,20 @@ package tardis.implementation.data;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.TimeUnit;
 
 import tardis.framework.QueueInputOutputBuffer;
 import tardis.implementation.evosuite.EvosuiteResult;
 
 public class EvosuiteResultInputOutputBuffer extends QueueInputOutputBuffer<EvosuiteResult> {
-    private final LinkedBlockingQueue<EvosuiteResult> queueWithPriority = new LinkedBlockingQueue<>();
+    private final ConcurrentLinkedDeque<EvosuiteResult> queueWithPriority = new ConcurrentLinkedDeque<>();
     
     @Override
     public boolean add(EvosuiteResult item) {
     	if (item.getPathConditionGenerating() == null) {
-    		return this.queueWithPriority.add(item);
+    		this.queueWithPriority.addFirst(item);
+    		return true;
     	} else {
     		return super.add(item);
     	}
@@ -25,7 +26,7 @@ public class EvosuiteResultInputOutputBuffer extends QueueInputOutputBuffer<Evos
     throws InterruptedException {
     	final ArrayList<EvosuiteResult> retVal = new ArrayList<>();
     	for (int i = 1; i <= n; ++i) {
-    		final EvosuiteResult item = this.queueWithPriority.poll(timeoutDuration, timeoutTimeUnit);
+    		final EvosuiteResult item = this.queueWithPriority.pollFirst();
     		if (item == null) {
     			break;
     		}
