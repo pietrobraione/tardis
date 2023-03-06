@@ -72,8 +72,9 @@ public final class TerminationManager {
                 //a timeout, just for safety
                 this.timedOut = true;
             }
-        });
+        }, "TerminationManager-detectorTimeout");
         this.detectorTermination = new Thread(() -> {
+        	boolean activityStarted = false;
             while (true) {
                 try {
                     TimeUnit.SECONDS.sleep(1);
@@ -96,16 +97,20 @@ public final class TerminationManager {
                     pauseAll();
                     final boolean allIdleSafe = allIdle();
                     resumeAll();
-                    if (allIdleSafe) {
+                    if (allIdleSafe && activityStarted) {
                         this.detectorTimeout.interrupt();
                         break;
+                    } else if (!allIdleSafe) {
+                    	activityStarted = true;
                     }
+                } else {
+                	activityStarted = true;
                 }
             }
 
             //quits
             stopAll();
-        });
+        }, "TerminationManager-detectorTermination");
     }
 
     /**

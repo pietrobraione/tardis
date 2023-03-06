@@ -7,7 +7,7 @@ def javaHome = javaToolchains.compilerFor { languageVersion = javaVersion }.get(
 
 repositories {
     flatDir {
-    	dirs "${javaHome}/lib", "${project(':jbse').projectDir.toString()}/libs" //for tools.jar and for the patched javassist.jar
+    	dirs "${javaHome}/lib", "${project(':jbse').projectDir.toString()}/libs", "${project.rootDir.toString()}/libs" //for tools.jar and for the patched javassist.jar
     }
 }
 
@@ -17,6 +17,7 @@ dependencies {
     implementation 'org.apache.logging.log4j:log4j-api:2.14.0'
     implementation 'org.apache.logging.log4j:log4j-core:2.14.0'
     implementation name: 'tools'
+    implementation name: 'evosuite-shaded-1.2.1-SNAPSHOT'
     implementation project(':sushi-lib')
     implementation project(':jbse')
 }

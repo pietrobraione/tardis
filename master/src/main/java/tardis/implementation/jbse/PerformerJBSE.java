@@ -13,7 +13,6 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
@@ -26,7 +25,6 @@ import org.apache.logging.log4j.Logger;
 
 import jbse.algo.exc.CannotManageStateException;
 import jbse.apps.run.UninterpretedNoContextException;
-import jbse.bc.ClassFile;
 import jbse.bc.ClassHierarchy;
 import jbse.bc.exc.InvalidClassFileFactoryClassException;
 import jbse.common.exc.ClasspathException;
@@ -51,9 +49,11 @@ import tardis.Coverage;
 import tardis.Options;
 import tardis.framework.InputBuffer;
 import tardis.framework.Performer;
+import tardis.framework.PerformerPausableFixedThreadPoolExecutor;
 import tardis.implementation.data.JBSEResultInputOutputBuffer;
 import tardis.implementation.data.TreePath;
 import tardis.implementation.evosuite.EvosuiteResult;
+import tardis.implementation.evosuite.PerformerEvosuiteListener;
 import tardis.implementation.evosuite.TestCase;
 
 /**
@@ -63,8 +63,11 @@ import tardis.implementation.evosuite.TestCase;
  * 
  * @author Pietro Braione
  */
-public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
+public final class PerformerJBSE extends PerformerPausableFixedThreadPoolExecutor<EvosuiteResult, JBSEResult> 
+implements PerformerEvosuiteListener {
     private static final Logger LOGGER = LogManager.getFormatterLogger(PerformerJBSE.class);
+    
+    private static final int NUM_INPUTS_PER_JOB = 1;
     
     private final Options o;
     private final JBSEResultInputOutputBuffer out;
@@ -72,34 +75,19 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
     private final ConcurrentHashMap<String, State> initialStateCache = new ConcurrentHashMap<>();
     private final AtomicLong pathCoverage = new AtomicLong(0);
     private final ConcurrentHashMap<MethodPathConditon, Set<String>> freshObjectsExpansions = new ConcurrentHashMap<>();
+    private boolean testGeneratorTerminated = false;
 
     public PerformerJBSE(Options o, InputBuffer<EvosuiteResult> in, JBSEResultInputOutputBuffer out, TreePath treePath) {
-        super(in, out, o.getNumOfThreadsJBSE(), 1, o.getThrottleFactorJBSE(), o.getGlobalTimeBudgetDuration(), o.getGlobalTimeBudgetUnit());
+        super("PerformerJBSE", in, out, o.getNumOfThreadsJBSE(), NUM_INPUTS_PER_JOB, o.getThrottleFactorJBSE(), o.getTimeoutJBSEJobCreationDuration() / NUM_INPUTS_PER_JOB, o.getTimeoutJBSEJobCreationUnit());
         this.o = o.clone();
         this.out = out;
         this.treePath = treePath;
     }
 
     @Override
-    protected final Runnable makeJob(List<EvosuiteResult> items) {
+    protected void executeJob(List<EvosuiteResult> items, Object... args) {
         final EvosuiteResult item = items.get(0);
-        final Runnable job = () -> {
-            try {
-                explore(item, item.getStartDepth());
-            } catch (DecisionException | CannotBuildEngineException | InitializationException |
-            InvalidClassFileFactoryClassException | NonexistingObservedVariablesException |
-            ClasspathException | CannotBacktrackException | CannotManageStateException |
-            ThreadStackEmptyException | ContradictionException | EngineStuckException |
-            FailureException e ) {
-                LOGGER.error("Unexpected error while exploring test case %s", item.getTestCase().getClassName());
-                LOGGER.error("Message: %s", e.toString());
-                LOGGER.error("Stack trace:");
-                for (StackTraceElement elem : e.getStackTrace()) {
-                    LOGGER.error("%s", elem.toString());
-                }
-            }
-        };
-        return job;
+        explore(item, item.getStartDepth());
     }
 
     /**
@@ -108,25 +96,8 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
      * 
      * @param item a {@link EvosuiteResult}.
      * @param depthStart the depth to which generation of tests must be started.
-     * @throws DecisionException
-     * @throws CannotBuildEngineException
-     * @throws InitializationException
-     * @throws InvalidClassFileFactoryClassException
-     * @throws NonexistingObservedVariablesException
-     * @throws ClasspathException
-     * @throws CannotBacktrackException
-     * @throws CannotManageStateException
-     * @throws ThreadStackEmptyException
-     * @throws ContradictionException
-     * @throws EngineStuckException
-     * @throws FailureException
      */
-    private void explore(EvosuiteResult item, int depthStart) 
-    throws DecisionException, CannotBuildEngineException, InitializationException, 
-    InvalidClassFileFactoryClassException, NonexistingObservedVariablesException, 
-    ClasspathException, CannotBacktrackException, CannotManageStateException, 
-    ThreadStackEmptyException, ContradictionException, EngineStuckException, 
-    FailureException {
+    private void explore(EvosuiteResult item, int depthStart) {
         if (this.o.getMaxDepth() <= 0) {
             return;
         }
@@ -185,6 +156,13 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             final State stateInitial = rp.getStateInitial();
             possiblySetInitialStateCached(item, stateInitial);
             
+            //emits the test if it covers something new
+            emitTestIfCoversSomethingNew(item, newCoveredBranches);
+            
+            if (testGeneratorTerminated) {
+            	return;
+            }
+            
             //learns the new data for future update of indices
             learnDataForIndices(newCoveredBranches, coveredBranches, entryPoint, pathConditionFinal);
             
@@ -192,9 +170,6 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
             //TODO possibly do it more lazily!
             updateIndicesAndReclassify();
 
-            //emits the test if it covers something new
-            emitTestIfCoversSomethingNew(item, newCoveredBranches);
-            
             //reruns the test case at all the depths in the range, generates all the modified 
             //path conditions and puts all the output jobs in the output queue
             final int depthFinal = Math.min(depthStart + this.o.getMaxTestCaseDepth(), stateFinal.getDepth());
@@ -207,7 +182,11 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
         } catch (NoTargetHitException e) {
             //prints some feedback
             LOGGER.warn("Run test case %s, does not reach the target method %s", item.getTestCase().getClassName(), item.getTargetMethodSignature());
-        } catch (FrozenStateException e) {
+        } catch (DecisionException | CannotBuildEngineException | InitializationException |
+                InvalidClassFileFactoryClassException | NonexistingObservedVariablesException |
+                ClasspathException | CannotBacktrackException | CannotManageStateException |
+                ThreadStackEmptyException | ContradictionException | EngineStuckException |
+                FailureException | FrozenStateException e) {
             LOGGER.error("Unexpected frozen state exception while trying to generate path condition for additional fresh object");
             LOGGER.error("Message: %s", e.toString());
             LOGGER.error("Stack trace:");
@@ -477,5 +456,10 @@ public final class PerformerJBSE extends Performer<EvosuiteResult, JBSEResult> {
         }
         return noOutputJobGenerated;
     }
+
+	@Override
+	public void allEvosuiteTerminated() {
+		testGeneratorTerminated = true;
+	}
 }
 

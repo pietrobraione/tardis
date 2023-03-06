@@ -66,12 +66,13 @@ final class TestDetector implements Runnable {
         this.in = in;
     }
 
-    @Override
+	@Override
     public void run() {
         //reads/copies the standard input and detects the generated tests
         final HashSet<Integer> generated = new HashSet<>();
         try {
-            final Pattern patternEmittedTest = Pattern.compile("^.*\\* EMITTED TEST CASE: .*EvoSuiteWrapper_(\\d+), \\w+\\z");
+            final Pattern patternEmittedTest = Pattern.compile("^.*\\* EMITTED TEST CASE: .*EvoSuiteWrapper_(\\d+).*, \\w+\\z");
+            
             String line;
             while ((line = this.evosuiteBufferedReader.readLine()) != null) {
                 if (Thread.interrupted()) {

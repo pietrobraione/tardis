@@ -2,6 +2,7 @@ package tardis.implementation.data;
 
 import static tardis.implementation.common.Util.filterOnPattern;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -15,6 +16,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import jbse.mem.Clause;
 import tardis.Options;
@@ -32,6 +36,7 @@ import tardis.implementation.jbse.JBSEResult;
  * @param <E> the type of the items stored in the buffer.
  */
 public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult>, OutputBuffer<JBSEResult> {
+    private static final Logger LOGGER = LogManager.getFormatterLogger(JBSEResultInputOutputBuffer.class);
     /** The maximum value for the index of improvability. */
     private static final int INDEX_IMPROVABILITY_MAX = 10;
     
@@ -211,12 +216,15 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
         	updateIndexInfeasibility(entryPoint, pathCondition);
         }
         final int queueNumber = calculateQueueNumber(entryPoint, pathCondition);
+        if (queueRanking[queueNumber] < queueRanking.length - 1) {
+			LOGGER.info("Priority path condition with last clause: " + pathCondition.get(pathCondition.size() - 1) + " -- priority=" + queueNumber + " (wrt min priority=" + queueRanking[queueRanking.length - 1] + ")");
+        }
         final LinkedBlockingQueue<JBSEResult> queue = this.queues.get(queueNumber);
         return queue.add(item);
     }
 
     @Override
-    public JBSEResult poll(long timeoutDuration, TimeUnit timeoutTimeUnit) throws InterruptedException {
+    public List<JBSEResult> pollN(int n, long timeoutDuration, TimeUnit timeoutTimeUnit) throws InterruptedException {
         //chooses the index considering the different probabilities
         final Random random = new Random();
         int randomValue = random.nextInt(100); //sum of PROBABILITY_VALUES
@@ -228,29 +236,43 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
         
         //assert (0 < j && j <= INDEX_VALUES.length)
 
-        synchronized (this) {
-            //extracts the item
-            for (int i = j - 1; i < this.queueRanking.length; ++i) {
-                final LinkedBlockingQueue<JBSEResult> queue = this.queues.get(this.queueRanking[i]);
-                //selects the next queue if the extracted queue is empty
-                if (queue.isEmpty()) {
-                    continue;
-                }
-                return queue.poll(timeoutDuration, timeoutTimeUnit);
-            }
-            //last chance to extract
-            for (int i = j - 2; i >= 0; --i) {
-                final LinkedBlockingQueue<JBSEResult> queue = this.queues.get(this.queueRanking[i]);
-                //selects the next queue if the extracted queue is empty
-                if (queue.isEmpty()) {
-                    continue;
-                }
-                return queue.poll(timeoutDuration, timeoutTimeUnit);
-            }
+        final ArrayList<JBSEResult> retVal = new ArrayList<>();
+        for (int k = 1; k <= n; ++k) {
+        	JBSEResult item = null;
+        	synchronized (this) {
+        		//extracts the item, first chance
+        		for (int i = j - 1; i < this.queueRanking.length; ++i) {
+        			final LinkedBlockingQueue<JBSEResult> queue = this.queues.get(this.queueRanking[i]);
+        			//selects the next queue if the extracted queue is empty
+        			if (queue.isEmpty()) {
+        				continue;
+        			} else {
+        				item = queue.poll(0, timeoutTimeUnit); //nothing to wait
+        				break;
+        			}
+        		}
+        		//extracts the item, second chance
+        		if (item == null) {
+            		timeoutTimeUnit.sleep(timeoutDuration);
+        			for (int i = j - 2; i >= 0; --i) {
+        				final LinkedBlockingQueue<JBSEResult> queue = this.queues.get(this.queueRanking[i]);
+        				//selects the next queue if the extracted queue is empty
+        				if (queue.isEmpty()) {
+        					continue;
+        				} else {
+        					item = queue.poll(0, timeoutTimeUnit); //nothing to wait
+        					break;
+        				}
+        			}
+        		}
+        	}
+        	if (item == null) {
+        		break;
+        	} else {
+        		retVal.add(item);
+        	}
         }
-        
-        TimeUnit.SECONDS.sleep(1);
-        return null;
+        return retVal;
     }
 
     @Override
@@ -329,6 +351,7 @@ public final class JBSEResultInputOutputBuffer implements InputBuffer<JBSEResult
                 if (queueNumberNew != queueNumber) {
                     this.queues.get(queueNumber).remove(bufferedJBSEResult);
                     this.queues.get(queueNumberNew).add(bufferedJBSEResult);
+                    LOGGER.info("Priority update for path condition with last clause: " + pathCondition.get(pathCondition.size() - 1) + " -- priority=" + queueNumber + " --> " + queueNumberNew + " (wrt min priority=" + queueRanking[queueRanking.length - 1] + ")");
                 }
             });
             this.coverageSetImprovability.clear();

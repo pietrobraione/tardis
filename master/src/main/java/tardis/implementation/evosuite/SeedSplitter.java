@@ -1,7 +1,7 @@
 package tardis.implementation.evosuite;
 
 import static jbse.common.Type.splitParametersDescriptors;
-import static tardis.implementation.common.Util.getInternalClassloader;
+import static tardis.implementation.common.Util.getInternalClassLoader;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -429,7 +429,7 @@ final class SeedSplitter {
             }
             return Array.newInstance(memberType, 0).getClass();
         } else { //class name
-            final ClassLoader ic = getInternalClassloader();
+            final ClassLoader ic = getInternalClassLoader();
             final String typeNoGenerics = eraseGenericParameters(type);
             final ArrayList<String> possiblePackageQualifiers = possiblePackageQualifiers(cu, typeNoGenerics);
             for (String possiblePackageQualifier : possiblePackageQualifiers) {
@@ -527,7 +527,7 @@ final class SeedSplitter {
     }
     
     private static Class<?> classFileTypeToClass(String type) {
-        final ClassLoader ic = getInternalClassloader();
+        final ClassLoader ic = getInternalClassLoader();
         final String typeName = internalToBinaryTypeName(type);
         Class<?> retVal = null;
         try {

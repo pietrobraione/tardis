@@ -28,6 +28,7 @@ import javax.tools.ToolProvider;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.core.LoggerContext;
 import org.apache.logging.log4j.core.appender.ConsoleAppender;
 import org.apache.logging.log4j.core.config.Configurator;
 import org.apache.logging.log4j.core.config.builder.api.AppenderComponentBuilder;
@@ -40,13 +41,15 @@ import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.ParserProperties;
 
-import tardis.framework.QueueInputOutputBuffer;
+import tardis.framework.Performer;
 import tardis.framework.TerminationManager;
 import tardis.implementation.common.NoJavaCompilerException;
+import tardis.implementation.data.EvosuiteResultInputOutputBuffer;
 import tardis.implementation.data.JBSEResultInputOutputBuffer;
 import tardis.implementation.data.TreePath;
 import tardis.implementation.evosuite.EvosuiteResult;
 import tardis.implementation.evosuite.PerformerEvosuite;
+import tardis.implementation.evosuite.PerformerEvosuiteRMI;
 import tardis.implementation.evosuite.TestCase;
 import tardis.implementation.jbse.JBSEResult;
 import tardis.implementation.jbse.PerformerJBSE;
@@ -61,6 +64,11 @@ public final class Main {
      * The logger.
      */
     private static Logger LOGGER;
+    
+    /**
+     * The logger context.
+     */
+    private static LoggerContext LOGGER_CONTEXT;
     
     /**
      * The configuration {@link Options}.
@@ -88,7 +96,7 @@ public final class Main {
         
         try {
             //logs some message
-            LOGGER.info("This is %s, version %s, \u00a9 2017-2021 %s", getName(), getVersion(), getVendor());
+            LOGGER.info("This is %s, version %s, \u00a9 2017-2022 %s", getName(), getVersion(), getVendor());
             LOGGER.info("Target is %s", (this.o.getTargetMethod() == null ? ("class " + this.o.getTargetClass()) : ("method " + this.o.getTargetMethod().get(0) + ":" + this.o.getTargetMethod().get(1) + ":" + this.o.getTargetMethod().get(2))));
             
             //checks prerequisites
@@ -103,16 +111,24 @@ public final class Main {
 
             //...the communication buffers...
             final JBSEResultInputOutputBuffer pathConditionBuffer = new JBSEResultInputOutputBuffer(this.o, treePath);
-            final QueueInputOutputBuffer<EvosuiteResult> testCaseBuffer = new QueueInputOutputBuffer<>();
+            final EvosuiteResultInputOutputBuffer testCaseBuffer = new EvosuiteResultInputOutputBuffer();
 
             //...the performers and the termination manager
-            final PerformerEvosuite performerEvosuite = new PerformerEvosuite(this.o, pathConditionBuffer, testCaseBuffer);
             final PerformerJBSE performerJBSE = new PerformerJBSE(this.o, testCaseBuffer, pathConditionBuffer, treePath);
-            final TerminationManager terminationManager = new TerminationManager(this.o, performerJBSE, performerEvosuite);
-
-            //injects a seed into a performer
-            injectSeed(performerEvosuite, performerJBSE);
+            Performer<JBSEResult, EvosuiteResult> performerEvosuite;
+            if (this.o.getEvosuiteMultiSearch()) {
+            	performerEvosuite = new PerformerEvosuiteRMI(this.o, pathConditionBuffer, testCaseBuffer);       
+            	((PerformerEvosuiteRMI) performerEvosuite).registerListener(performerJBSE);
+            } else {
+            	performerEvosuite = new PerformerEvosuite(this.o, pathConditionBuffer, testCaseBuffer);
+            }
             
+            //...the termination manager
+            final TerminationManager terminationManager = new TerminationManager(this.o, performerJBSE, performerEvosuite);
+            
+        	//injects a seed into a performer
+            injectSeed(performerEvosuite, performerJBSE);
+
             //starts everything
             performerJBSE.start();
             performerEvosuite.start();
@@ -120,7 +136,7 @@ public final class Main {
 
             //waits for the end
             terminationManager.waitTermination();
-            
+
             //logs a final message and returns
             LOGGER.info("%s ends", getName());
             return 0;
@@ -185,10 +201,12 @@ public final class Main {
                 LOGGER.error("%s", elem.toString());
             }
             return 2;
+        } finally {
+        	shutdownLogger();
         }
     }
-    
-    /**
+
+	/**
      * Configures the logger
      */
     private void configureLogger() {
@@ -208,7 +226,11 @@ public final class Main {
         rootLoggerBuilder.add(builder.newAppenderRef("Stdout"));
         builder.add(rootLoggerBuilder);
         
-        Configurator.initialize(builder.build());
+        LOGGER_CONTEXT = Configurator.initialize(builder.build());
+    }
+    
+    private void shutdownLogger() {
+    	Configurator.shutdown(LOGGER_CONTEXT);
     }
     
     /**
@@ -282,8 +304,8 @@ public final class Main {
     /**
      * Injects a seed into a performer.
      * 
-     * @param performerEvosuite a {@link PerformerEvosuite}.
-     * @param performerJBSE a {@link PerformerJBSE}.
+     * @param performerEvosuite a {@link Performer}{@code <}{@link JBSEResult}{@code , ?>}.
+     * @param performerJBSE a {@link Performer}{@code <}{@link EvosuiteResult}{@code , ?>}. 
      * @throws NoJavaCompilerException if no Java compiler is installed.
      * @throws JavaCompilerException if some error happens while the Java 
      *         compiler is run.
@@ -293,15 +315,16 @@ public final class Main {
      * @throws NoInitialTestFileException  if the initial test specified by
      *         the user does not exist in the filesystem.
      */
-    private void injectSeed(PerformerEvosuite performerEvosuite, PerformerJBSE performerJBSE) 
+    private void injectSeed(Performer<JBSEResult, ?> performerEvosuite, Performer<EvosuiteResult, ?> performerJBSE) 
     throws NoJavaCompilerException, JavaCompilerException, ClassNotFoundException, MalformedURLException, SecurityException, NoInitialTestFileException {
         if (this.o.getTargetMethod() != null && this.o.getInitialTestCase() != null) {
             //the target is a method and there is an
             //initial test case: JBSE should start
             final ArrayList<EvosuiteResult> seed = generateSeedForPerformerJBSE();
             performerJBSE.seed(seed);
-        } else {
-            //all the other cases: EvoSuite should start
+        } else if (!this.o.getEvosuiteMultiSearch()) {
+            //all the other cases: EvoSuite should start (in the multisearch case
+        	//no seed is necessary)
             final ArrayList<JBSEResult> seed = generateSeedForPerformerEvosuite();
             performerEvosuite.seed(seed);
         }
@@ -320,14 +343,16 @@ public final class Main {
     throws ClassNotFoundException, MalformedURLException, SecurityException {
         final ArrayList<JBSEResult> retVal = new ArrayList<>();
         if (this.o.getTargetMethod() != null) {
+        	//target is a single method
             retVal.add(new JBSEResult(this.o.getTargetMethod()));
         } else if (this.o.getInitialTestCaseRandom() == Randomness.METHOD) {
+        	//target is a class, we want "true" path conditions for each method
         	final List<List<String>> targets = getTargets(this.o);
         	for (List<String> target : targets) {
         		retVal.add(new JBSEResult(target));
         	}
         } else {
-            retVal.add(new JBSEResult(this.o.getTargetClass()));
+        	//target is a class, EvoSuite must be in charge of generating initial tests
         }
         return retVal;
     }
@@ -402,7 +427,7 @@ public final class Main {
 
     //Here starts the static part of the class, for managing the command line
 
-    public static void main(String[] args) {		
+    public static void main(String[] args) throws Exception {		
         //parses options from the command line and exits if the command line
         //is ill-formed
         final Options o = new Options();
