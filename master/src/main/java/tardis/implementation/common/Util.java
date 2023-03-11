@@ -130,7 +130,8 @@ public final class Util {
             retVal.add(o.getTargetMethod());
         } else {
             final boolean onlyPublic = (o.getVisibility() == Visibility.PUBLIC);
-            final ClassLoader ic = getInternalClassloader(o.getClassesPath());
+            ensureInternalClassLoader(o.getClassesPath());
+            final ClassLoader ic = getInternalClassLoader(); 
             final Class<?> clazz = ic.loadClass(className.replace('/', '.'));
             final List<Executable> targets = Stream.concat(Arrays.stream(clazz.getDeclaredMethods()), Arrays.stream(clazz.getDeclaredConstructors())).collect(Collectors.toList());
             for (Executable target : targets) {
@@ -159,8 +160,7 @@ public final class Util {
     }
     
     /**
-     * Returns a classloader to load the classes on a classpath, 
-     * creating it if it does not exist.
+     * Creates a classloader to load the classes on a classpath.
      * 
      * @param classpath A {@link List}{@code <}{@link Path}{@code >}.
      * @return a {@link ClassLoader} that is able to load the classes
@@ -172,8 +172,8 @@ public final class Util {
      *         is malformed.
      * @throws SecurityException if a security violation arises.
      */
-    static ClassLoader internalClassLoader = null; //lazily initialized
-    private static ClassLoader getInternalClassloader(List<Path> classpath) throws MalformedURLException, SecurityException {
+    static ClassLoader internalClassLoader = null;
+    public static void ensureInternalClassLoader(List<Path> classpath) throws MalformedURLException, SecurityException {
         if (internalClassLoader == null) {
             if (classpath == null || classpath.size() == 0) {
                 internalClassLoader = ClassLoader.getSystemClassLoader();
@@ -181,7 +181,6 @@ public final class Util {
             	internalClassLoader = makeURLClassLoader(classpath);
             }
         }
-        return internalClassLoader;
     }
     
     private static ClassLoader makeURLClassLoader(List<Path> classpath) throws MalformedURLException {
@@ -217,7 +216,7 @@ public final class Util {
      *         {@code null}. 
      * @throws SecurityException if a security violation arises.
      */
-    public static ClassLoader getInternalClassloader() {
+    public static ClassLoader getInternalClassLoader() {
         return internalClassLoader;
     }
 
