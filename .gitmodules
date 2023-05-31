@@ -4,3 +4,4 @@
 [submodule "runtime"]
 	path = runtime
 	url = https://github.com/pietrobraione/sushi-lib.git
+	branch = uif
