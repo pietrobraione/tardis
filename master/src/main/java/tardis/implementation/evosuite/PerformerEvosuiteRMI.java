@@ -1,6 +1,12 @@
 package tardis.implementation.evosuite;
 
 import static jbse.bc.ClassLoaders.CLASSLOADER_APP;
+import static jbse.bc.Signatures.JAVA_STRING;
+import static jbse.common.Type.BOOLEAN;
+import static jbse.common.Type.REFERENCE;
+import static jbse.common.Type.TYPEEND;
+import static jbse.common.Type.splitParametersDescriptors;
+import static jbse.common.Type.splitReturnValueDescriptor;
 import static shaded.org.evosuite.rmi.UtilsRMI.exportObject;
 import static tardis.implementation.common.Util.getTargets;
 import static tardis.implementation.common.Util.stream;
@@ -27,6 +33,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -97,6 +104,7 @@ public final class PerformerEvosuiteRMI extends PerformerMultiServer<JBSEResult,
     private final URL[] classpathTestURLClassLoader;
     private final String classpathCompilationTest;
     private final String classpathCompilationWrapper;
+    private final HashSet<Signature> uninterpretedMethodsWithFitness;
     private final AtomicInteger testCount = new AtomicInteger(0);
 	private final Map<Integer, JBSEResult> itemsMap = Collections.synchronizedMap(new HashMap<>());
 	private final ArrayList<Process> evosuiteProcesses = new ArrayList<>();
@@ -136,6 +144,7 @@ public final class PerformerEvosuiteRMI extends PerformerMultiServer<JBSEResult,
         }
         this.classpathCompilationTest = this.o.getTmpBinDirectoryPath().toString() + File.pathSeparator + classesPathString + File.pathSeparator + this.o.getJBSELibraryPath().toString() + File.pathSeparator + this.o.getSushiLibPath().toString() + File.pathSeparator + this.o.getEvosuitePath().toString();
         this.classpathCompilationWrapper = classesPathString + File.pathSeparator + this.o.getSushiLibPath().toString();
+        this.uninterpretedMethodsWithFitness = getUninterpretedMethodsWithFitness(o);
         
         //creates the RMI registry, exports this object and binds it to the registry
         startRMI();
@@ -163,6 +172,28 @@ public final class PerformerEvosuiteRMI extends PerformerMultiServer<JBSEResult,
             LOGGER.error("Internal error while converting path %s to URL", path.toString());
             throw new RuntimeException(e);
         }                   
+    }
+    
+    //TODO remove duplicate and move method?
+    private static HashSet<Signature> getUninterpretedMethodsWithFitness(Options o) {
+    	final List<List<String>> uninterpreted = o.getUninterpreted();
+    	final HashSet<Signature> retVal = new HashSet<>();
+    	final String JAVA_STRING_DESCRIPTOR = REFERENCE + JAVA_STRING + TYPEEND;
+loopSignatures:
+    	for (List<String> sig : uninterpreted) {
+    		String[] paramsDescriptors = splitParametersDescriptors(sig.get(1));
+    		for (String paramDescriptor : paramsDescriptors) {
+    			if (!JAVA_STRING_DESCRIPTOR.equals(paramDescriptor)) {
+    				continue loopSignatures;
+    			}
+    		}
+    		String retValDescriptor = splitReturnValueDescriptor(sig.get(1));
+    		if (! ("" + BOOLEAN).equals(retValDescriptor)) {
+    			continue loopSignatures;
+    		}
+    		retVal.add(new Signature(sig.get(0), sig.get(1), sig.get(2)));
+    	}
+        return retVal;
     }
 
 	private void startRMI() throws RemoteException {
@@ -709,7 +740,7 @@ public final class PerformerEvosuiteRMI extends PerformerMultiServer<JBSEResult,
      */
     private void emitAndCompileEvoSuiteWrapper(int testCount, State initialState, State finalState, Map<Long, String> stringLiterals, Set<Long> stringOthers, Set<String> forbiddenExpansions) 
     throws IOFileCreationException, CompilationFailedWrapperException, UnexpectedJBSELibFailureException {
-        final StateFormatterSushiPathCondition fmt = new StateFormatterSushiPathCondition(testCount, () -> initialState, true);
+        final StateFormatterSushiPathCondition fmt = new StateFormatterSushiPathCondition(testCount, () -> initialState, true, this.uninterpretedMethodsWithFitness);
         fmt.setStringsConstant(stringLiterals);
         fmt.setStringsNonconstant(stringOthers);
         if (forbiddenExpansions != null) {
