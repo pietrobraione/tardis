@@ -129,7 +129,7 @@ The launcher must create a `tardis.Options` object, configure it with the necess
 Shall you launch TARDIS via the command line or programmatically, you will need to set a number of options for it to work. The indispensable ones, that you *must* set in order to obtain any result, are:
 
 * `-java8_home` (command line) or `setJava8Home` (`tardis.Options`): the path to the home directory of a Java 8 full JDK setup, in case the default JDK installed on the deploy platform is not Java 8, or should be overridden. If this parameter is not provided, TARDIS will try with the default JDK installed on the deploy platform.
-* `-evosuite` (command line) or `setEvosuitePath` (`tardis.Options`): the path to the EvoSuite jar file `evosuite-shaded-1.1.1-SNAPSHOT.jar` contained in the `libs/` folder. The same jar file must be put on the classpath (see previous section).
+* `-evosuite` (command line) or `setEvosuitePath` (`tardis.Options`): the path to the EvoSuite jar file `evosuite-shaded-1.2.1-SNAPSHOT.jar` contained in the `libs/` folder. The same jar file must be put on the classpath (see previous section).
 * `-jbse_lib` (command line) or `setJBSELibraryPath` (`tardis.Options`): this must be set to the path of the JBSE jar file from the `jbse/build/libs` directory. It must be the same you put in the classpath. If you chose to deploy the `tardis-master-<VERSION>-shaded.jar` uber-jar, set this option to point to it.
 * `-sushi_lib` (command line) or `setSushiLibPath` (`tardis.Options`): this must be set to the path of the SUSHI-Lib jar file from the `runtime/build/libs` directory.  If you chose to deploy the `tardis-master-<VERSION>-shaded.jar` uber-jar, set this option to point to it.
 * `-z3` (command line) or `setZ3Path` (`tardis.Options`): the path to the Z3 binary.
@@ -144,11 +144,11 @@ There are many more options that allow to control several aspects of TARDIS beha
 
 A possible example of command line invocation is the following:
 
-    $ java -Xms16G -Xmx16G -cp /usr/lib/jvm/java-8-openjdk-amd64/lib/tools.jar:./libs/tardis-master-0.2.0-SNAPSHOT.jar:./libs/sushi-lib-0.2.0-SNAPSHOT.jar:./libs/jbse-0.10.0-SNAPSHOT-shaded.jar:./libs/evosuite-shaded-1.1.1-SNAPSHOT.jar:./libs/args4j-2.32.jar:./libs/log4j-api-2.14.0.jar:./libs/log4j-core-2.14.0.jar:./libs/javaparser-core-3.15.9.jar tardis.Main -jbse_lib ./libs/jbse-0.10.0-SNAPSHOT-shaded.jar -sushi_lib ./libs/sushi-lib-0.2.0-SNAPSHOT.jar -evosuite ./libs/evosuite-shaded-1.1.1-SNAPSHOT.jar -z3 /usr/bin/z3 -classes ./my-application/bin -target_class my/Class -tmp_base ./tmp -out ./tests
+    $ java -Xms16G -Xmx16G -cp /usr/lib/jvm/java-8-openjdk-amd64/lib/tools.jar:./libs/tardis-master-0.2.0-SNAPSHOT.jar:./libs/sushi-lib-0.2.0-SNAPSHOT.jar:./libs/jbse-0.11.0-SNAPSHOT-shaded.jar:./libs/evosuite-shaded-1.2.1-SNAPSHOT.jar:./libs/args4j-2.32.jar:./libs/log4j-api-2.14.0.jar:./libs/log4j-core-2.14.0.jar:./libs/javaparser-core-3.15.9.jar tardis.Main -jbse_lib ./libs/jbse-0.11.0-SNAPSHOT-shaded.jar -sushi_lib ./libs/sushi-lib-0.2.0-SNAPSHOT.jar -evosuite ./libs/evosuite-shaded-1.2.1-SNAPSHOT.jar -z3 /usr/bin/z3 -classes ./my-application/bin -target_class my/Class -tmp_base ./tmp -out ./tests
     
 where we assume that all the jars except for `tools.jar` are in `./libs`, that the software to be tested is in `./my-application/bin`, that the class to generate tests for is `my.Class`, that a work directory where TARDIS can put intermediate files is `./tmp`, and that we want TARDIS to emit the generated tests in `./tests`. In the case you prefer (at your own risk) to use the TARDIS uber-jar the command line invocation becomes a bit, but not that much, shorter:
 
-    $ java -Xms16G -Xmx16G -cp /usr/lib/jvm/java-8-openjdk-amd64/lib/tools.jar:./libs/tardis-master-0.2.0-SNAPSHOT-shaded.jar:./libs/evosuite-shaded-1.1.1-SNAPSHOT.jar tardis.Main -jbse_lib ./libs/tardis-master-0.2.0-SNAPSHOT-shaded.jar -sushi_lib ./libs/tardis-master-0.2.0-SNAPSHOT-shaded.jar -evosuite ./libs/evosuite-shaded-1.1.1-SNAPSHOT.jar -z3 /usr/bin/z3 -classes ./my-application/bin -target_class my/Class -tmp_base ./tmp -out ./tests
+    $ java -Xms16G -Xmx16G -cp /usr/lib/jvm/java-8-openjdk-amd64/lib/tools.jar:./libs/tardis-master-0.2.0-SNAPSHOT-shaded.jar:./libs/evosuite-shaded-1.2.1-SNAPSHOT.jar tardis.Main -jbse_lib ./libs/tardis-master-0.2.0-SNAPSHOT-shaded.jar -sushi_lib ./libs/tardis-master-0.2.0-SNAPSHOT-shaded.jar -evosuite ./libs/evosuite-shaded-1.2.1-SNAPSHOT.jar -z3 /usr/bin/z3 -classes ./my-application/bin -target_class my/Class -tmp_base ./tmp -out ./tests
 
 There is a third way of launching TARDIS that mixes the two approaches: You can launch it from the command line, but by configuring the options through an object of class `tardis.Options`. At the purpose you must define a class implementing the interface `tardis.OptionsConfigurator`. This interface declares only one method `configure`, that you must override to configure a `tardis.Options` object as in the following example:
 
@@ -168,7 +168,7 @@ public final class MyConfigurator implements OptionsConfigurator {
 
 As you can see, the resulting code resembles that of a TARDIS launcher, but you do not need to explicitly create the `tardis.Options` object (it is received as a parameter) nor to create the `tardis.Main` object and start it. Once created your configurator class, compile it (remember to put the `tardis-master` jar in the compilation classpath), put the generated classfile where you prefer and invoke TARDIS as follows:
 
-    $ java -Xms16G -Xmx16G -cp /usr/lib/jvm/java-8-openjdk-amd64/lib/tools.jar:./libs/tardis-master-0.2.0-SNAPSHOT.jar:./libs/sushi-lib-0.2.0-SNAPSHOT.jar:./libs/jbse-0.10.0-SNAPSHOT-shaded.jar:./libs/evosuite-shaded-1.1.1-SNAPSHOT.jar:./libs/args4j-2.32.jar:./libs/log4j-api-2.14.0.jar:./libs/log4j-core-2.14.0.jar:./libs/javaparser-core-3.15.9.jar tardis.Main -options_config_path ./my-config -options_config_class MyConfigurator
+    $ java -Xms16G -Xmx16G -cp /usr/lib/jvm/java-8-openjdk-amd64/lib/tools.jar:./libs/tardis-master-0.2.0-SNAPSHOT.jar:./libs/sushi-lib-0.2.0-SNAPSHOT.jar:./libs/jbse-0.11.0-SNAPSHOT-shaded.jar:./libs/evosuite-shaded-1.2.1-SNAPSHOT.jar:./libs/args4j-2.32.jar:./libs/log4j-api-2.14.0.jar:./libs/log4j-core-2.14.0.jar:./libs/javaparser-core-3.15.9.jar tardis.Main -options_config_path ./my-config -options_config_class MyConfigurator
 
 (here we assume that we put the `MyConfigurator.class` classfile in the `./my-config` directory). You will find examples of both launcher and configurator classes in the [tardis-experiments](https://github.com/pietrobraione/tardis-experiments) project. 
 
@@ -211,8 +211,8 @@ where `<class name>` is the name of the class under test, and `<number>` is a se
 
 The generated scaffolding/actual suite classes are declared in the same package as the class under test, so they can access its package-level members. This means, for example, that if you have specified the option `-out /your/out/dir`, an `avl_tree.AvlTree` class under test will produce a test `/your/out/dir/avl_tree/AvlTree_1_Test.java`. If you want to compile and execute the test suites add the output directory to the classpath and qualify the class name of the test suite with the package name, e.g.:
 
-    $ javac -cp junit.jar:evosuite-shaded-1.1.1-SNAPSHOT.jar:avltree.jar /your/out/dir/avl_tree/AvlTree_1_Test.java
-    $ java -cp junit.jar:evosuite-shaded-1.1.1-SNAPSHOT.jar:avltree.jar:/your/out/dir org.junit.runner.JUnitCore avl_tree.AvlTree_1_Test
+    $ javac -cp junit.jar:evosuite-shaded-1.2.1-SNAPSHOT.jar:avltree.jar /your/out/dir/avl_tree/AvlTree_1_Test.java
+    $ java -cp junit.jar:evosuite-shaded-1.2.1-SNAPSHOT.jar:avltree.jar:/your/out/dir org.junit.runner.JUnitCore avl_tree.AvlTree_1_Test
 
 ## Disclaimer
 
