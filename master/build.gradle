@@ -1,6 +1,6 @@
 plugins {
     id 'application'
-    id 'com.github.johnrengelman.shadow' version '7.0.0'
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
 }
 
 def javaHome = javaToolchains.compilerFor { languageVersion = javaVersion }.get().metadata.installationPath.asFile.toString()
@@ -23,7 +23,7 @@ dependencies {
 }
 
 task wrapper(type: Wrapper) {
-    gradleVersion = '7.1.1'
+    gradleVersion = '8.4'
 }
 
 task copyToLib(type: Copy) {
@@ -32,7 +32,7 @@ task copyToLib(type: Copy) {
 }
 
 shadowJar {
-    classifier = 'shaded'
+    archiveClassifier = 'shaded'
     exclude 'tools.jar'
     relocate 'com.github.javaparser', 'tardis.com.github.javaparser'
     relocate 'javassist', 'tardis.javassist'
