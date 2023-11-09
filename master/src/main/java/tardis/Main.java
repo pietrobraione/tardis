@@ -353,6 +353,7 @@ public final class Main {
         	}
         } else {
         	//target is a class, EvoSuite must be in charge of generating initial tests
+        	retVal.add(new JBSEResult(this.o.getTargetClass()));
         }
         return retVal;
     }
