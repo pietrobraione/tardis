@@ -36,7 +36,7 @@ RUN cp libs/evosuite-shaded-1.2.1-SNAPSHOT.jar ${JARS_HOME}/.
 
 # Create script
 RUN echo "#!/bin/sh" > /usr/local/bin/tardis
-RUN echo "java -Xms16G -Xmx16G -cp ${CLASSPATH} tardis.Main -evosuite ${JARS_HOME}/evosuite-shaded-1.2.1-SNAPSHOT.jar -jbse_lib ${JARS_HOME}/jbse-0.10.0-SNAPSHOT-shaded.jar -sushi_lib ${JARS_HOME}/sushi-lib-0.2.0-SNAPSHOT.jar -z3 ${Z3_HOME}/z3 \$@" >> /usr/local/bin/tardis
+RUN echo "java -Xms16G -Xmx16G -cp ${CLASSPATH} tardis.Main -evosuite ${JARS_HOME}/evosuite-shaded-1.2.1-SNAPSHOT.jar -jbse_lib ${JARS_HOME}/jbse-0.11.0-SNAPSHOT-shaded.jar -sushi_lib ${JARS_HOME}/sushi-lib-0.2.0-SNAPSHOT.jar -z3 ${Z3_HOME}/z3 \$@" >> /usr/local/bin/tardis
 RUN chmod +x /usr/local/bin/tardis
 
 # Get some examples and compile them
