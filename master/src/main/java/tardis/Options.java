@@ -257,9 +257,13 @@ public final class Options implements Cloneable {
             usage = "Whether EvoSuite shall do simultaneous path-condition-guided (TARDIS) and branch-guided (ordinary) search")
     private boolean evosuiteMultiSearch = false;
     
-    @Option(name = "-maximum_elapsed_without_pathcondition_generated_tests",
-            usage = "The maximum time elapsed (in seconds) without generating test with injected path conditions")
-    private int maximumElapsedWithoutPathConditions = 10;
+    @Option(name = "-delay_path_condition_generation_duration",
+            usage = "Duration of initial delay of test case generation based on path conditions; Meaningful only when -evosuite_multi_search=true")
+    private int delayPathConditionGenerationDuration = 10;
+
+    @Option(name = "-delay_path_condition_generation_unit",
+            usage = "Unit of initial delay of test case generation based on path conditions: NANOSECONDS, MICROSECONDS, MILLISECONDS, SECONDS, MINUTES, HOURS, DAYS; Meaningful only when -evosuite_multi_search=true")
+    private TimeUnit delayPathConditionGenerationUnit = TimeUnit.SECONDS;
 
 	public boolean getHelp() {
         return this.help;
@@ -901,12 +905,23 @@ public final class Options implements Cloneable {
 		this.evosuiteMultiSearch = evosuiteMultiSearch;
 	}
 	
-	public int getMaximumElapsedWithoutPathConditions() {
-		return this.maximumElapsedWithoutPathConditions;
+	public int getDelayPathConditionGenerationDuration() {
+		return this.delayPathConditionGenerationDuration;
 	}
 	
-	public void setMaximumElapsedWithoutPathConditions(int maximumElapsedWithoutPathConditions) {
-		this.maximumElapsedWithoutPathConditions = maximumElapsedWithoutPathConditions;
+	public void setDelayPathConditionGenerationDuration(int delayPathConditionGenerationDuration) {
+		this.delayPathConditionGenerationDuration = delayPathConditionGenerationDuration;
+	}
+
+	public TimeUnit getDelayPathConditionGenerationUnit() {
+		return this.delayPathConditionGenerationUnit;
+	}
+	
+	public void setDelayPathConditionGenerationUnit(TimeUnit delayPathConditionGenerationUnit) {
+        if (delayPathConditionGenerationUnit == null) {
+            throw new IllegalArgumentException("Attempted to set the delay of test case generation based on path conditions time unit to null.");
+        }
+		this.delayPathConditionGenerationUnit = delayPathConditionGenerationUnit;
 	}
 
 	public int getMaxEvosuiteItersPerPathCondition() {

@@ -96,7 +96,7 @@ public final class Main {
         
         try {
             //logs some message
-            LOGGER.info("This is %s, version %s, \u00a9 2017-2022 %s", getName(), getVersion(), getVendor());
+            LOGGER.info("This is %s, version %s, \u00a9 2017-2024 %s", getName(), getVersion(), getVendor());
             LOGGER.info("Target is %s", (this.o.getTargetMethod() == null ? ("class " + this.o.getTargetClass()) : ("method " + this.o.getTargetMethod().get(0) + ":" + this.o.getTargetMethod().get(1) + ":" + this.o.getTargetMethod().get(2))));
             
             //checks prerequisites
@@ -130,10 +130,13 @@ public final class Main {
             injectSeed(performerEvosuite, performerJBSE);
 
             //starts everything
-            performerJBSE.start();
-            performerEvosuite.start();
             terminationManager.start();
-
+            performerEvosuite.start();
+            if (this.o.getEvosuiteMultiSearch()) {
+            	this.o.getDelayPathConditionGenerationUnit().sleep(this.o.getDelayPathConditionGenerationDuration());
+            }
+            performerJBSE.start();
+            
             //waits for the end
             terminationManager.waitTermination();
 
