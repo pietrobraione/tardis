@@ -328,7 +328,8 @@ public final class PerformerEvosuiteRMI extends PerformerMultiServer<JBSEResult,
     @Override
     protected void executeJob(List<JBSEResult> items, Object... args) {
     	String workerKey = (String) args[0];
-    	ArrayList<Pair<JBSEResult, Integer>> compiled = (ArrayList<Pair<JBSEResult, Integer>>) args[1];
+    	@SuppressWarnings("unchecked")
+		ArrayList<Pair<JBSEResult, Integer>> compiled = (ArrayList<Pair<JBSEResult, Integer>>) args[1];
     	if (this.terminated) {
     		LOGGER.info("All Evosuite instances terminated, Evosuite job ignored");
     	} else if (workerKey != null) {
