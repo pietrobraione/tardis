@@ -29,7 +29,7 @@ TARDIS is composed by several projects, some of which are imported as git submod
 
 #### Dependencies
 
-TARDIS has many dependencies. It must be built using a JDK version 8 - neither less, nor more. We suggest to use the latest Eclipse Temurin from [Adoptium](https://adoptium.net/) v8 with HotSpot JVM (note that the JDK with the OpenJ9 JVM currently does not work, because there are some slight differences in the standard library classes). The Gradle wrapper `gradlew` included in the repository will take care to select the right version of Java. Gradle will automatically resolve and use the following compile-time-only dependencies:
+TARDIS has many dependencies. It must be built using a JDK version 8 - neither less, nor more. We suggest to use the latest Eclipse Temurin from [Adoptium](https://adoptium.net/) v8 with HotSpot JVM (note that the JDK with the OpenJ9 JVM currently does not work, because there are some slight differences in the standard library classes). If you are on an Apple Silicon Mac we suggest to use the JDK Zulu distribution from [Azul](https://www.azul.com/downloads/?package=jdk#zulu). The Gradle wrapper `gradlew` included in the repository will take care to select the right version of Java. Gradle will automatically resolve and use the following compile-time-only dependencies:
 
 * [JavaCC](https://javacc.org) is used in the JBSE submodule for compiling the parser for the JBSE settings files.
 * [JUnit](http://junit.org) is used in the JBSE submodule for running the test suite that comes with JBSE (in future TARDIS might come with a test suite of its own).
