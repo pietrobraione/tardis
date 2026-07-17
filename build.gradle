@@ -2,13 +2,14 @@ allprojects {
     apply plugin: 'java'
     group = 'tardis'
     version = '0.3.0-SNAPSHOT'
+    description = 'TARDIS'
 
     repositories {
         mavenCentral()
     }
 
     dependencies {
-        testImplementation 'junit:junit:4.12'
+        testImplementation 'junit:junit:4.13.2'
     }
 
 	ext {
