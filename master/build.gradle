@@ -7,7 +7,7 @@ def javaHome = javaToolchains.compilerFor { languageVersion = javaVersion }.get(
 
 repositories {
     flatDir {
-    	dirs "${javaHome}/lib", "${project(':jbse').projectDir.toString()}/libs", "${project.rootDir.toString()}/libs" //for tools.jar and for the patched javassist.jar
+    	dirs "${javaHome}/lib", "${project.rootDir.toString()}/libs" //for tools.jar and for evosuite-....jar
     }
 }
 
@@ -18,12 +18,7 @@ dependencies {
     implementation 'org.apache.logging.log4j:log4j-core:2.14.0'
     implementation name: 'tools'
     implementation name: 'evosuite-shaded-1.2.1-SNAPSHOT'
-    implementation project(':sushi-lib')
     implementation project(':jbse')
-}
-
-task wrapper(type: Wrapper) {
-    gradleVersion = '8.4'
 }
 
 task copyToLib(type: Copy) {
@@ -37,9 +32,7 @@ shadowJar {
     relocate 'com.github.javaparser', 'tardis.com.github.javaparser'
     relocate 'javassist', 'tardis.javassist'
     relocate 'org.apache.logging.log4j', 'tardis.org.apache.logging.log4j'
-    relocate 'org.jacoco', 'tardis.org.jacoco'
     relocate 'org.kohsuke', 'tardis.org.kohsuke'
-    relocate 'org.objectweb', 'tardis.org.objectweb'
 }
 
 build.dependsOn(copyToLib)

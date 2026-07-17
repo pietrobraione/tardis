@@ -30,6 +30,7 @@ import javax.tools.ToolProvider;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import jbse.apps.StateFormatterSushiPathCondition;
 import jbse.bc.ClassFile;
 import jbse.bc.ClassFileFactoryJavassist;
 import jbse.bc.Classpath;
@@ -52,7 +53,6 @@ import jbse.mem.exc.FrozenStateException;
 import jbse.mem.exc.HeapMemoryExhaustedException;
 import jbse.val.HistoryPoint;
 import jbse.val.SymbolFactory;
-import sushi.formatters.StateFormatterSushiPathCondition;
 import tardis.Options;
 import tardis.framework.OutputBuffer;
 import tardis.framework.Performer;
