@@ -12,13 +12,13 @@ RUN apt-get install -y z3
 RUN rm -rf /var/lib/apt/lists/*
 
 # Setup environment variables
-ENV HOME /root
-ENV JAVA_HOME_8 /usr/lib/jvm/java-8-openjdk-amd64
-ENV JAVA_HOME_21 /usr/lib/jvm/java-21-openjdk-amd64
-ENV JARS_HOME /usr/share/java
-ENV Z3_HOME /usr/bin
-ENV JARS_8 ${JARS_HOME}/jbse-0.12.0-SNAPSHOT-shaded.jar:${JARS_HOME}/tardis-master-0.3.0-SNAPSHOT.jar:${JARS_HOME}/args4j-2.32.jar:${JARS_HOME}/javaparser-core-3.15.9.jar:${JARS_HOME}/log4j-api-2.14.0.jar:${JARS_HOME}/log4j-core-2.14.0.jar:${JARS_HOME}/evosuite-shaded-1.2.1-SNAPSHOT.jar
-ENV CLASSPATH_8 ${JAVA_HOME_8}/lib/tools.jar:${JARS}
+ENV HOME=/root
+ENV JAVA_HOME_8=/usr/lib/jvm/java-8-openjdk-amd64
+ENV JAVA_HOME_21=/usr/lib/jvm/java-21-openjdk-amd64
+ENV JARS_HOME=/usr/share/java
+ENV Z3_HOME=/usr/bin
+ENV JARS_8=${JARS_HOME}/jbse-0.12.0-SNAPSHOT-shaded.jar:${JARS_HOME}/tardis-master-0.3.0-SNAPSHOT.jar:${JARS_HOME}/args4j-2.32.jar:${JARS_HOME}/javaparser-core-3.15.9.jar:${JARS_HOME}/log4j-api-2.14.0.jar:${JARS_HOME}/log4j-core-2.14.0.jar:${JARS_HOME}/evosuite-shaded-1.2.1-SNAPSHOT.jar
+ENV CLASSPATH_8=${JAVA_HOME_8}/lib/tools.jar:${JARS_8}
 
 
 # Build and install
