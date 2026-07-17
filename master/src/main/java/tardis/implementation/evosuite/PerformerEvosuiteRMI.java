@@ -39,6 +39,7 @@ import javax.tools.ToolProvider;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import jbse.apps.StateFormatterSushiPathCondition;
 import jbse.bc.ClassFile;
 import jbse.bc.ClassFileFactoryJavassist;
 import jbse.bc.Classpath;
@@ -66,7 +67,6 @@ import shaded.org.evosuite.coverage.branch.BranchCoverageTestFitness;
 import shaded.org.evosuite.ga.FitnessFunction;
 import shaded.org.evosuite.rmi.service.EvosuiteRemote;
 import shaded.org.evosuite.rmi.service.TestListenerRemote;
-import sushi.formatters.StateFormatterSushiPathCondition;
 import tardis.Options;
 import tardis.framework.OutputBuffer;
 import tardis.framework.Performer;
