@@ -71,7 +71,7 @@ final class TestDetector implements Runnable {
         //reads/copies the standard input and detects the generated tests
         final HashSet<Integer> generated = new HashSet<>();
         try {
-            final Pattern patternEmittedTest = Pattern.compile("^.*\\* EMITTED TEST CASE: .*EvoSuiteWrapper_(\\d+).*, \\w+\\z");
+            final Pattern patternEmittedTest = Pattern.compile("^.*\\* EMITTED TEST CASE .*EvoSuiteWrapper_(\\d+).*$");
             
             String line;
             while ((line = this.evosuiteBufferedReader.readLine()) != null) {
