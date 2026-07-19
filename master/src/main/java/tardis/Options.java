@@ -265,6 +265,15 @@ public final class Options implements Cloneable {
             usage = "Unit of initial delay of test case generation based on path conditions: NANOSECONDS, MICROSECONDS, MILLISECONDS, SECONDS, MINUTES, HOURS, DAYS; Meaningful only when -evosuite_multi_search=true")
     private TimeUnit delayPathConditionGenerationUnit = TimeUnit.SECONDS;
 
+	public boolean isConsistent() {
+		if (this.optionsConfiguratorClass == null &&
+			this.targetClassName == null &&
+			this.targetMethodSignature == null) {
+			return false;
+		}
+		return true;
+	}
+    
 	public boolean getHelp() {
         return this.help;
     }
