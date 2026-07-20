@@ -40,6 +40,7 @@ RUN cp libs/sushi-lib-0.3.0-SNAPSHOT.jar ${JARS_HOME}/.
 RUN cp libs/evosuite-shaded-1.2.1-SNAPSHOT.jar ${JARS_HOME}/.
 
 # Use Java 8
+ENV JAVA_HOME=${JAVA_HOME_8}
 RUN update-java-alternatives --set java-1.8.0-openjdk-amd64
 
 # Create script
