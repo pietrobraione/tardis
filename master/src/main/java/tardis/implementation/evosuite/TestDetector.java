@@ -30,6 +30,7 @@ import tardis.implementation.jbse.JBSEResult;
  */
 final class TestDetector implements Runnable {
     private static final Logger LOGGER = LogManager.getFormatterLogger(PerformerEvosuite.class);
+    private static final Pattern PATTERN_EMITTED_TEST = Pattern.compile("^.*\\* EMITTED TEST CASE .*_(\\d+)_Test, .*$");
     
 	private final PerformerEvosuite performerEvosuite;
 	private final Options o;
@@ -71,8 +72,6 @@ final class TestDetector implements Runnable {
         //reads/copies the standard input and detects the generated tests
         final HashSet<Integer> generated = new HashSet<>();
         try {
-            final Pattern patternEmittedTest = Pattern.compile("^.*\\* EMITTED TEST CASE .*_(\\d+)_Test, .*$");
-            
             String line;
             while ((line = this.evosuiteBufferedReader.readLine()) != null) {
                 if (Thread.interrupted()) {
@@ -86,7 +85,7 @@ final class TestDetector implements Runnable {
                 
                 //check if the read line reports the emission of a test case
                 //and in the positive case schedule JBSE to analyze it
-                final Matcher matcherEmittedTest = patternEmittedTest.matcher(line);
+                final Matcher matcherEmittedTest = PATTERN_EMITTED_TEST.matcher(line);
                 if (matcherEmittedTest.matches()) {
                     final int testCount = Integer.parseInt(matcherEmittedTest.group(1));
                     generated.add(testCount);
