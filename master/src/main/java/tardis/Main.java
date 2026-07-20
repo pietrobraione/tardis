@@ -96,7 +96,7 @@ public final class Main {
 
 		try {
 			//logs some message
-			LOGGER.info("This is %s, version %s, \u00a9 2017-2024 %s", getName(), getVersion(), getVendor());
+			LOGGER.info("This is %s, version %s, \u00a9 2017-2026 %s", getName(), getVersion(), getVendor());
 			LOGGER.info("Target is %s", (this.o.getTargetMethod() == null ? ("class " + this.o.getTargetClass()) : ("method " + this.o.getTargetMethod().get(0) + ":" + this.o.getTargetMethod().get(1) + ":" + this.o.getTargetMethod().get(2))));
 
 			//checks prerequisites

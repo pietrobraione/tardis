@@ -5,6 +5,7 @@ MAINTAINER Pietro Braione <pietro.braione@gmail.com>
 RUN apt-get update -y
 RUN apt-get install -y openjdk-8-jdk
 RUN apt-get install -y openjdk-21-jdk
+RUN apt-get install -y java-common
 RUN apt-get install -y unzip
 RUN apt-get install -y nano
 RUN apt-get install -y git
@@ -39,7 +40,7 @@ RUN cp libs/sushi-lib-0.3.0-SNAPSHOT.jar ${JARS_HOME}/.
 RUN cp libs/evosuite-shaded-1.2.1-SNAPSHOT.jar ${JARS_HOME}/.
 
 # Use Java 8
-ENV JAVA_HOME=${JAVA_HOME_8}
+RUN sudo update-java-alternatives --set java-1.8.0-openjdk-amd64
 
 # Create script
 RUN echo "#!/bin/sh" > /usr/local/bin/tardis

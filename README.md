@@ -15,6 +15,7 @@ There are two ways to install TARDIS. The easiest is via Docker; The less easy i
 A convenient package is available from the TARDIS GitHub page, that allows you to install a Docker image containing a setup of TARDIS and some examples to play with. From the command line run:
 
     $ docker pull ghcr.io/pietrobraione/tardis:master
+    $ docker run -it ghcr.io/pietrobraione/tardis:master
 
 Alternatively, download the `Dockerfile` to the current directory and from the command line run:
 
@@ -132,7 +133,7 @@ Shall you launch TARDIS via the command line or programmatically, you will need 
 
 There are many more options that allow to control several aspects of the TARDIS behaviour. You can see a synthetic description of all of them by invoking TARDIS from the command line with the `-help` option, or by reading the comments in the `tardis.Options` class.
 
-A possible example of command line invocation is the following:
+A possible example of command line invocation is the following (remember to invoke TARDIS with Java v8):
 
     $ java -Xms16G -Xmx16G -cp /usr/lib/jvm/java-8-openjdk-amd64/lib/tools.jar:./libs/tardis-master-0.3.0-SNAPSHOT.jar:./libs/jbse-0.12.0-SNAPSHOT-shaded.jar:./libs/evosuite-shaded-1.2.1-SNAPSHOT.jar:./libs/args4j-2.32.jar:./libs/log4j-api-2.14.0.jar:./libs/log4j-core-2.14.0.jar:./libs/javaparser-core-3.15.9.jar tardis.Main -jbse_lib ./libs/jbse-0.12.0-SNAPSHOT-shaded.jar -sushi_lib ./libs/sushi-lib-0.3.0-SNAPSHOT.jar -evosuite ./libs/evosuite-shaded-1.2.1-SNAPSHOT.jar -z3 /usr/bin/z3 -classes ./my-application/bin -target_class my/Class -tmp_base ./tmp -out ./tests
     
@@ -156,16 +157,16 @@ public final class MyConfigurator implements OptionsConfigurator {
 }
 ```
 
-As you can see, the resulting code resembles that of a TARDIS launcher, but you do not need to explicitly create the `tardis.Options` object (it is received as a parameter) nor to create the `tardis.Main` object and start it. Once created your configurator class, compile it (remember to put the `tardis-master` jar in the compilation classpath), put the generated classfile where you prefer and invoke TARDIS as follows:
+As you can see, the resulting code resembles that of a TARDIS launcher, but you do not need to explicitly create the `tardis.Options` object (it is received as a parameter) nor to create the `tardis.Main` object and start it. Once created your configurator class, compile it with a Java 8 compiler (the `tardis-master` jar must be in the compilation classpath), put the generated classfile where you like, e.g. in a `./my-config` directory, and invoke TARDIS as follows:
 
     $ java -Xms16G -Xmx16G -cp /usr/lib/jvm/java-8-openjdk-amd64/lib/tools.jar:./libs/tardis-master-0.3.0-SNAPSHOT.jar:./libs/jbse-0.12.0-SNAPSHOT-shaded.jar:./libs/evosuite-shaded-1.2.1-SNAPSHOT.jar:./libs/args4j-2.32.jar:./libs/log4j-api-2.14.0.jar:./libs/log4j-core-2.14.0.jar:./libs/javaparser-core-3.15.9.jar tardis.Main -options_config_path ./my-config -options_config_class MyConfigurator
     
 where:
 
-* `-options_config_path` (command line) or `setOptionsConfiguratorPath` (`tardis.Options`) is a classpath (actually, a single path) where the options configurator class must be found, and
-* `-options_config_class` (command line) or `setOptionsConfiguratorClass` (`tardis.Options`) is the name in internal classfile format of the options configurator class
+* `-options_config_path` (command line) or `setOptionsConfiguratorPath` (`tardis.Options`) is the directory where the options configurator classfile is found, and
+* `-options_config_class` (command line) or `setOptionsConfiguratorClass` (`tardis.Options`) is the name in internal classfile format of the options configurator class.
 
-(in the above example we put the `MyConfigurator.class` classfile in the `./my-config` directory). You will find examples of both launcher and configurator classes in the [tardis-experiments](https://github.com/pietrobraione/tardis-experiments) project. 
+You will find examples of both launcher and configurator classes in the [tardis-experiments](https://github.com/pietrobraione/tardis-experiments) project. 
 
 ### Running TARDIS from the Docker environment
 
