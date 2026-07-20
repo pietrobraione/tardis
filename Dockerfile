@@ -40,7 +40,7 @@ RUN cp libs/sushi-lib-0.3.0-SNAPSHOT.jar ${JARS_HOME}/.
 RUN cp libs/evosuite-shaded-1.2.1-SNAPSHOT.jar ${JARS_HOME}/.
 
 # Use Java 8
-RUN sudo update-java-alternatives --set java-1.8.0-openjdk-amd64
+RUN update-java-alternatives --set java-1.8.0-openjdk-amd64
 
 # Create script
 RUN echo "#!/bin/sh" > /usr/local/bin/tardis
