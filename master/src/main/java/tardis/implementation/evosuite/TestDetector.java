@@ -156,7 +156,7 @@ final class TestDetector implements Runnable {
                 
                 //learns for update of indices
                 if (this.o.getUseIndexInfeasibility() && item.getPostFrontierState() != null) { //NB: item.getFinalState() == null for seed items when target is method
-                	this.in.learnPathConditionForIndexInfeasibility(item.getTargetMethodSignature(), item.getPathConditionGenerated(), false);
+                	this.in.learnPathConditionForIndexInfeasibility(item.getTargetMethodSignature(), item.getPathConditionMangled(), false);
                 }
 
                 //TODO possibly lazier updates of index

@@ -20,6 +20,7 @@ import jbse.apps.run.DecisionProcedureGuidance;
 import jbse.apps.run.GuidanceException;
 import jbse.bc.exc.InvalidClassFileFactoryClassException;
 import jbse.common.exc.ClasspathException;
+import jbse.common.exc.InvalidInputException;
 import jbse.dec.exc.DecisionException;
 import jbse.jvm.Runner;
 import jbse.jvm.RunnerBuilder;
@@ -257,10 +258,10 @@ final class RunnerPreFrontier implements AutoCloseable {
 							  // stateful object graphs produced by pure methods
 						}
 					}
-				} catch (FrozenStateException | InvalidNumberOfOperandsException | ThreadStackEmptyException e) {
+				} catch (InvalidInputException | InvalidNumberOfOperandsException | ThreadStackEmptyException e) {
 					// this should never happen
 					LOGGER.error("Internal error when attempting to manage String literals");
-					LOGGER.error("Message: %s", e.toString());
+					LOGGER.error("Message: %s", e.getMessage());
 					LOGGER.error("Stack trace:");
 					for (StackTraceElement elem : e.getStackTrace()) {
 						LOGGER.error("%s", elem.toString());

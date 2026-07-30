@@ -65,7 +65,7 @@ public final class JBSEResult {
      * {@link #postState}'s path condition, or {@code null}
      * if this {@link JBSEResult} is a seed item.
      */
-    private final ArrayList<Clause> pathConditionGenerated;
+    private final ArrayList<Clause> pathConditionMangled;
     
     /**
      * Set to {@code true} iff the frontier is a 
@@ -98,17 +98,17 @@ public final class JBSEResult {
     private final HashSet<Long> stringOthers;
     
     /**
-     * The depth of the path to the frontier, or 
-     * {@code -1} if this {@link JBSEResult} is a seed item.
-     */
-    private final int depth;
-    
-    /**
      * The set of the class names of the expansions that are forbidden. 
      * Used only if the last clause in the path condition of {@link #postState}
      * is an expands clause.
      */
     private final HashSet<String> forbiddenExpansions;
+    
+    /**
+     * The depth of the path to the frontier, or 
+     * {@code -1} if this {@link JBSEResult} is a seed item.
+     */
+    private final int depth;
 
     /**
      * Constructor for seed item (target method).
@@ -127,13 +127,13 @@ public final class JBSEResult {
         this.initialState = null;
         this.preState = null;
         this.postState = null;
-        this.pathConditionGenerated = null;
+        this.pathConditionMangled = null;
         this.atJump = false;
         this.targetBranch = null;
         this.stringLiterals = null;
         this.stringOthers = null;
-        this.depth = 0;
         this.forbiddenExpansions = null;
+        this.depth = 0;
     }
 
     /**
@@ -149,13 +149,13 @@ public final class JBSEResult {
         this.initialState = null;
         this.preState = null;
         this.postState = null;
-        this.pathConditionGenerated = null;
+        this.pathConditionMangled = null;
         this.atJump = false;
         this.targetBranch = null;
         this.stringLiterals = null;
         this.stringOthers = null;
+        this.forbiddenExpansions = null;
         this.depth = 0;
-        this.forbiddenExpansions = null;
     }
 
     /**
@@ -171,13 +171,13 @@ public final class JBSEResult {
      * @param preState the pre-frontier {@link State} of the path.
      * @param postState the post-frontier (final) {@link State} 
      *        of the path.
-     * @param pathConditionGenerated the post-frontier (final) 
-     *        path condition, produced from
-     *        {@code postState}'s path condition.
+     * @param pathConditionMangled the post-frontier (final) 
+     *        path condition, produced from {@code postState}'s 
+     *        path condition.
      * @param atJump a {@code boolean}, set to {@code true} iff 
      *        the frontier is a jump bytecode.
      * @param targetBranch a {@link String} that identifies the target
-     *        branch. If {@code atJump == false} it is irrelevant.
+     *        branch. If {@code atJump == false} it is ignored.
      * @param stringLiterals a {@link Map}{@code <}{@link Long}{@code , }{@link String}{@code >}, 
      *        the string literals gathered during the execution of 
      *        the path to the frontier.
@@ -185,65 +185,16 @@ public final class JBSEResult {
      *        containing all the heap positions of the (nonconstant) 
      *        {@link String} objects gathered during the execution of 
      *        the path to the frontier. 
-     * @param depth a positive {@code int}, the depth of the path 
-     *        to the frontier.
-     */
-    public JBSEResult(String targetMethodClassName, String targetMethodDescriptor, String targetMethodName, State initialState, 
-                      State preState, State postState, List<Clause> pathConditionGenerated, boolean atJump, String targetBranch, Map<Long, String> stringLiterals, 
-                      Set<Long> stringOthers, int depth) {
-        this.targetClassName = null;
-        this.targetMethodClassName = targetMethodClassName;
-        this.targetMethodDescriptor = targetMethodDescriptor;
-        this.targetMethodName = targetMethodName;
-        this.initialState = initialState.clone();
-        this.preState = preState.clone();
-        this.postState = postState.clone();
-        this.pathConditionGenerated = new ArrayList<>(pathConditionGenerated); //safety copy
-        this.atJump = atJump;
-        this.targetBranch = (atJump ? targetBranch : null);
-        this.stringLiterals = new HashMap<>(stringLiterals); //safety copy
-        this.stringOthers = new HashSet<>(stringOthers);     //safety copy
-        this.depth = depth;
-        this.forbiddenExpansions = null;
-    }
-
-    /**
-     * Constructor for non-seed item (target method only).
-     * 
-     * @param targetMethodClassName a {@link String}, 
-     *        the name of the class of the target method.
-     * @param targetMethodDescriptor a {@link String}, the 
-     *        descriptor of the target method.
-     * @param targetMethodName a {@link String}, the name 
-     *        of the target method.
-     * @param initialState the initial {@link State} of the path.
-     * @param preState the pre-frontier {@link State} of the path.
-     * @param postState the post-frontier (final) {@link State} 
-     *        of the path.
-     * @param pathConditionGenerated the post-frontier (final) 
-     *        path condition, produced from
-     *        {@code postState}'s path condition.
-     * @param atJump a {@code boolean}, set to {@code true} iff 
-     *        the frontier is a jump bytecode.
-     * @param targetBranch a {@link String} that identifies the target
-     *        branch. If {@code atJump == false} it is irrelevant.
-     * @param stringLiterals a {@link Map}{@code <}{@link Long}{@code , }{@link String}{@code >}, 
-     *        the string literals gathered during the execution of 
-     *        the path to the frontier.
-     * @param stringOthers a {@link Set}{@code <}{@link Long}{@code >}, 
-     *        containing all the heap positions of the (nonconstant) 
-     *        {@link String} objects gathered during the execution of 
-     *        the path to the frontier. 
-     * @param depth a positive {@code int}, the depth of the path 
-     *        to the frontier.
      * @param forbiddenExpansions a {@link List}{@code <}{@link String}{@code >}, 
      *        containing the class names of the expansions that are forbidden. 
      *        Used only if the last clause in the path condition of {@code finalState}
      *        is an expands clause.
+     * @param depth a positive {@code int}, the depth of the path 
+     *        to the frontier.
      */
     public JBSEResult(String targetMethodClassName, String targetMethodDescriptor, String targetMethodName, State initialState, 
-                      State preState, State postState, List<Clause> pathConditionGenerated, boolean atJump, String targetBranch, Map<Long, String> stringLiterals, 
-                      Set<Long> stringOthers, int depth, Set<String> forbiddenExpansions) {
+                      State preState, State postState, List<Clause> pathConditionMangled, boolean atJump, String targetBranch, Map<Long, String> stringLiterals, 
+                      Set<Long> stringOthers, Set<String> forbiddenExpansions, int depth) {
         this.targetClassName = null;
         this.targetMethodClassName = targetMethodClassName;
         this.targetMethodDescriptor = targetMethodDescriptor;
@@ -251,13 +202,13 @@ public final class JBSEResult {
         this.initialState = initialState.clone();
         this.preState = preState.clone();
         this.postState = postState.clone();
-        this.pathConditionGenerated = new ArrayList<>(pathConditionGenerated); //safety copy
+        this.pathConditionMangled = new ArrayList<>(pathConditionMangled); //safety copy
         this.atJump = atJump;
         this.targetBranch = (atJump ? targetBranch : null);
         this.stringLiterals = new HashMap<>(stringLiterals); //safety copy
         this.stringOthers = new HashSet<>(stringOthers);     //safety copy
-        this.depth = depth;
         this.forbiddenExpansions = new HashSet<>(forbiddenExpansions); //safety copy
+        this.depth = depth;
     }
     
     /**
@@ -373,8 +324,8 @@ public final class JBSEResult {
      * 
      * @return a {@link List}{@code <}{@link Clause}{@code >}.
      */
-    public List<Clause> getPathConditionGenerated() {
-    	return this.pathConditionGenerated;
+    public List<Clause> getPathConditionMangled() {
+    	return this.pathConditionMangled;
     }
 
     /**
@@ -421,16 +372,6 @@ public final class JBSEResult {
     public Set<Long> getStringOthers() {
         return this.stringOthers;
     }
-
-    /**
-     * Gets the depth of the path to the frontier.
-     * 
-     * @return a positive {@code int}, or {@code -1}
-     *         if {@link #isSeed() isSeed}{@code () == true}.
-     */
-    public int getDepth() {
-        return this.depth;
-    }
     
     /**
      * Returns the list of the class names of the 
@@ -440,5 +381,15 @@ public final class JBSEResult {
      */
     public Set<String> getForbiddenExpansions() {
     	return this.forbiddenExpansions;
+    }
+
+    /**
+     * Gets the depth of the path to the frontier.
+     * 
+     * @return a positive {@code int}, or {@code -1}
+     *         if {@link #isSeed() isSeed}{@code () == true}.
+     */
+    public int getDepth() {
+        return this.depth;
     }
 }
