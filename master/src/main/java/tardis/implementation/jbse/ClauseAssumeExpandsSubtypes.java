@@ -21,7 +21,6 @@ import jbse.val.ReferenceSymbolic;
  * forbidden expansions.
  * 
  * @author Pietro Braione
- *
  */
 public final class ClauseAssumeExpandsSubtypes extends ClauseAssumeReferenceSymbolic {    
     /**
@@ -34,6 +33,8 @@ public final class ClauseAssumeExpandsSubtypes extends ClauseAssumeReferenceSymb
 	/**
 	 * Constructor.
 	 * 
+	 * @param referenceSymbolic a {@link ReferenceSymbolic}. 
+	 *        It must not be {@code null}.
 	 * @param referenceSymbolic a {@link ReferenceSymbolic}. 
 	 *        It must not be {@code null}.
 	 * @throws InvalidInputException if {@code referenceSymbolic == null || forbiddenExpansions == null}.

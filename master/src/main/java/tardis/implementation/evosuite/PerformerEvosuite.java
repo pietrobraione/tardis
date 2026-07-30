@@ -613,9 +613,13 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
      */
     private void emitAndCompileEvoSuiteWrapper(int testCount, State initialState, State finalState, Map<Long, String> stringLiterals, Set<Long> stringOthers, Set<String> forbiddenExpansions) 
     throws FrozenStateException, IOFileCreationException, CompilationFailedWrapperException {
-        final StateFormatterSushiPathCondition fmt = new StateFormatterSushiPathCondition(testCount, () -> initialState, true);
-        fmt.setStringsConstant(stringLiterals);
-        fmt.setStringsNonconstant(stringOthers);
+        final String initialCurrentClassName = initialState.getStack().get(0).getMethodClass().getClassName();
+        final int lastSlash = initialCurrentClassName.lastIndexOf('/');
+        final String initialCurrentClassPackageName = (lastSlash == -1 ? "" : initialCurrentClassName.substring(0, lastSlash));
+        
+        final StateFormatterSushiPathCondition fmt = new StateFormatterSushiPathCondition(initialCurrentClassPackageName, testCount, () -> initialState, true);
+        fmt.setStringConstants(stringLiterals);
+        fmt.setStringNonconstants(stringOthers);
         if (forbiddenExpansions != null) {
         	fmt.setForbiddenExpansions(forbiddenExpansions);
         }
@@ -625,16 +629,13 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
         
         final Path wrapperFilePath;
         try { 
-            final String initialCurrentClassName = initialState.getStack().get(0).getMethodClass().getClassName();
-            final int lastSlash = initialCurrentClassName.lastIndexOf('/');
-            final String initialCurrentClassPackageName = (lastSlash == -1 ? "" : initialCurrentClassName.substring(0, lastSlash));
             final Path wrapperDirectoryPath = this.o.getTmpWrappersDirectoryPath().resolve(initialCurrentClassPackageName);
             try {
                 Files.createDirectories(wrapperDirectoryPath);
             } catch (IOException e) {
                 throw new IOFileCreationException(e, wrapperDirectoryPath);
             }
-            wrapperFilePath = wrapperDirectoryPath.resolve("EvoSuiteWrapper_" + testCount + ".java");
+            wrapperFilePath = wrapperDirectoryPath.resolve("PathConditionEvaluator_" + testCount + ".java");
             try (final BufferedWriter w = Files.newBufferedWriter(wrapperFilePath)) {
                 w.write(fmt.emit());
             } catch (IOException e) {
@@ -862,7 +863,7 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
             final int depth = item.getDepth();
             LOGGER.info("Generated test case %s, depth: %d, post-frontier path condition: %s:%s", testCaseClassName, depth, item.getTargetMethodSignature(), stringifyPostFrontierPathCondition(item));
             final TestCase newTestCase = new TestCase(testCaseClassName, "()V", "test0", this.o.getTmpTestsDirectoryPath(), (testCaseScaff != null));
-            getOutputBuffer().add(new EvosuiteResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), item.getPathConditionGenerated(), newTestCase, depth + 1));
+            getOutputBuffer().add(new EvosuiteResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), item.getPathConditionMangled(), newTestCase, depth + 1));
         } catch (NoSuchMethodException e) { 
             throw new NoTestMethodException(testCase, item.getTargetMethodSignature(), stringifyPostFrontierPathCondition(item));
         } catch (SecurityException | NoClassDefFoundError | ClassNotFoundException e) {
