@@ -4,11 +4,15 @@ import java.util.List;
 
 import jbse.mem.Clause;
 
-final class MethodPathConditon {
+/**
+ * A pair of a method and a path condition.
+ * Used as a map key by the JBSE performer.
+ */
+final class MethodAndPathConditon {
 	private final String method;
 	private final List<Clause> pathCondition;
 	
-	public MethodPathConditon(String method, List<Clause> pathCondition) {
+	public MethodAndPathConditon(String method, List<Clause> pathCondition) {
 		this.method = method;
 		this.pathCondition = pathCondition; //no safety clone!
 	}
@@ -41,7 +45,7 @@ final class MethodPathConditon {
 		if (getClass() != obj.getClass()) {
 			return false;
 		}
-		final MethodPathConditon other = (MethodPathConditon) obj;
+		final MethodAndPathConditon other = (MethodAndPathConditon) obj;
 		if (this.method == null) {
 			if (other.method != null) {
 				return false;

@@ -549,7 +549,7 @@ public final class PerformerEvosuiteRMI extends PerformerMultiServer<JBSEResult,
             final int depth = item.getDepth();
             LOGGER.info("Generated test case %s, depth: %d, post-frontier path condition: %s:%s", testCaseClassName, depth, item.getTargetMethodSignature(), stringifyPostFrontierPathCondition(item));
             final TestCase newTestCase = new TestCase(testCaseClassName, "()V", "test0", this.o.getTmpTestsDirectoryPath(), (testCaseScaff != null));
-            getOutputBuffer().add(new EvosuiteResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), item.getPathConditionGenerated(), newTestCase, depth + 1));
+            getOutputBuffer().add(new EvosuiteResult(item.getTargetMethodClassName(), item.getTargetMethodDescriptor(), item.getTargetMethodName(), item.getPathConditionMangled(), newTestCase, depth + 1));
         
             /*if (item.getPathConditionGenerated() == null && !item.isSeed()) {
             	if (this.performerPauseStart == 0) {
@@ -710,9 +710,18 @@ public final class PerformerEvosuiteRMI extends PerformerMultiServer<JBSEResult,
      */
     private void emitAndCompileEvoSuiteWrapper(int testCount, State initialState, State finalState, Map<Long, String> stringLiterals, Set<Long> stringOthers, Set<String> forbiddenExpansions) 
     throws IOFileCreationException, CompilationFailedWrapperException, UnexpectedJBSELibFailureException {
-        final StateFormatterSushiPathCondition fmt = new StateFormatterSushiPathCondition(testCount, () -> initialState, true);
-        fmt.setStringsConstant(stringLiterals);
-        fmt.setStringsNonconstant(stringOthers);
+    	final String initialCurrentClassPackageName;
+    	try {
+    		final String initialCurrentClassName = initialState.getStack().get(0).getMethodClass().getClassName();
+    		final int lastSlash = initialCurrentClassName.lastIndexOf('/');
+    		initialCurrentClassPackageName = (lastSlash == -1 ? "" : initialCurrentClassName.substring(0, lastSlash));
+        } catch (FrozenStateException e) {
+        	throw new UnexpectedJBSELibFailureException(e);
+        }
+        
+        final StateFormatterSushiPathCondition fmt = new StateFormatterSushiPathCondition(initialCurrentClassPackageName, testCount, () -> initialState, true);
+        fmt.setStringConstants(stringLiterals);
+        fmt.setStringNonconstants(stringOthers);
         if (forbiddenExpansions != null) {
         	fmt.setForbiddenExpansions(forbiddenExpansions);
         }
@@ -722,23 +731,18 @@ public final class PerformerEvosuiteRMI extends PerformerMultiServer<JBSEResult,
         
         final Path wrapperFilePath;
         try { 
-            final String initialCurrentClassName = initialState.getStack().get(0).getMethodClass().getClassName();
-            final int lastSlash = initialCurrentClassName.lastIndexOf('/');
-            final String initialCurrentClassPackageName = (lastSlash == -1 ? "" : initialCurrentClassName.substring(0, lastSlash));
             final Path wrapperDirectoryPath = this.o.getTmpWrappersDirectoryPath().resolve(initialCurrentClassPackageName);
             try {
                 Files.createDirectories(wrapperDirectoryPath);
             } catch (IOException e) {
                 throw new IOFileCreationException(e, wrapperDirectoryPath);
             }
-            wrapperFilePath = wrapperDirectoryPath.resolve("EvoSuiteWrapper_" + testCount + ".java");
+            wrapperFilePath = wrapperDirectoryPath.resolve("PathConditionEvaluator_" + testCount + ".java");
             try (final BufferedWriter w = Files.newBufferedWriter(wrapperFilePath)) {
                 w.write(fmt.emit());
             } catch (IOException e) {
                 throw new IOFileCreationException(e, wrapperFilePath);
             }
-        } catch (FrozenStateException e) {
-        	throw new UnexpectedJBSELibFailureException(e);
         } finally {
             fmt.cleanup();
         }
@@ -814,8 +818,8 @@ public final class PerformerEvosuiteRMI extends PerformerMultiServer<JBSEResult,
     			final String targetMethodNameAndDescriptor = new StringBuilder(item.first().getTargetMethodName()).append(item.first().getTargetMethodDescriptor()).toString();
     			final String wrapperName = new StringBuilder(targetPackage).append(".EvoSuiteWrapper_").append(item.second()).toString();
     			evosuiteRemote.evosuite_injectFitnessFunction(targetClass, targetMethodNameAndDescriptor, wrapperName);
-    			Clause lastClause = aJBSEResult == null || aJBSEResult.getPathConditionGenerated() == null ||  aJBSEResult.getPathConditionGenerated().size() == 0 ? null : 
-    				aJBSEResult.getPathConditionGenerated().get(aJBSEResult.getPathConditionGenerated().size() - 1);
+    			Clause lastClause = aJBSEResult == null || aJBSEResult.getPathConditionMangled() == null ||  aJBSEResult.getPathConditionMangled().size() == 0 ? null : 
+    				aJBSEResult.getPathConditionMangled().get(aJBSEResult.getPathConditionMangled().size() - 1);
     			LOGGER.info("Sent new path conditions to Evosuite: %s in %s, last clause is %s", targetMethodNameAndDescriptor, wrapperName, lastClause);
     		}
     	} catch (RemoteException e) {

@@ -61,7 +61,9 @@ public final class Util {
      * @param pathCondition a {@link Collection}{@code <}{@link Clause}{@code >}.
      * @return {@code pathCondition} filtered, where the filter drops all the clauses
      *         that are {@code instanceof }{@link ClauseAssumeClassInitialized}
-     *         or {@link ClauseAssumeClassNotInitialized}.
+     *         or {@link ClauseAssumeClassNotInitialized}. It is a new 
+     *         {@link Collection}{@code <}{@link Clause}{@code >} distinct
+     *         from {@code pathCondition}.
      */
     public static List<Clause> shorten(Collection<Clause> pathCondition) {
         return pathCondition.stream().filter(x -> !(x instanceof ClauseAssumeClassInitialized || x instanceof ClauseAssumeClassNotInitialized)).collect(Collectors.toList());
@@ -344,7 +346,7 @@ public final class Util {
     }
 
 	public static String stringifyPostFrontierPathCondition(JBSEResult item) {
-	    final List<Clause> pathCondition = item.getPathConditionGenerated();
+	    final List<Clause> pathCondition = item.getPathConditionMangled();
 	    final String retVal = (pathCondition == null ? "true" : stringifyPostFrontierPathCondition(pathCondition));
 	    return retVal;
 	}

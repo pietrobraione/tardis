@@ -164,7 +164,7 @@ final class RunnerPostFrontier implements AutoCloseable {
                 } catch (ThreadStackEmptyException | FrozenStateException e) {
                     //this should never happen
                     LOGGER.error("Internal error when attempting to inspect the current bytecode instruction");
-                    LOGGER.error("Message: %s", e.toString());
+                    LOGGER.error("Message: %s", e.getMessage());
                     LOGGER.error("Stack trace:");
                     for (StackTraceElement elem : e.getStackTrace()) {
                         LOGGER.error("%s", elem.toString());
@@ -296,10 +296,10 @@ final class RunnerPostFrontier implements AutoCloseable {
                         } //TODO: constants for Integer, Float, Double ... boxed types; add generic stateful object graphs produced by pure methods
                     }                                       
                 }
-            } catch (FrozenStateException | InvalidNumberOfOperandsException | ThreadStackEmptyException e) {
+            } catch (InvalidInputException | InvalidNumberOfOperandsException | ThreadStackEmptyException e) {
                 //this should never happen
                 LOGGER.error("Internal error when attempting to manage String literals");
-                LOGGER.error("Message: %s", e.toString());
+                LOGGER.error("Message: %s", e.getMessage());
                 LOGGER.error("Stack trace:");
                 for (StackTraceElement elem : e.getStackTrace()) {
                     LOGGER.error("%s", elem.toString());
