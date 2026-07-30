@@ -635,7 +635,7 @@ public final class PerformerEvosuite extends PerformerPausableFixedThreadPoolExe
             } catch (IOException e) {
                 throw new IOFileCreationException(e, wrapperDirectoryPath);
             }
-            wrapperFilePath = wrapperDirectoryPath.resolve("EvoSuiteWrapper_" + testCount + ".java");
+            wrapperFilePath = wrapperDirectoryPath.resolve("PathConditionEvaluator_" + testCount + ".java");
             try (final BufferedWriter w = Files.newBufferedWriter(wrapperFilePath)) {
                 w.write(fmt.emit());
             } catch (IOException e) {

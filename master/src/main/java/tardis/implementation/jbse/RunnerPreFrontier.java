@@ -184,9 +184,8 @@ final class RunnerPreFrontier implements AutoCloseable {
 					}
 				} catch (ThreadStackEmptyException | FrozenStateException e) {
 					// this should never happen
-					LOGGER
-					.error("Internal error when attempting to inspect the state before bytecode instruction execution");
-					LOGGER.error("Message: %s", e.toString());
+					LOGGER.error("Internal error when attempting to inspect the state before bytecode instruction execution");
+					LOGGER.error("Message: %s", e.getMessage());
 					LOGGER.error("Stack trace:");
 					for (StackTraceElement elem : e.getStackTrace()) {
 						LOGGER.error("%s", elem.toString());
